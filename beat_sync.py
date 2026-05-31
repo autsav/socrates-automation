@@ -160,13 +160,13 @@ def detect_beats_librosa(
         y, sr = librosa.load(str(audio_path), sr=22050, mono=True, duration=30)
 
         # Onset strength envelope (spectral flux)
-        onset_env = librosa.onset.onset_strength(y=y, sr=sr, aggregate=sum)
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
 
         # Beat tracking: finds the periodic pulse
         tempo, beat_frames = librosa.beat.beat_track(
             onset_envelope=onset_env,
             sr=sr,
-            bpm=target_bpm_range,
+            start_bpm=100.0,
             trim=True,
         )
 
@@ -177,18 +177,12 @@ def detect_beats_librosa(
         onset_frames = librosa.onset.onset_detect(
             onset_envelope=onset_env,
             sr=sr,
-            wait=int(min_peak_distance * sr / 512),  # wait in frames
-            pre_max=3,
-            post_max=3,
-            pre_avg=3,
-            post_avg=3,
-            delta=0.07,
-            silence=0.0,
+            units='time',
         )
-        onset_times = librosa.frames_to_time(onset_frames, sr=sr)
+        onset_times = list(onset_frames) if isinstance(onset_frames, (list, tuple, np.ndarray)) else []
 
         # Merge beat times and strong onset times, preferring beats
-        all_peaks = sorted(set(list(beat_times) + list(onset_times)))
+        all_peaks = sorted(set(list(beat_times) + onset_times))
 
         # Filter: minimum distance between peaks
         filtered = []
@@ -303,8 +297,8 @@ def calculate_synced_offsets(
     actual_total = v01_dur + cta_dur - transition_duration
 
     return (
-        [round(hook_dur, 2), round(quote_dur, 2), round(cta_dur, 2)],
-        [round(offset_1, 2), round(offset_2, 2)],
+        [float(round(hook_dur, 2)), float(round(quote_dur, 2)), float(round(cta_dur, 2))],
+        [float(round(offset_1, 2)), float(round(offset_2, 2))],
         True,
     )
 

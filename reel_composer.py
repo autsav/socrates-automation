@@ -317,7 +317,7 @@ def generate_reel(
                 v_idx = voice_inputs[voice_key]
                 # Mix voiceover with background
                 mix = (
-                    f"[bg_{name}][{v_idx}:a]amix=inputs=2:duration=shortest:weights='0.3 1.0"
+                    f"[bg_{name}][{v_idx}:a]amix=inputs=2:duration=shortest:weights='0.3 1.0'"
                     f"[mix_{name}]"
                 )
                 audio_filters.append(mix)
