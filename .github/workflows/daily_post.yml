@@ -2,10 +2,16 @@ name: Socrates Pipeline
 
 on:
   schedule:
-    # 3x daily: morning, lunch, evening — peak Instagram engagement times
-    - cron: '30 7 * * *'   # 7:30 UTC — morning scroll
-    - cron: '0 13 * * *'    # 13:00 UTC — lunch break
-    - cron: '0 19 * * *'    # 19:00 UTC — evening wind-down
+    # REEL posts — 3x daily every day at peak engagement windows
+    # Research (Buffer 9.6M posts): mornings 8-10am, evenings 6-9pm perform best
+    - cron: '0 8 * * *'    # 08:00 UTC — morning scroll (commute)
+    - cron: '0 12 * * *'   # 12:00 UTC — lunch break
+    - cron: '0 18 * * *'   # 18:00 UTC — evening wind-down (peak)
+
+    # CAROUSEL posts — Wed + Thu only (highest engagement days per 2026 data)
+    # Carousels get 1.92% vs 0.50% engagement, 3x more saves — use on best days
+    - cron: '30 9 * * 3'   # Wednesday 09:30 UTC — carousel
+    - cron: '30 9 * * 4'   # Thursday  09:30 UTC — carousel
   workflow_dispatch:  # Manual trigger from GitHub UI
   pull_request:       # Safety check on every PR
 
@@ -36,7 +42,17 @@ jobs:
         run: python generate_audio.py
 
       - name: Create output dirs
-        run: mkdir -p output logs
+        run: mkdir -p output logs audio/music
+
+      - name: Download royalty-free music tracks
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: |
+          if [ -n "$PIXABAY_API_KEY" ]; then
+            python download_music.py
+          else
+            echo "⚠️ PIXABAY_API_KEY not set — using generated audio fallback"
+          fi
 
       - name: Init SQLite database
         run: python -c "from data_store import init_db; init_db()"
@@ -49,6 +65,20 @@ jobs:
             echo "🆕 No existing database — fresh start"
             mkdir -p data
           fi
+
+      - name: Detect post format (reel vs carousel)
+        id: format
+        run: |
+          # Carousel runs at :30 past the hour (Wed/Thu 09:30)
+          # Reels run on the hour (08:00, 12:00, 18:00)
+          MINUTE=$(date -u +%M)
+          DAY=$(date -u +%u)  # 1=Mon … 7=Sun
+          if [ "$MINUTE" = "30" ] && { [ "$DAY" = "3" ] || [ "$DAY" = "4" ]; }; then
+            echo "mode=carousel" >> $GITHUB_OUTPUT
+          else
+            echo "mode=reel" >> $GITHUB_OUTPUT
+          fi
+          echo "Detected mode: $(cat $GITHUB_OUTPUT | grep mode | cut -d= -f2)"
 
       - name: Run pipeline (dry-run on PRs)
         env:
@@ -65,7 +95,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             python pipeline.py --dry-run
+          elif [ "${{ steps.format.outputs.mode }}" = "carousel" ]; then
+            echo "📸 Posting CAROUSEL (Wed/Thu — highest engagement day)"
+            python pipeline.py --carousel
           else
+            echo "🎬 Posting REEL"
             python pipeline.py --reel
           fi
 
