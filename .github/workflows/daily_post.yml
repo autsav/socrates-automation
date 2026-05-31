@@ -1,0 +1,97 @@
+name: Socrates Pipeline
+
+on:
+  schedule:
+    # 3x daily: morning, lunch, evening — peak Instagram engagement times
+    - cron: '30 7 * * *'   # 7:30 UTC — morning scroll
+    - cron: '0 13 * * *'    # 13:00 UTC — lunch break
+    - cron: '0 19 * * *'    # 19:00 UTC — evening wind-down
+  workflow_dispatch:  # Manual trigger from GitHub UI
+  pull_request:       # Safety check on every PR
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install ffmpeg (for Reel video generation)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Generate ambient audio tracks
+        run: python generate_audio.py
+
+      - name: Create output dirs
+        run: mkdir -p output logs
+
+      - name: Init SQLite database
+        run: python -c "from data_store import init_db; init_db()"
+
+      - name: Restore SQLite database from repo
+        run: |
+          if [ -f "data/pipeline.db" ]; then
+            echo "✅ Restored pipeline.db from repo ($(du -h data/pipeline.db | cut -f1))"
+          else
+            echo "🆕 No existing database — fresh start"
+            mkdir -p data
+          fi
+
+      - name: Run pipeline (dry-run on PRs)
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
+          META_ACCESS_TOKEN:      ${{ secrets.META_ACCESS_TOKEN }}
+          META_APP_ID:            ${{ secrets.META_APP_ID }}
+          META_APP_SECRET:        ${{ secrets.META_APP_SECRET }}
+          IG_ACCOUNT_ID:          ${{ secrets.IG_ACCOUNT_ID }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+          PIXABAY_API_KEY:        ${{ secrets.PIXABAY_API_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python pipeline.py --dry-run
+          else
+            python pipeline.py --reel
+          fi
+
+      - name: Commit SQLite database back to repo
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/pipeline.db
+          git diff --staged --quiet || git commit -m "chore: update pipeline.db [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload generated image as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: post-image-${{ github.run_number }}
+          path: output/*.jpg
+          retention-days: 30
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 30

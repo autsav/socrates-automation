@@ -1,0 +1,70 @@
+name: Socrates Analytics
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 08:00 UTC — morning after posts have accumulated overnight metrics
+  workflow_dispatch:        # Manual trigger from GitHub UI
+  pull_request:             # Safety check on every PR
+
+jobs:
+  analytics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Create output dirs
+        run: mkdir -p output logs
+
+      - name: Run analytics (dry-run on PRs)
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
+          META_ACCESS_TOKEN:      ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID:          ${{ secrets.IG_ACCOUNT_ID }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+          META_APP_ID:            ${{ secrets.META_APP_ID }}
+          META_APP_SECRET:        ${{ secrets.META_APP_SECRET }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python analytics.py --dry-run
+          else
+            python analytics.py
+          fi
+
+      - name: Commit SQLite database back to repo
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/pipeline.db
+          git diff --staged --quiet || git commit -m "chore: update pipeline.db analytics [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-analytics-${{ github.run_number }}
+          path: logs/
+          retention-days: 30
