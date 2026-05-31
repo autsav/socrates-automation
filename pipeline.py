@@ -27,6 +27,7 @@ from ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 from token_manager import get_valid_token_with_fallback
 from notifier import Notifier
 from trending_music import get_trending_suggestion
+from voiceover import prepare_reel_voiceover, voiceover_available
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
@@ -503,6 +504,30 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             timestamp=timestamp
         )
 
+        # ── Generate voiceover narration ──────────────────────────────────────
+        voiceover = None
+        if voiceover_available(cfg.ANTHROPIC_API_KEY):  # Reuse Anthropic key or use dedicated OpenAI key
+            # Try OpenAI TTS if OPENAI_API_KEY is set, otherwise skip
+            openai_key = getattr(cfg, "OPENAI_API_KEY", "")
+            if openai_key:
+                cta_text = _pick_cta(quote_data["row_number"])
+                log.info("  Generating voiceover narration...")
+                try:
+                    voiceover = prepare_reel_voiceover(
+                        hook_text=hook_text,
+                        quote_text=quote_data["quote"],
+                        cta_text=cta_text,
+                        mood=mood,
+                        api_key=openai_key,
+                        output_dir=OUTPUT_DIR,
+                        timestamp=timestamp,
+                    )
+                    log.info(f"  Voiceover: {voiceover['voice']} voice")
+                except Exception as e:
+                    log.warning(f"  Voiceover generation failed: {e}")
+            else:
+                log.info("  OPENAI_API_KEY not set — skipping voiceover")
+
         # Assemble multi-scene reel
         reel_path = generate_reel(
             scene_images=[scene_hook, scene_quote, scene_cta],
@@ -510,6 +535,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             output_dir=OUTPUT_DIR,
             timestamp=timestamp,
             quote_text=quote_data["quote"],
+            voiceover=voiceover,
         )
         if reel_path:
             log.info(f"Reel: {reel_path}")

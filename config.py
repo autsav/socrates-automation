@@ -24,6 +24,9 @@ class Config:
     CLOUDINARY_API_SECRET: str = ""
     PIXABAY_API_KEY: str = ""        # Optional — royalty-free music downloads
 
+    # ── Voiceover (optional) ────────────────────────────────────────────────
+    OPENAI_API_KEY: str = ""         # OpenAI TTS — text-to-speech narration
+
     # ── Notification backends (all optional) ──────────────────────────────────
     TELEGRAM_BOT_TOKEN: str = ""     # @BotFather on Telegram
     TELEGRAM_CHAT_ID: str = ""       # @userinfobot on Telegram
@@ -40,6 +43,7 @@ class Config:
         self.CLOUDINARY_API_KEY    = self._get("CLOUDINARY_API_KEY")
         self.CLOUDINARY_API_SECRET = self._get("CLOUDINARY_API_SECRET")
         self.PIXABAY_API_KEY         = self._get_opt("PIXABAY_API_KEY")
+        self.OPENAI_API_KEY          = self._get_opt("OPENAI_API_KEY")
         self.TELEGRAM_BOT_TOKEN      = self._get_opt("TELEGRAM_BOT_TOKEN")
         self.TELEGRAM_CHAT_ID        = self._get_opt("TELEGRAM_CHAT_ID")
         self.SLACK_WEBHOOK_URL       = self._get_opt("SLACK_WEBHOOK_URL")

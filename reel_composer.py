@@ -105,6 +105,7 @@ def generate_reel(
     output_dir: str = "output",
     timestamp: str | None = None,
     quote_text: str = "",
+    voiceover: dict | None = None,
 ) -> Path | None:
     """
     Generate a 20-second Reel video from 3 scene images with crossfade
@@ -140,9 +141,13 @@ def generate_reel(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"reel_{timestamp}.mp4"
+    silent_path = output_dir / f"reel_{timestamp}_silent.mp4"
 
     audio = _audio_path(mood)
     has_audio = audio is not None
+    has_voiceover = voiceover is not None and any(
+        voiceover.get(k) for k in ("hook_voice", "quote_voice", "cta_voice")
+    )
 
     # ── Beat Sync: detect energy peaks and align transitions ─────────────────
     beat_sync_info = None
@@ -169,22 +174,14 @@ def generate_reel(
 
     zoom_frames = int(quote_dur * 30)  # frames for quote scene @ 30fps
 
+    # ── PASS 1: Generate silent video ─────────────────────────────────────────
     cmd = ["ffmpeg", "-y"]
 
     # Add 3 image inputs with framerate
     for img_path in scene_paths:
         cmd += ["-framerate", "30", "-loop", "1", "-i", str(img_path)]
 
-    # Add audio input if available
-    audio_input_idx = 3
-    if has_audio:
-        cmd += ["-i", str(audio)]
-
-    # ── Build filter_complex ────────────────────────────────────────────────
-    # Scene 1 (hook): subtle zoom-in for energy
-    # Scene 2 (quote): Ken Burns zoom + pan + subtitles + vignette
-    # Scene 3 (cta): static + vignette
-
+    # ── Build video filter_complex ──────────────────────────────────────────
     font_path = _subtitle_font_path()
     has_font = bool(font_path)
 
@@ -252,17 +249,7 @@ def generate_reel(
 
     cmd += ["-filter_complex", filter_complex]
     cmd += ["-map", "[outv]"]
-
-    if has_audio:
-        cmd += ["-map", f"{audio_input_idx}:a:0"]
-        cmd += [
-            "-c:a", "aac",
-            "-b:a", "160k",
-            "-af", f"afade=t=in:d=0.5,afade=t=out:st={TOTAL_DURATION - 1}:d=1,volume=0.35,loudnorm",
-        ]
-    else:
-        cmd += ["-an"]
-
+    cmd += ["-an"]  # No audio in silent video
     cmd += [
         "-c:v", "libx264",
         "-preset", "medium",
@@ -270,15 +257,129 @@ def generate_reel(
         "-r", "30",
         "-pix_fmt", "yuv420p",
         "-t", str(TOTAL_DURATION),
-        str(output_path),
+        str(silent_path),
     ]
 
-    print(f"  [reel] Generating 20s multi-scene reel{' with audio + subtitles' if has_audio and has_font else ' with audio' if has_audio else ' (silent)'}...")
+    print(f"  [reel] Generating silent video with {len(scene_images)} scenes...")
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
 
     if result.returncode != 0:
         error = result.stderr[-600:] if result.stderr else "unknown error"
-        raise RuntimeError(f"ffmpeg failed: {error}")
+        raise RuntimeError(f"ffmpeg video pass failed: {error}")
+
+    # ── PASS 2: Mix audio (background music + voiceover) ────────────────────
+    if has_audio or has_voiceover:
+        # Build mixed audio track
+        mixed_audio_path = output_dir / f"audio_{timestamp}.m4a"
+
+        # Strategy:
+        # 1. Extract background music segments for each scene
+        # 2. Mix each segment with corresponding voiceover
+        # 3. Concatenate all mixed segments
+        # 4. Apply overall fade in/out
+
+        audio_inputs = []
+        audio_filters = []
+
+        # Background music is input 0
+        if has_audio:
+            audio_inputs += ["-i", str(audio)]
+            bg_idx = 0
+        else:
+            # Create silent audio track if no background music
+            audio_inputs += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono"]
+            bg_idx = 0
+
+        # Voiceover inputs
+        voice_inputs = {}
+        next_input = 1
+        for key in ("hook_voice", "quote_voice", "cta_voice"):
+            path = voiceover.get(key) if voiceover else None
+            if path and Path(path).exists():
+                audio_inputs += ["-i", str(path)]
+                voice_inputs[key] = next_input
+                next_input += 1
+
+        # Scene durations
+        scene_durs = [hook_dur, quote_dur, cta_dur]
+        scene_names = ["hook", "quote", "cta"]
+        start_times = [0, hook_dur, hook_dur + quote_dur]
+
+        mixed_segments = []
+        for i, (name, dur, start) in enumerate(zip(scene_names, scene_durs, start_times)):
+            # Extract background segment
+            bg_label = f"[0:a]atrim=start={start}:end={start + dur},volume=0.20[bg_{name}]"
+            audio_filters.append(bg_label)
+
+            # Check if voiceover exists for this scene
+            voice_key = f"{name}_voice"
+            if voice_key in voice_inputs:
+                v_idx = voice_inputs[voice_key]
+                # Mix voiceover with background
+                mix = (
+                    f"[bg_{name}][{v_idx}:a]amix=inputs=2:duration=shortest:weights='0.3 1.0"
+                    f"[mix_{name}]"
+                )
+                audio_filters.append(mix)
+                mixed_segments.append(f"[mix_{name}]")
+            else:
+                mixed_segments.append(f"[bg_{name}]")
+
+        # Concatenate all mixed segments
+        concat_inputs = "".join(mixed_segments)
+        concat_filter = f"{concat_inputs}concat=n={len(mixed_segments)}:v=0:a=1[concat]"
+        audio_filters.append(concat_filter)
+
+        # Apply overall fade in/out
+        fade_filter = (
+            f"[concat]afade=t=in:d=0.5,afade=t=out:st={TOTAL_DURATION - 1}:d=1"
+            f"[outa]"
+        )
+        audio_filters.append(fade_filter)
+
+        audio_cmd = ["ffmpeg", "-y"] + audio_inputs
+        audio_cmd += ["-filter_complex", ";".join(audio_filters)]
+        audio_cmd += ["-map", "[outa]"]
+        audio_cmd += [
+            "-c:a", "aac",
+            "-b:a", "160k",
+            "-t", str(TOTAL_DURATION),
+            str(mixed_audio_path),
+        ]
+
+        print(f"  [reel] Mixing audio ({'voiceover + ' if has_voiceover else ''}background music)...")
+        audio_result = subprocess.run(audio_cmd, capture_output=True, text=True, timeout=60)
+
+        if audio_result.returncode != 0:
+            error = audio_result.stderr[-400:] if audio_result.stderr else "unknown error"
+            print(f"  [reel] ⚠️ Audio mixing failed: {error}")
+            print(f"  [reel] Using silent video without audio")
+            mixed_audio_path = None
+    else:
+        mixed_audio_path = None
+
+    # ── PASS 3: Combine silent video + mixed audio ─────────────────────────
+    final_cmd = ["ffmpeg", "-y", "-i", str(silent_path)]
+    if mixed_audio_path and mixed_audio_path.exists():
+        final_cmd += ["-i", str(mixed_audio_path)]
+        final_cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest"]
+    else:
+        final_cmd += ["-c:v", "copy", "-an"]
+
+    final_cmd += [str(output_path)]
+
+    print(f"  [reel] Combining video + audio...")
+    final_result = subprocess.run(final_cmd, capture_output=True, text=True, timeout=30)
+
+    if final_result.returncode != 0:
+        error = final_result.stderr[-400:] if final_result.stderr else "unknown error"
+        raise RuntimeError(f"ffmpeg final combine failed: {error}")
+
+    # Clean up temp files
+    if silent_path.exists():
+        silent_path.unlink()
+    if mixed_audio_path and mixed_audio_path.exists():
+        mixed_audio_path.unlink()
 
     size = output_path.stat().st_size
     print(f"  [reel] Saved: {output_path} ({size / 1024:.0f} KB)")
