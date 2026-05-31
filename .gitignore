@@ -1,3 +1,42 @@
-socrates_pipeline/
+# Environments
 .env
+.venv/
+env/
+venv/
 
+# Nested repo
+socrates_pipeline/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Generated artifacts
+output/
+audio/music/
+audio/*.mp3
+!audio/.gitkeep
+
+# Data & logs
+data/
+logs/
+*.db
+*.db-shm
+*.db-wal
+
+# Claude IDE
+.claude/
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Excel temp files
+~$*.xlsx

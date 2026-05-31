@@ -1,8 +1,27 @@
+# Socrates Instagram Automation — Core Dependencies
+# Install: pip install -r requirements.txt
+
+# HTTP requests
 httpx>=0.27.0
-Pillow>=10.0.0
 requests>=2.31.0
-python-dotenv>=1.0.0
-cloudinary>=1.36.0
+
+# Image processing
+Pillow>=10.0.0
+
+# Excel / data
 openpyxl>=3.1.0
+
+# Environment config
+python-dotenv>=1.0.0
+
+# Cloud image upload (optional — used by image_generator)
+cloudinary>=1.36.0
+
+# Dev / test tools
 pytest>=8.0.0
 ruff>=0.4.0
+
+# ── Optional: Better beat detection ──────────────────────────────────────────
+# Uncomment to install librosa for more accurate musical beat detection.
+# Without it, the pipeline falls back to ffmpeg ebur128 (works fine).
+# librosa>=0.10.0  # + numpy, scipy, soundfile (heavy, ~150MB)

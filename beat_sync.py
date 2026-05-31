@@ -1,8 +1,10 @@
 """
-Beat Sync — detects energy peaks in audio and aligns Reel transitions to them.
+Beat Sync — detects energy peaks and musical beats in audio, aligning Reel
+transitions to them for maximum engagement.
 
-Uses ffmpeg ebur128 + volumedetect filters (zero Python dependencies).
-Falls back to fixed timing if no clear peaks are found.
+Two backends:
+  1. librosa — onset detection + beat tracking (highly accurate, optional dependency)
+  2. ffmpeg ebur128 — loudness peak detection (zero dependencies, always works)
 
 Research: Reels with beat-synced cuts have 20-30% higher completion rates.
 """
@@ -10,6 +12,14 @@ Research: Reels with beat-synced cuts have 20-30% higher completion rates.
 import subprocess
 import re
 from pathlib import Path
+
+# ── Optional librosa import ───────────────────────────────────────────────────
+try:
+    import librosa
+    import numpy as np
+    _HAS_LIBROSA = True
+except ImportError:
+    _HAS_LIBROSA = False
 
 # Mood → xfade transition type mapping
 # ffmpeg 4.4+ supports: fade, wipe*, slide*, smooth*, circle*, vert*, horz*,
@@ -118,6 +128,110 @@ def detect_energy_peaks(
     return peaks
 
 
+# ── librosa-based beat detection (much more accurate) ───────────────────────────
+
+def detect_beats_librosa(
+    audio_path: Path,
+    min_peak_distance: float = 1.2,
+    target_bpm_range: tuple[float, float] = (60, 140),
+) -> list[float]:
+    """
+    Detect musical beats using librosa onset detection + beat tracking.
+    Returns list of beat timestamps in seconds, sorted.
+
+    This is significantly more accurate than ebur128 because it uses:
+      - Spectral flux (onset strength) to detect note attacks
+      - Beat tracking to find the periodic pulse of the music
+      - Dynamic programming to pick the most musically-salient beat grid
+
+    Args:
+        audio_path: Path to audio file (mp3, wav, etc.)
+        min_peak_distance: Minimum seconds between returned peaks
+        target_bpm_range: Acceptable BPM range for beat tracking
+    """
+    if not _HAS_LIBROSA:
+        return []
+
+    if not audio_path.exists():
+        return []
+
+    try:
+        # Load audio (mono, resampled to 22050 Hz for speed)
+        y, sr = librosa.load(str(audio_path), sr=22050, mono=True, duration=30)
+
+        # Onset strength envelope (spectral flux)
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr, aggregate=sum)
+
+        # Beat tracking: finds the periodic pulse
+        tempo, beat_frames = librosa.beat.beat_track(
+            onset_envelope=onset_env,
+            sr=sr,
+            bpm=target_bpm_range,
+            trim=True,
+        )
+
+        # Convert beat frames to timestamps
+        beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+
+        # Also get onset peaks for additional transition points
+        onset_frames = librosa.onset.onset_detect(
+            onset_envelope=onset_env,
+            sr=sr,
+            wait=int(min_peak_distance * sr / 512),  # wait in frames
+            pre_max=3,
+            post_max=3,
+            pre_avg=3,
+            post_avg=3,
+            delta=0.07,
+            silence=0.0,
+        )
+        onset_times = librosa.frames_to_time(onset_frames, sr=sr)
+
+        # Merge beat times and strong onset times, preferring beats
+        all_peaks = sorted(set(list(beat_times) + list(onset_times)))
+
+        # Filter: minimum distance between peaks
+        filtered = []
+        for t in all_peaks:
+            if not filtered or (t - filtered[-1]) >= min_peak_distance:
+                filtered.append(t)
+
+        # Also add early peaks (first 3 seconds) for hook→quote transition
+        early_peaks = [t for t in filtered if 2.0 <= t <= 5.0]
+        late_peaks = [t for t in filtered if t > 5.0]
+
+        # Ensure we have at least 2 peaks in the first half
+        if len(early_peaks) < 1 and filtered:
+            early_peaks = [filtered[0]]
+        if len(early_peaks) < 2 and len(late_peaks) > 0:
+            early_peaks.append(late_peaks[0])
+
+        result = sorted(set(early_peaks[:2] + late_peaks[:2]))
+        return result
+
+    except Exception as e:
+        print(f"  [beat-sync] librosa detection failed ({e}) — falling back to ebur128")
+        return []
+
+
+def detect_beats(
+    audio_path: Path,
+    min_peak_distance: float = 1.2,
+) -> list[float]:
+    """
+    Best-effort beat detection. Uses librosa if available, else ebur128.
+    Returns list of peak timestamps in seconds.
+    """
+    if _HAS_LIBROSA:
+        peaks = detect_beats_librosa(audio_path, min_peak_distance)
+        if peaks:
+            print(f"  [beat-sync] librosa detected {len(peaks)} beats")
+            return peaks
+    # Fallback to ffmpeg ebur128
+    print(f"  [beat-sync] Using ebur128 fallback (install librosa for better accuracy)")
+    return detect_energy_peaks(audio_path, min_peak_distance)
+
+
 def calculate_synced_offsets(
     peaks: list[float],
     target_total: float = 14.0,
@@ -215,7 +329,7 @@ def analyze_audio_for_sync(
         - used_beats: bool
         - peaks: list of detected peak timestamps
     """
-    peaks = detect_energy_peaks(audio_path)
+    peaks = detect_beats(audio_path)
     scene_durs, offsets, used_beats = calculate_synced_offsets(
         peaks, target_total=target_total
     )
