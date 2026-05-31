@@ -1,0 +1,233 @@
+"""
+Notifier — pluggable post-publish notification system.
+
+Backends (all optional, gracefully degrades):
+  - Telegram: instant mobile notification
+  - Email: SMTP-based
+  - Slack: webhook-based
+  - JSONL: always-on local log fallback
+
+Usage: After posting a Reel, call notify_post_published() to remind
+the user to manually add a trending sound via the Instagram app.
+"""
+
+import json
+import logging
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+LOG_DIR = Path(__file__).parent / "logs"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _log_notification(payload: dict):
+    """Append notification to JSONL log (always works, zero deps)."""
+    path = LOG_DIR / "notifications.jsonl"
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, default=str) + "\n")
+
+
+# ── Telegram Backend ─────────────────────────────────────────────────────────
+
+class TelegramBackend:
+    """Send notifications via Telegram Bot API."""
+
+    name = "telegram"
+
+    def __init__(self, bot_token: str, chat_id: str):
+        self.bot_token = bot_token
+        self.chat_id = chat_id
+        self.api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+    def send(self, message: str) -> bool:
+        import requests
+        try:
+            resp = requests.post(
+                self.api_url,
+                json={"chat_id": self.chat_id, "text": message, "parse_mode": "Markdown"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            return True
+        except Exception as e:
+            print(f"  [notify] Telegram failed: {e}")
+            return False
+
+
+# ── Slack Backend ────────────────────────────────────────────────────────────
+
+class SlackBackend:
+    """Send notifications via Slack Incoming Webhook."""
+
+    name = "slack"
+
+    def __init__(self, webhook_url: str):
+        self.webhook_url = webhook_url
+
+    def send(self, message: str) -> bool:
+        import requests
+        try:
+            resp = requests.post(
+                self.webhook_url,
+                json={"text": message},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            return True
+        except Exception as e:
+            print(f"  [notify] Slack failed: {e}")
+            return False
+
+
+# ── JSONL Fallback Backend ───────────────────────────────────────────────────
+
+class JsonlBackend:
+    """Write notifications to local JSONL file (always available)."""
+
+    name = "jsonl"
+
+    def __init__(self, log_path: Path = LOG_DIR / "notifications.jsonl"):
+        self.log_path = log_path
+
+    def send(self, message: str) -> bool:
+        _log_notification({
+            "backend": "jsonl",
+            "timestamp": datetime.now().isoformat(),
+            "message": message,
+        })
+        return True
+
+
+# ── Notifier Orchestrator ────────────────────────────────────────────────────
+
+class Notifier:
+    """
+    Send post-publish notifications via configured backends.
+    All backends are optional; at minimum JSONL logger always works.
+    """
+
+    def __init__(self, cfg):
+        self.backends = []
+
+        # Telegram (preferred for mobile instant notification)
+        if getattr(cfg, "TELEGRAM_BOT_TOKEN", None) and getattr(cfg, "TELEGRAM_CHAT_ID", None):
+            self.backends.append(TelegramBackend(cfg.TELEGRAM_BOT_TOKEN, cfg.TELEGRAM_CHAT_ID))
+
+        # Slack
+        if getattr(cfg, "SLACK_WEBHOOK_URL", None):
+            self.backends.append(SlackBackend(cfg.SLACK_WEBHOOK_URL))
+
+        # JSONL fallback — always present
+        self.backends.append(JsonlBackend())
+
+    def _build_message(
+        self,
+        post_id: str,
+        caption_preview: str,
+        mood: str,
+        trending_suggestion: str = "",
+    ) -> str:
+        """Build a rich notification message."""
+        lines = [
+            "🎬 *New Socrates Reel Posted!*",
+            "",
+            f"*Mood:* {mood}",
+            f"*Preview:* {caption_preview[:120]}{'...' if len(caption_preview) > 120 else ''}",
+            f"*Link:* https://www.instagram.com/p/{post_id}/",
+            "",
+            "💡 *ACTION NEEDED:*",
+            "Open Instagram → Go to your profile → Edit this Reel → Add Music",
+        ]
+
+        if trending_suggestion:
+            lines.append(f"🎵 *Trending sound suggestion:* {trending_suggestion}")
+
+        lines.extend([
+            "",
+            "_(This is the only way to attach real trending audio. The API cannot do it automatically.)_",
+        ])
+
+        return "\n".join(lines)
+
+    def notify_post_published(
+        self,
+        post_id: str,
+        caption_preview: str,
+        mood: str,
+        trending_suggestion: str = "",
+    ):
+        """
+        Send notification after a Reel is posted.
+        Non-blocking: backend failures are logged but don't raise.
+        """
+        message = self._build_message(post_id, caption_preview, mood, trending_suggestion)
+
+        # Always log to JSONL first
+        _log_notification({
+            "event": "post_published",
+            "timestamp": datetime.now().isoformat(),
+            "post_id": post_id,
+            "mood": mood,
+            "caption_preview": caption_preview,
+            "trending_suggestion": trending_suggestion,
+            "message": message,
+        })
+
+        sent_any = False
+        for backend in self.backends:
+            try:
+                ok = backend.send(message)
+                if ok:
+                    print(f"  [notify] Sent via {backend.name}")
+                    sent_any = True
+            except Exception as e:
+                print(f"  [notify] Backend {backend.name} failed: {e}")
+
+        if not sent_any:
+            print("  [notify] ⚠️  No external backend succeeded — check logs/notifications.jsonl")
+
+
+# ── CLI helper ───────────────────────────────────────────────────────────────
+
+def notify_latest(cfg):
+    """Send notification for the most recently logged post (workflow helper)."""
+    log_path = LOG_DIR / "posts.jsonl"
+    if not log_path.exists():
+        print("[notify] No posts.jsonl found")
+        return
+
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = [l.strip() for l in f if l.strip()]
+        if not lines:
+            print("[notify] No posts in log")
+            return
+        latest = json.loads(lines[-1])
+    except Exception as e:
+        print(f"[notify] Failed to read posts log: {e}")
+        return
+
+    notifier = Notifier(cfg)
+    notifier.notify_post_published(
+        post_id=latest.get("post_id", ""),
+        caption_preview=latest.get("caption_preview", ""),
+        mood=latest.get("mood", ""),
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+    from config import Config
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--latest", action="store_true", help="Notify for the most recent post in posts.jsonl")
+    args = parser.parse_args()
+
+    cfg = Config()
+    if args.latest:
+        notify_latest(cfg)
+    else:
+        print("Usage: python notifier.py --latest")

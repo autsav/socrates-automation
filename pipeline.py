@@ -25,6 +25,8 @@ from config import Config
 from data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today
 from ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 from token_manager import get_valid_token_with_fallback
+from notifier import Notifier
+from trending_music import get_trending_suggestion
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
@@ -545,6 +547,20 @@ def run_pipeline(dry_run: bool = False, reel: bool = False):
         log.info(f"✅ Posted! ID: {post_id}")
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
         mark_posted(post_row_id, post_id, str(final_image_path), str(reel_path) if reel_path else None)
+
+        # ── Phase 4: Notify user to manually add trending sound ───────────────
+        if post_id:
+            try:
+                notifier = Notifier(cfg)
+                trending = get_trending_suggestion(mood)
+                notifier.notify_post_published(
+                    post_id=post_id,
+                    caption_preview=quote_data["caption"][:120],
+                    mood=mood,
+                    trending_suggestion=trending,
+                )
+            except Exception as e:
+                log.warning(f"Notification failed (non-blocking): {e}")
     else:
         log.info("⏭ dry_run=True — skip Instagram post")
 

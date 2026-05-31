@@ -144,13 +144,30 @@ def generate_reel(
     audio = _audio_path(mood)
     has_audio = audio is not None
 
-    # Scene durations (seconds)
-    hook_dur, quote_dur, cta_dur = SCENE_DURATIONS
-    offset_1 = hook_dur - TRANSITION_DURATION          # 2.5
-    v01_dur = hook_dur + quote_dur - TRANSITION_DURATION  # 17.5
-    offset_2 = v01_dur - TRANSITION_DURATION           # 17.0
+    # ── Beat Sync: detect energy peaks and align transitions ─────────────────
+    beat_sync_info = None
+    if has_audio:
+        try:
+            from beat_sync import analyze_audio_for_sync
+            beat_sync_info = analyze_audio_for_sync(audio, mood=mood, target_total=TOTAL_DURATION)
+            print(f"  [beat-sync] Peaks: {beat_sync_info['peaks'][:3]}")
+            print(f"  [beat-sync] Scenes: {beat_sync_info['scene_durations']}, transition: {beat_sync_info['transition_type']}")
+        except Exception as e:
+            print(f"  [beat-sync] Analysis failed ({e}) — using default timing")
 
-    zoom_frames = quote_dur * 30  # 450 frames for 15s @ 30fps
+    if beat_sync_info and beat_sync_info["used_beats"]:
+        hook_dur, quote_dur, cta_dur = beat_sync_info["scene_durations"]
+        offset_1, offset_2 = beat_sync_info["transition_offsets"]
+        transition_type = beat_sync_info["transition_type"]
+    else:
+        # Fallback to fixed psychology-optimised timing
+        hook_dur, quote_dur, cta_dur = SCENE_DURATIONS
+        offset_1 = hook_dur - TRANSITION_DURATION          # 2.5
+        v01_dur = hook_dur + quote_dur - TRANSITION_DURATION  # 17.5
+        offset_2 = v01_dur - TRANSITION_DURATION           # 17.0
+        transition_type = "fade"
+
+    zoom_frames = int(quote_dur * 30)  # frames for quote scene @ 30fps
 
     cmd = ["ffmpeg", "-y"]
 
@@ -225,10 +242,10 @@ def generate_reel(
         f"{vignette},format=yuv420p[v2]"
     )
 
-    # Crossfade transitions
+    # Crossfade transitions (beat-synced type or default fade)
     transition_filters = (
-        f"[v0][v1]xfade=transition=fade:duration={TRANSITION_DURATION}:offset={offset_1}[v01];"
-        f"[v01][v2]xfade=transition=fade:duration={TRANSITION_DURATION}:offset={offset_2}[outv]"
+        f"[v0][v1]xfade=transition={transition_type}:duration={TRANSITION_DURATION}:offset={offset_1}[v01];"
+        f"[v01][v2]xfade=transition={transition_type}:duration={TRANSITION_DURATION}:offset={offset_2}[outv]"
     )
 
     filter_complex = ";".join([hook_filter, quote_filter, cta_filter, transition_filters])

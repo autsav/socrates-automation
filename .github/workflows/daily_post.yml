@@ -103,13 +103,27 @@ jobs:
             python pipeline.py --reel
           fi
 
-      - name: Commit SQLite database back to repo
+      - name: Send post notification (Telegram/Slack)
+        if: github.event_name != 'pull_request'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] || [ -n "$SLACK_WEBHOOK_URL" ]; then
+            echo "📨 Sending post notification..."
+            python notifier.py --latest || echo "Notification skipped (no recent post)"
+          else
+            echo "ℹ️ No notification backend configured — check logs/notifications.jsonl"
+          fi
+
+      - name: Commit SQLite database + logs back to repo
         if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/pipeline.db
-          git diff --staged --quiet || git commit -m "chore: update pipeline.db [skip ci]"
+          git add data/pipeline.db logs/
+          git diff --staged --quiet || git commit -m "chore: update pipeline.db + logs [skip ci]"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

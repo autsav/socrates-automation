@@ -24,6 +24,11 @@ class Config:
     CLOUDINARY_API_SECRET: str = ""
     PIXABAY_API_KEY: str = ""        # Optional — royalty-free music downloads
 
+    # ── Notification backends (all optional) ──────────────────────────────────
+    TELEGRAM_BOT_TOKEN: str = ""     # @BotFather on Telegram
+    TELEGRAM_CHAT_ID: str = ""       # @userinfobot on Telegram
+    SLACK_WEBHOOK_URL: str = ""      # Slack Incoming Webhook URL
+
     def __post_init__(self):
         self.ANTHROPIC_API_KEY     = self._get("ANTHROPIC_API_KEY")
         self.FAL_API_KEY           = self._get("FAL_API_KEY")
@@ -35,6 +40,9 @@ class Config:
         self.CLOUDINARY_API_KEY    = self._get("CLOUDINARY_API_KEY")
         self.CLOUDINARY_API_SECRET = self._get("CLOUDINARY_API_SECRET")
         self.PIXABAY_API_KEY         = self._get_opt("PIXABAY_API_KEY")
+        self.TELEGRAM_BOT_TOKEN      = self._get_opt("TELEGRAM_BOT_TOKEN")
+        self.TELEGRAM_CHAT_ID        = self._get_opt("TELEGRAM_CHAT_ID")
+        self.SLACK_WEBHOOK_URL       = self._get_opt("SLACK_WEBHOOK_URL")
 
     def _get(self, key: str) -> str:
         val = os.getenv(key, "")
