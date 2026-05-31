@@ -134,6 +134,73 @@ _FALLBACK_HOOKS = [
 ]
 
 
+# ── Controversy questions — drives comments via binary debate ─────────────────
+# Psychology: binary opinion questions generate 4-7x more comments than generic CTAs.
+# Formats: "Agree or disagree:", "Hot take:", "Unpopular opinion:" all force a reaction.
+
+_CONTROVERSY_QUESTIONS = {
+    "procrastinator": [
+        "Agree or disagree: Waiting is just fear with better excuses.",
+        "Hot take: Procrastination is a choice, not a personality trait.",
+        "Unpopular opinion: Laziness doesn't exist. Only misaligned priorities.",
+        "Agree or disagree: If you really wanted it, you'd have started already.",
+    ],
+    "doomscroller": [
+        "Agree or disagree: Social media is designed to make you feel inferior.",
+        "Hot take: Your phone is not the problem. Your discipline is.",
+        "Unpopular opinion: Most people are addicted and won't admit it.",
+        "Agree or disagree: You are being manipulated right now.",
+    ],
+    "stuck": [
+        "Hot take: Being stuck is comfortable. That's the real problem.",
+        "Agree or disagree: Change is always possible. Most people just won't pay the price.",
+        "Unpopular opinion: You're not stuck. You're just scared.",
+        "Agree or disagree: The life you want is on the other side of one hard decision.",
+    ],
+    "lazy": [
+        "Hot take: There is no such thing as a lazy person. Only wrong goals.",
+        "Agree or disagree: Discipline is a muscle. You've just stopped training it.",
+        "Unpopular opinion: You already know what to do. You just don't want to do it.",
+        "Agree or disagree: Action creates motivation, not the other way around.",
+    ],
+    "quitter": [
+        "Hot take: Most people quit right before their breakthrough.",
+        "Agree or disagree: Quitting is never the right answer — change strategy, not the goal.",
+        "Unpopular opinion: Every time you quit, it gets easier to quit next time.",
+        "Agree or disagree: The version of you that never gave up is still possible.",
+    ],
+    "lost": [
+        "Hot take: You're not lost. You're avoiding the answer you already know.",
+        "Agree or disagree: Most people know their purpose. They just fear it.",
+        "Unpopular opinion: Feeling lost is a luxury. Most people are too busy surviving.",
+        "Agree or disagree: Purpose is found through action, not reflection.",
+    ],
+    "overwhelmed": [
+        "Hot take: You're overwhelmed by too little clarity, not too much to do.",
+        "Agree or disagree: Saying yes to everything is saying no to yourself.",
+        "Unpopular opinion: Burnout is a warning, not a badge of honour.",
+        "Agree or disagree: The most productive thing you can do right now is rest.",
+    ],
+}
+
+_FALLBACK_CONTROVERSY = [
+    "Hot take: Socrates would say most people are sleepwalking through life.",
+    "Agree or disagree: Ancient wisdom > modern self-help.",
+    "Unpopular opinion: Most people know the answer. They just won't act.",
+    "Agree or disagree: The unexamined life is the default, not the exception.",
+]
+
+
+def _pick_controversy(audience: str, row_number: int) -> str:
+    """
+    Pick a polarising debate question for the image controversy bar + caption.
+    Rotates deterministically so every post has a different angle.
+    """
+    pool = _CONTROVERSY_QUESTIONS.get(audience, _FALLBACK_CONTROVERSY)
+    return pool[row_number % len(pool)]
+
+
+
 def _generate_psychology_hook(audience: str, row_number: int) -> str:
     """
     Pick a psychology-driven hook for Reel Scene 1.
@@ -231,11 +298,12 @@ def _viral_first_line(audience: str, row_number: int) -> str:
     return pool[(row_number + 1) % len(pool)]
 
 
-def _enhance_caption(caption: str, audience: str, mood: str, row_number: int) -> str:
+def _enhance_caption(caption: str, audience: str, mood: str, row_number: int, controversy: str = "") -> str:
     """
     Enhance a caption with:
     - Viral first line (shown in feed preview — must stop the scroll)
     - Dynamic CTA replacement with share-optimised variants
+    - Controversy question (drives comments — binary debate trigger)
     - Emoji prefix
     - Strategic line breaks
     - Hashtag block
@@ -260,6 +328,11 @@ def _enhance_caption(caption: str, audience: str, mood: str, row_number: int) ->
     first_line = _viral_first_line(audience, row_number)
     emojis = _add_emojis(audience, mood)
     enhanced = f"{first_line}\n\n{emojis}\n\n{body}"
+
+    # Add controversy question — drives comments via binary debate
+    # Placed just before hashtags so it's the last thing read before they scroll on
+    if controversy:
+        enhanced = f"{enhanced}\n\n💬 {controversy}"
 
     # Add hashtags at the bottom
     hashtags = _generate_hashtags(audience, mood)
@@ -310,12 +383,17 @@ def run_pipeline(dry_run: bool = False, reel: bool = False):
     chosen_caption = quote_data.get("caption_b") if caption_variant == 1 else quote_data["caption"]
     quote_data["caption"] = chosen_caption
 
-    # Enhance caption with emojis, dynamic CTA, hashtags, formatting
+    # Pick controversy question — drives comments on image and in caption
+    controversy = _pick_controversy(quote_data["audience"], quote_data["row_number"])
+    log.info(f"  Controversy: {controversy[:60]}")
+
+    # Enhance caption with emojis, dynamic CTA, controversy, hashtags, formatting
     enhanced_caption = _enhance_caption(
         chosen_caption,
         audience=quote_data["audience"],
         mood=mood,
         row_number=quote_data["row_number"],
+        controversy=controversy,
     )
     quote_data["caption"] = enhanced_caption
     log.info(f"  Caption enhanced ({len(enhanced_caption)} chars)")
@@ -350,6 +428,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False):
         output_dir=OUTPUT_DIR,
         timestamp=timestamp,
         quote_source=quote_data.get("source", "socrates"),
+        controversy_text=controversy,
     )
     log.info(f"Final image: {final_image_path}")
 
@@ -406,7 +485,8 @@ def run_pipeline(dry_run: bool = False, reel: bool = False):
             background_path=bg_hook_path,
             hook_text=hook_text,
             output_dir=OUTPUT_DIR,
-            timestamp=timestamp
+            timestamp=timestamp,
+            controversy_text=controversy,
         )
         scene_quote = compose_quote_scene(
             background_path=bg_quote_path,

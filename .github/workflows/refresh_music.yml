@@ -1,0 +1,42 @@
+name: Refresh Trending Music
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Every Monday 06:00 UTC — start of week, fresh tracks
+  workflow_dispatch:        # Manual trigger anytime
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r socrates_pipeline/requirements.txt
+
+      - name: Refresh trending music tracks
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        working-directory: socrates_pipeline
+        run: python download_music.py --refresh
+
+      - name: Commit refreshed music tracks
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add socrates_pipeline/audio/music/
+          git diff --staged --quiet || git commit -m "chore: refresh trending music tracks [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

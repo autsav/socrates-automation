@@ -165,6 +165,7 @@ def compose_post(
     output_dir: str = "output",
     timestamp: str = "post",
     quote_source: str = "socrates",  # "socrates" or "ai_generated"
+    controversy_text: str = "",      # Optional: bold debate-starter bar at bottom
 ) -> Path:
     """
     Compose final Instagram post image.
@@ -174,6 +175,7 @@ def compose_post(
     - Text glow for readability on busy backgrounds
     - Decorative gold lines and Greek symbol
     - Smart attribution (Socrates vs AI-generated)
+    - Optional controversy bar (red band + polarising question) for engagement
     Returns path to final JPEG.
     """
     bg_path = Path(background_path)
@@ -254,12 +256,55 @@ def compose_post(
     brand_x = (OUTPUT_SIZE[0] - (bbox[2] - bbox[0])) // 2
     draw.text((brand_x, OUTPUT_SIZE[1] - 80), brand_text, font=brand_font, fill=(*GOLD_COLOR, 160))
 
+    # ── Controversy overlay (optional) ───────────────────────────────────────
+    if controversy_text:
+        _draw_controversy_overlay(draw, controversy_text, OUTPUT_SIZE[0], OUTPUT_SIZE[1], _load_font)
+
     # ── Save final image ──────────────────────────────────────────────────────
     final = composite.convert("RGB")  # Instagram requires JPEG (no alpha)
     output_path = Path(output_dir) / f"post_{timestamp}.jpg"
     final.save(output_path, "JPEG", quality=95)
 
     return output_path
+
+
+def _draw_controversy_overlay(draw, text: str, image_width: int, image_height: int, font_loader):
+    """
+    Draw a high-contrast controversy bar at the bottom of the image.
+    Psychology: polarising statements + binary questions force comments.
+    Style: bold white text on semi-transparent dark red/charcoal band.
+    """
+    bar_height = 90
+    bar_top = image_height - 200
+    bar_bottom = bar_top + bar_height
+
+    # Draw semi-transparent dark band
+    from PIL import Image as PILImage
+    bar_overlay = PILImage.new("RGBA", (image_width, image_height), (0, 0, 0, 0))
+    bar_draw = ImageDraw.Draw(bar_overlay)
+    bar_draw.rectangle(
+        [(0, bar_top), (image_width, bar_bottom)],
+        fill=(140, 20, 20, 210)  # Deep red, high visibility
+    )
+    draw._image.paste(
+        PILImage.new("RGBA", (image_width, bar_height), (140, 20, 20, 210)),
+        (0, bar_top),
+        PILImage.new("RGBA", (image_width, bar_height), (140, 20, 20, 210)),
+    )
+
+    # Draw controversy text centered in the bar
+    font = font_loader(28, bold=True)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    x = (image_width - text_w) // 2
+    y = bar_top + (bar_height - text_h) // 2
+
+    # White text with black outline for max contrast
+    for dx, dy in [(-1,-1),(1,-1),(-1,1),(1,1)]:
+        draw.text((x+dx, y+dy), text, font=font, fill=(0, 0, 0))
+    draw.text((x, y), text, font=font, fill=(255, 255, 255))
+
 
 # ── Scene composers for multi-scene Reels ────────────────────────────────────
 
@@ -268,10 +313,11 @@ def compose_hook_scene(
     hook_text: str,
     output_dir: str = "output",
     timestamp: str = "hook",
+    controversy_text: str = "",   # Bold debate question at bottom
 ) -> Path:
     """
     Compose a scroll-stopping hook frame (Scene 1).
-    Large bold text, no attribution — pure attention grabber.
+    Large bold text + optional controversy bar — pure attention grabber.
     """
     bg = Image.open(background_path).convert("RGBA")
     bg = bg.resize(OUTPUT_SIZE, Image.LANCZOS)
@@ -302,6 +348,10 @@ def compose_hook_scene(
         color=WHITE_COLOR,
         glow=True,
     )
+
+    # Controversy bar on hook scene — drives comments from first frame
+    if controversy_text:
+        _draw_controversy_overlay(draw, controversy_text, OUTPUT_SIZE[0], OUTPUT_SIZE[1], _load_font)
 
     final = composite.convert("RGB")
     out = Path(output_dir) / f"scene_hook_{timestamp}.jpg"
