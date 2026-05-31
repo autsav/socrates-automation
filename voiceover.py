@@ -16,15 +16,19 @@ from pathlib import Path
 from typing import Literal
 
 # Mood → OpenAI voice mapping
-# alloy=neutral, echo=deep, fable=storytelling, onyx=powerful, nova=warm, shimmer=bright
+# Research: deep baritone voices (echo, onyx) signal authority, wisdom, trust.
+# Morgan Freeman effect: low pitch + resonant formants + measured pace = gravitas.
+# Default ALL stoic moods to "echo" (Freeman-esque baritone).
+# Reserve "onyx" only for epic_warrior when maximum aggression/power needed.
+# Avoid bright/approachable voices (nova, shimmer, fable) — philosophy needs weight.
 VOICE_MAP = {
-    "calm_stoic":         "alloy",
-    "cinematic_hopeful":  "nova",
-    "dark_philosophical": "echo",
-    "dramatic_ancient":   "fable",
-    "epic_warrior":       "onyx",
-    "mystical_greek":     "shimmer",
-    "stark_minimal":      "alloy",
+    "calm_stoic":         "echo",    # deep, authoritative, contemplative
+    "cinematic_hopeful":  "echo",    # aspirational but still weighty
+    "dark_philosophical": "echo",    # the darkest, most resonant
+    "dramatic_ancient":   "echo",    # history-channel narrator gravitas
+    "epic_warrior":       "onyx",    # maximum power, commanding
+    "mystical_greek":     "echo",    # clean but deep, not bright
+    "stark_minimal":      "echo",    # every word lands with weight
 }
 
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
