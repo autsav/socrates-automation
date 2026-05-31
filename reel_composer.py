@@ -200,7 +200,7 @@ def generate_reel(
     quote_filter = (
         f"[1:v]trim=duration={quote_dur},"
         f"zoompan=z='min(zoom+0.0015,1.12)':d={zoom_frames}:s=1080x1920:fps=30"
-        f":x='(iw-iw/zoom)/2+sin(t/15*PI)*40',"
+        f":x='(iw-iw/zoom)/2+in*0.15',"
         f"{vignette}"
     )
 
