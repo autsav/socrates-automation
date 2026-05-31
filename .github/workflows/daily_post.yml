@@ -94,13 +94,17 @@ jobs:
           PIXABAY_API_KEY:        ${{ secrets.PIXABAY_API_KEY }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "🔍 PR dry-run"
             python pipeline.py --dry-run
           elif [ "${{ steps.format.outputs.mode }}" = "carousel" ]; then
             echo "📸 Posting CAROUSEL (Wed/Thu — highest engagement day)"
             python pipeline.py --carousel
-          else
-            echo "🎬 Posting REEL"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "🎬 MANUAL TRIGGER — posting REEL directly (for testing)"
             python pipeline.py --reel
+          else
+            echo "📲 SCHEDULED — generating Reel and sending to Telegram for MANUAL upload with trending music"
+            python pipeline.py --manual
           fi
 
       - name: Send post notification (Telegram/Slack)

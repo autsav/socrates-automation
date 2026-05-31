@@ -56,6 +56,25 @@ class TelegramBackend:
             print(f"  [notify] Telegram failed: {e}")
             return False
 
+    def send_video(self, video_path: Path, caption: str = "") -> bool:
+        """Send MP4 video file via Telegram sendVideo API (max 50MB)."""
+        import requests
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendVideo"
+            with open(video_path, "rb") as f:
+                resp = requests.post(
+                    url,
+                    data={"chat_id": self.chat_id, "caption": caption, "supports_streaming": True},
+                    files={"video": (video_path.name, f, "video/mp4")},
+                    timeout=120,
+                )
+            resp.raise_for_status()
+            print(f"  [notify] Sent video via Telegram: {video_path.name} ({video_path.stat().st_size / 1024:.0f} KB)")
+            return True
+        except Exception as e:
+            print(f"  [notify] Telegram video failed: {e}")
+            return False
+
 
 # ── Slack Backend ────────────────────────────────────────────────────────────
 
@@ -188,6 +207,72 @@ class Notifier:
 
         if not sent_any:
             print("  [notify] ⚠️  No external backend succeeded — check logs/notifications.jsonl")
+
+    def notify_manual_reel_ready(
+        self,
+        reel_path,
+        cover_path,
+        caption: str,
+        mood: str,
+        trending_suggestion: str = "",
+    ):
+        """
+        MANUAL MODE: Send the generated Reel video file to the user via Telegram.
+        User downloads it and manually posts to Instagram with trending music.
+        """
+        # Build caption message
+        lines = [
+            "🎬 Your Socrates Reel is ready!",
+            "",
+            f"Mood: {mood}",
+            f"File: {reel_path.name}",
+            "",
+            "✍️ CAPTION (copy & paste into Instagram):",
+            "-" * 30,
+            caption,
+            "-" * 30,
+            "",
+            "🎵 TRENDING SOUND to add:",
+        ]
+        lines.append(trending_suggestion)
+        lines.extend([
+            "",
+            "📌 STEPS:",
+            "1. Download the video above to your gallery",
+            "2. Open Instagram → Reels → Upload from gallery",
+            "3. Tap 'Add Music' and search the trending sound",
+            "4. Paste the caption above",
+            "5. Post!",
+        ])
+        message = "\n".join(lines)
+
+        # Log first
+        _log_notification({
+            "event": "manual_reel_ready",
+            "timestamp": datetime.now().isoformat(),
+            "reel_path": str(reel_path),
+            "mood": mood,
+            "caption_preview": caption[:120],
+            "trending_suggestion": trending_suggestion,
+            "message": message,
+        })
+
+        # Send video + caption via Telegram (only Telegram supports video files)
+        sent_video = False
+        for backend in self.backends:
+            if backend.name == "telegram" and hasattr(backend, "send_video"):
+                try:
+                    ok = backend.send_video(reel_path, caption="🎬 Your Reel is ready! Download this video and upload to Instagram Reels.")
+                    if ok:
+                        print(f"  [notify] Sent Reel video via {backend.name}")
+                        sent_video = True
+                        # Send follow-up text message with caption
+                        backend.send(message)
+                except Exception as e:
+                    print(f"  [notify] Video send via {backend.name} failed: {e}")
+
+        if not sent_video:
+            print("  [notify] ⚠️  Could not send video — check logs/notifications.jsonl and GitHub artifacts")
 
 
 # ── CLI helper ───────────────────────────────────────────────────────────────

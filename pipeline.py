@@ -350,11 +350,11 @@ def save_log(data: dict):
         f.write(json.dumps(data) + "\n")
 
 
-def run_pipeline(dry_run: bool = False, reel: bool = False):
+def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False):
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    log.info(f"▶ HYBRID Pipeline start | dry_run={dry_run} reel={reel}")
+    log.info(f"▶ HYBRID Pipeline start | dry_run={dry_run} reel={reel} manual={manual}")
 
     # Initialize SQLite state store
     init_db()
@@ -516,7 +516,28 @@ def run_pipeline(dry_run: bool = False, reel: bool = False):
 
     # ── Step 6: Post to Instagram ────────────────────────────────────────────
     post_id = None
-    if not dry_run:
+    if manual:
+        # ── MANUAL MODE: Generate Reel but send to user for manual upload ──
+        log.info("Step 6/6: MANUAL MODE — Sending Reel to Telegram for manual posting...")
+        try:
+            notifier = Notifier(cfg)
+            trending = get_trending_suggestion(mood)
+            notifier.notify_manual_reel_ready(
+                reel_path=reel_path,
+                cover_path=final_image_path,
+                caption=quote_data["caption"],
+                mood=mood,
+                trending_suggestion=trending,
+            )
+            log.info("✅ Reel sent to Telegram! Download it and post to Instagram with trending music.")
+        except Exception as e:
+            log.error(f"Failed to send Reel to Telegram: {e}")
+
+        # Mark as ready (not fully posted yet)
+        mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
+        mark_posted(post_row_id, "PENDING_MANUAL", str(final_image_path), str(reel_path) if reel_path else None)
+
+    elif not dry_run:
         if reel and reel_path and ffmpeg_available():
             log.info("Step 6/6: Posting Reel to Instagram...")
             post_id = post_reel_to_instagram(
@@ -586,5 +607,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Skip Instagram post")
     parser.add_argument("--reel", action="store_true", help="Post as Reel with Ken Burns zoom + ambient audio")
+    parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     args = parser.parse_args()
-    run_pipeline(dry_run=args.dry_run, reel=args.reel)
+
+    # --manual implies --reel (generate video) but skips API posting
+    if args.manual:
+        run_pipeline(dry_run=False, reel=True, manual=True)
+    else:
+        run_pipeline(dry_run=args.dry_run, reel=args.reel)
