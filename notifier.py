@@ -47,7 +47,7 @@ class TelegramBackend:
         try:
             resp = requests.post(
                 self.api_url,
-                json={"chat_id": self.chat_id, "text": message, "parse_mode": "Markdown"},
+                json={"chat_id": self.chat_id, "text": message},
                 timeout=15,
             )
             resp.raise_for_status()
@@ -132,14 +132,14 @@ class Notifier:
     ) -> str:
         """Build a rich notification message."""
         lines = [
-            "🎬 *New Socrates Reel Posted!*",
+            "🎬*New Socrates Reel Posted!*",
             "",
             f"*Mood:* {mood}",
             f"*Preview:* {caption_preview[:120]}{'...' if len(caption_preview) > 120 else ''}",
             f"*Link:* https://www.instagram.com/p/{post_id}/",
             "",
             "💡 *ACTION NEEDED:*",
-            "Open Instagram → Go to your profile → Edit this Reel → Add Music",
+            "Open Instagram, go to your profile, edit this Reel, then tap Add Music.",
         ]
 
         if trending_suggestion:
