@@ -14,6 +14,9 @@ openpyxl>=3.1.0
 # Environment config
 python-dotenv>=1.0.0
 
+# AI Creative Studio — reasoning agents (structured outputs, prompt caching)
+anthropic>=0.69.0
+
 # Cloud image upload (optional — used by image_generator)
 cloudinary>=1.36.0
 
