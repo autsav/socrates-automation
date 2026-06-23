@@ -22,7 +22,7 @@ from image_composer import compose_post, compose_hook_scene, compose_quote_scene
 from instagram_poster import post_to_instagram, post_reel_to_instagram
 from reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today
+from data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
 from ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 from token_manager import get_valid_token_with_fallback
 from notifier import Notifier
@@ -351,7 +351,64 @@ def save_log(data: dict):
         f.write(json.dumps(data) + "\n")
 
 
-def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False):
+def _apply_studio_decision(brief, decision, concepts_by_id):
+    """Map a studio Decision onto the quote_data dict the renderer consumes.
+    Stamps caption_marker (the hook) onto visual_direction for reconcile."""
+    concept = concepts_by_id[decision.top_pick]
+    decision.visual_direction["caption_marker"] = concept.hook
+    return {
+        "row_number": brief.quote.get("row_number"),
+        "audience": brief.audience,
+        "quote": brief.quote.get("text", ""),
+        "caption": concept.caption,
+        "mood": decision.visual_direction["mood"],
+        "hook": concept.hook,
+        "flux_prompt": decision.visual_direction.get("flux_prompt", ""),
+        "format": brief.format,
+        "reel_scenes": concept.reel_scenes,
+    }
+
+
+def _studio_stage(cfg, slot):
+    """Run the AI Creative Studio. Returns (quote_data, decision) or None (fallback)."""
+    from studio.run import run_studio, _build_pool
+    from studio.client import StudioClient
+
+    client = StudioClient(cfg.ANTHROPIC_API_KEY)
+    pool = _build_pool(str(EXCEL_PATH))
+    result = run_studio(client, slot, pool, [])
+    if result is None:
+        return None
+    brief, decision, cmap = result
+    # Resolve the quote text from the pool if the strategist returned only a row.
+    if not brief.quote.get("text") and brief.quote.get("row_number") is not None:
+        match = next((r for r in pool if r["row_number"] == brief.quote["row_number"]), None)
+        if match:
+            brief.quote["text"] = match["quote"]
+    return _apply_studio_decision(brief, decision, cmap), decision
+
+
+def _legacy_content(cfg):
+    """Legacy templated content prep (quote pool + A/B + caption templates)."""
+    quote_data = read_todays_quote(EXCEL_PATH, api_key=cfg.ANTHROPIC_API_KEY)
+    caption_variant = pick_caption_variant(quote_data["audience"], get_ab_results=get_ab_results)
+    mood = pick_mood(quote_data["audience"], quote_data["quote"], get_ab_results=get_ab_results)
+    chosen_caption = quote_data.get("caption_b") if caption_variant == 1 else quote_data["caption"]
+    controversy = _pick_controversy(quote_data["audience"], quote_data["row_number"])
+    quote_data["caption"] = _enhance_caption(
+        chosen_caption,
+        audience=quote_data["audience"],
+        mood=mood,
+        row_number=quote_data["row_number"],
+        controversy=controversy,
+    )
+    if not mood:
+        mood = get_mood_prompt(quote=quote_data["quote"], audience=quote_data["audience"],
+                               api_key=cfg.ANTHROPIC_API_KEY)
+    return quote_data, mood, controversy, caption_variant
+
+
+def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False):
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -369,47 +426,30 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         log.info(f"⏭ Slot {slot} already posted today — skipping")
         return {"skipped": True, "reason": f"slot {slot} already posted today"}
 
-    # ── Step 1: Read quote from Excel (FREE) ──────────────────────────────────
-    log.info("Step 1/5: Reading quote from Excel...")
-    quote_data = read_todays_quote(EXCEL_PATH, api_key=cfg.ANTHROPIC_API_KEY)
+    # ── Content stage: AI Creative Studio (with legacy fallback) ──────────────
+    studio_decision = None
+    flux_override = ""
+    if studio:
+        log.info("Step 1: AI Creative Studio...")
+        bundle = _studio_stage(cfg, slot)
+        if bundle is not None:
+            quote_data, studio_decision = bundle
+            mood = quote_data["mood"]
+            controversy = ""
+            caption_variant = -1
+            flux_override = quote_data.get("flux_prompt", "")
+            log.info(f"  [studio] proposal ready — mood={mood}, "
+                     f"hook={quote_data.get('hook', '')[:40]!r}")
+        else:
+            log.info("  [studio] fell back to legacy templated path")
+
+    if studio_decision is None:
+        log.info("Step 1: Reading quote + legacy templated content...")
+        quote_data, mood, controversy, caption_variant = _legacy_content(cfg)
+
     log.info(f"Quote:    {quote_data['quote'][:60]}...")
     log.info(f"Audience: {quote_data['audience']}")
-    log.info(f"Row:      {quote_data['row_number']}")
-
-    # ── Step 0: A/B Test Selection ────────────────────────────────────────────
-    log.info("Step 0: A/B test selection...")
-    caption_variant = pick_caption_variant(quote_data["audience"], get_ab_results=get_ab_results)
-    mood = pick_mood(quote_data["audience"], quote_data["quote"], get_ab_results=get_ab_results)
     log.info(f"Slot: {slot}, Variant: {caption_variant}, Mood: {mood}")
-
-    # Pick caption variant
-    chosen_caption = quote_data.get("caption_b") if caption_variant == 1 else quote_data["caption"]
-    quote_data["caption"] = chosen_caption
-
-    # Pick controversy question — drives comments on image and in caption
-    controversy = _pick_controversy(quote_data["audience"], quote_data["row_number"])
-    log.info(f"  Controversy: {controversy[:60]}")
-
-    # Enhance caption with emojis, dynamic CTA, controversy, hashtags, formatting
-    enhanced_caption = _enhance_caption(
-        chosen_caption,
-        audience=quote_data["audience"],
-        mood=mood,
-        row_number=quote_data["row_number"],
-        controversy=controversy,
-    )
-    quote_data["caption"] = enhanced_caption
-    log.info(f"  Caption enhanced ({len(enhanced_caption)} chars)")
-
-    # ── Step 2: Get image mood from Claude Haiku (TINY call) ──────────────────
-    log.info("Step 2/5: Getting image mood from Claude Haiku...")
-    if not mood:
-        mood = get_mood_prompt(
-            quote=quote_data["quote"],
-            audience=quote_data["audience"],
-            api_key=cfg.ANTHROPIC_API_KEY,
-        )
-    log.info(f"Mood: {mood}")
 
     # ── Step 3: Generate background image via Fal.ai ─────────────────────────
     log.info("Step 3/5: Generating background via Fal.ai...")
@@ -419,6 +459,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         output_dir=OUTPUT_DIR,
         quote=quote_data["quote"],
         anthropic_api_key=cfg.ANTHROPIC_API_KEY,
+        prompt_override=flux_override,
     )
     log.info(f"Background: {image_path}")
 
@@ -453,7 +494,8 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         # Extract hook text from caption for Scene 1
         # Psychology-driven hook: audience-specific pattern interrupt
         # Research: confrontational/curiosity-gap hooks have highest 3s hold rates
-        hook_text = _generate_psychology_hook(quote_data["audience"], quote_data["row_number"])
+        hook_text = quote_data.get("hook") or _generate_psychology_hook(
+            quote_data["audience"], quote_data["row_number"])
         log.info(f"  Hook: {hook_text[:50]}...")
 
         # Generate 2 backgrounds for visual variety
@@ -464,6 +506,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             output_dir=OUTPUT_DIR,
             quote=quote_data["quote"],
             anthropic_api_key=cfg.ANTHROPIC_API_KEY,
+            prompt_override=flux_override,
         )
         log.info("  Generating background 2 (quote scene)...")
         bg_quote_path = generate_background(
@@ -472,6 +515,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             output_dir=OUTPUT_DIR,
             quote=quote_data["quote"],
             anthropic_api_key=cfg.ANTHROPIC_API_KEY,
+            prompt_override=flux_override,
         )
         log.info("  Generating background 3 (CTA scene)...")
         bg_cta_path = generate_background(
@@ -480,6 +524,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             output_dir=OUTPUT_DIR,
             quote=quote_data["quote"],
             anthropic_api_key=cfg.ANTHROPIC_API_KEY,
+            prompt_override=flux_override,
         )
 
         # Compose 3 vertical scenes
@@ -611,6 +656,15 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     else:
         log.info("⏭ dry_run=True — skip Instagram post")
 
+    # ── Persist studio proposal (for reconcile + analyst feedback loop) ───────
+    if studio_decision is not None:
+        try:
+            save_proposal(slot, quote_data.get("row_number"), quote_data["audience"],
+                          quote_data.get("format", "reel"),
+                          json.dumps(studio_decision.to_dict()))
+        except Exception as e:
+            log.warning(f"[studio] save_proposal failed (non-blocking): {e}")
+
     # ── Save log ──────────────────────────────────────────────────────────────
     record = {
         "timestamp":       timestamp,
@@ -634,10 +688,11 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true", help="Skip Instagram post")
     parser.add_argument("--reel", action="store_true", help="Post as Reel with Ken Burns zoom + ambient audio")
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
+    parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
     args = parser.parse_args()
 
     # --manual implies --reel (generate video) but skips API posting
     if args.manual:
-        run_pipeline(dry_run=False, reel=True, manual=True)
+        run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio)
     else:
-        run_pipeline(dry_run=args.dry_run, reel=args.reel)
+        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio)

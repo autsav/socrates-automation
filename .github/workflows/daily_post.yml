@@ -136,11 +136,11 @@ jobs:
             echo "📸 Posting CAROUSEL (Wed/Thu — highest engagement day)"
             python pipeline.py --carousel
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "🎬 MANUAL TRIGGER — posting REEL directly (for testing)"
-            python pipeline.py --reel
+            echo "🎬 MANUAL TRIGGER — AI Creative Studio → Telegram proposal for manual upload (test)"
+            python pipeline.py --studio --manual
           else
-            echo "📲 SCHEDULED — generating Reel and sending to Telegram for MANUAL upload with trending music"
-            python pipeline.py --manual
+            echo "📲 SCHEDULED — AI Creative Studio proposal → Telegram for MANUAL upload with trending music (auto-falls back to legacy templates if the studio fails)"
+            python pipeline.py --studio --manual
           fi
 
       - name: Send post notification (Telegram/Slack)

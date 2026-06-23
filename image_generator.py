@@ -149,14 +149,17 @@ def generate_background(
     output_dir: str = "output",
     quote: str = "",
     anthropic_api_key: str = "",
+    prompt_override: str = "",
 ) -> Path:
     """
     Generate background image via Fal.ai FLUX schnell.
     Uses native vertical aspect ratio, seed for reproducibility, negative prompt,
     and 6 inference steps for sharper detail. Optionally enhances prompt via Claude.
+    If `prompt_override` is given (e.g. from the studio Creative Director), it is
+    used verbatim and the Haiku enhancement is skipped.
     Returns path to saved JPEG.
     """
-    prompt = enhance_prompt(mood, quote, anthropic_api_key)
+    prompt = prompt_override or enhance_prompt(mood, quote, anthropic_api_key)
 
     headers = {
         "Authorization": f"Key {api_key}",

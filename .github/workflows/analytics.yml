@@ -56,6 +56,18 @@ jobs:
       - name: Create output dirs
         run: mkdir -p output logs
 
+      - name: Reconcile manual posts (backfill real post_id)
+        if: github.event_name != 'pull_request'
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
+          META_ACCESS_TOKEN:      ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID:          ${{ secrets.IG_ACCOUNT_ID }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: python -m studio.reconcile || echo "Reconcile skipped/failed (non-blocking)"
+
       - name: Run analytics (dry-run on PRs)
         env:
           ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
