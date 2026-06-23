@@ -43,7 +43,7 @@ def test_generate_background_success(tmp_path):
         _, kwargs = mock_post.call_args
         assert kwargs["headers"]["Authorization"] == "Key test-key"
         assert kwargs["json"]["prompt"] == MOOD_PROMPTS["dark_philosophical"]
-        assert kwargs["json"]["image_size"] == "portrait_4_3"
+        assert kwargs["json"]["image_size"] == "portrait_16_9"
         assert kwargs["timeout"] == 60
 
         # Verify download call
