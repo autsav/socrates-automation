@@ -72,6 +72,19 @@ def init_db() -> None:
                 last_refreshed TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS proposals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                slot INTEGER NOT NULL,
+                quote_row INTEGER,
+                audience TEXT,
+                format TEXT,
+                decision_json TEXT NOT NULL,
+                status TEXT DEFAULT 'proposed',
+                post_id TEXT
+            )
+        """)
         conn.commit()
     finally:
         conn.close()
@@ -249,6 +262,107 @@ def save_token(service: str, token: str, expires_at: datetime | None = None) -> 
         conn.commit()
     finally:
         conn.close()
+
+
+def save_proposal(slot, quote_row, audience, fmt, decision_json):
+    """Insert a studio proposal. Returns row id."""
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO proposals (slot, quote_row, audience, format, decision_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (slot, quote_row, audience, fmt, decision_json),
+        )
+        rid = cur.lastrowid
+        conn.commit()
+        return rid
+    finally:
+        conn.close()
+
+
+def proposed_today(slot):
+    """Return True if a proposal already exists for today and this slot."""
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM proposals WHERE created_at >= date('now') AND slot = ? LIMIT 1",
+            (slot,),
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def mark_proposal_posted(proposal_id, post_id):
+    """Mark a proposal as posted and store its real Instagram post_id."""
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE proposals SET status='posted', post_id=? WHERE id=?",
+            (post_id, proposal_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_pending_proposals():
+    """Return proposals still awaiting reconciliation (status='proposed', no post_id)."""
+    conn = _get_connection()
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM proposals WHERE status='proposed' AND post_id IS NULL")
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def aggregate_performance(window_days=90):
+    """Compact per-dimension performance stats for the Analyst (no raw rows)."""
+    cutoff = (datetime.utcnow() - timedelta(days=window_days)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = _get_connection()
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT p.mood, p.audience, p.posting_slot,
+                   COALESCE(m.likes, 0) likes, COALESCE(m.reach, 0) reach,
+                   COALESCE(m.saved, 0) saved, COALESCE(m.comments, 0) comments
+            FROM posts p LEFT JOIN post_metrics m ON p.post_id = m.post_id
+            WHERE p.post_id IS NOT NULL AND p.posted_at >= ?
+            """,
+            (cutoff,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    def _avg(items, key):
+        vals = [r[key] for r in items]
+        return round(sum(vals) / len(vals), 2) if vals else 0.0
+
+    def _group(field):
+        out = {}
+        for k in {r[field] for r in rows}:
+            sub = [r for r in rows if r[field] == k]
+            out[str(k)] = {"n": len(sub), "avg_reach": _avg(sub, "reach"),
+                           "avg_saved": _avg(sub, "saved")}
+        return out
+
+    return {
+        "sample_size": len(rows),
+        "window_days": window_days,
+        "overall_avg_reach": _avg(rows, "reach"),
+        "overall_avg_saved": _avg(rows, "saved"),
+        "by_mood": _group("mood"),
+        "by_audience": _group("audience"),
+        "by_slot": _group("posting_slot"),
+    }
 
 
 def get_token(service: str) -> dict | None:
