@@ -687,6 +687,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Skip Instagram post")
     parser.add_argument("--reel", action="store_true", help="Post as Reel with Ken Burns zoom + ambient audio")
+    parser.add_argument("--carousel", action="store_true", help="Post as Carousel (currently treated as standard post)")
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
     args = parser.parse_args()
