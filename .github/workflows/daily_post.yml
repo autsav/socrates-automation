@@ -32,6 +32,30 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Validate required secrets
+        run: |
+          missing=""
+          for key in ANTHROPIC_API_KEY FAL_API_KEY META_ACCESS_TOKEN IG_ACCOUNT_ID CLOUDINARY_CLOUD_NAME CLOUDINARY_API_KEY CLOUDINARY_API_SECRET; do
+            val="${!key}"
+            if [ -z "$val" ]; then
+              missing="$missing $key"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "❌ MISSING REQUIRED SECRETS:$missing"
+            echo "   → https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+          echo "✅ All required secrets present"
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
+          META_ACCESS_TOKEN:      ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID:          ${{ secrets.IG_ACCOUNT_ID }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
@@ -43,6 +67,17 @@ jobs:
 
       - name: Create output dirs
         run: mkdir -p output logs audio/music
+
+      - name: Get ISO week key
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache music tracks
+        uses: actions/cache@v4
+        with:
+          path: audio/music
+          key: music-${{ steps.week.outputs.week }}
+          restore-keys: music-
 
       - name: Download royalty-free music tracks
         env:

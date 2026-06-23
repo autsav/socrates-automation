@@ -51,6 +51,14 @@ class Config:
     def _get(self, key: str) -> str:
         val = os.getenv(key, "")
         if not val:
+            if os.getenv("GITHUB_ACTIONS"):
+                raise RuntimeError(
+                    f"Missing required GitHub secret: {key}.\n"
+                    f"  → Go to repo Settings → Secrets and variables → Actions → New repository secret\n"
+                    f"  → Add {key} with your API key.\n"
+                    f"  → Required secrets: ANTHROPIC_API_KEY, FAL_API_KEY, META_ACCESS_TOKEN, "
+                    f"IG_ACCOUNT_ID, CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET"
+                )
             raise RuntimeError(
                 f"Missing required environment variable: {key}. "
                 f"Copy .env.example → .env and fill in your keys."
