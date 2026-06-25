@@ -36,6 +36,10 @@ from engagement.comment_bait import CommentBait
 from prompts.architect import PromptArchitect
 from wallpapers.composer import WallpaperComposer
 
+# ── Phase 3 Audio Engineering ──────────────────────────────────────────────────
+from trending_audio import TrendingAudioEngine, download_music_for_mood
+from voiceover_engine import VoiceoverEngine, generate_enhanced_voiceover
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -622,14 +626,27 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             timestamp=timestamp
         )
 
-        # ── Generate voiceover narration ──────────────────────────────────────
+        # ── Phase 3: Generate voiceover narration with emotion-tagged scripts ──
         voiceover = None
-        if voiceover_available(cfg.ANTHROPIC_API_KEY):  # Reuse Anthropic key or use dedicated OpenAI key
-            # Try OpenAI TTS if OPENAI_API_KEY is set, otherwise skip
-            openai_key = getattr(cfg, "OPENAI_API_KEY", "")
-            if openai_key:
-                cta_text = _pick_cta(quote_data["row_number"])
-                log.info("  Generating voiceover narration...")
+        openai_key = getattr(cfg, "OPENAI_API_KEY", "")
+        if openai_key:
+            cta_text = _pick_cta(quote_data["row_number"])
+            log.info("  Generating enhanced voiceover narration...")
+            try:
+                voiceover = generate_enhanced_voiceover(
+                    hook_text=hook_text,
+                    quote=quote_data["quote"],
+                    cta_text=cta_text,
+                    mood=mood,
+                    api_key=openai_key,
+                    output_dir=OUTPUT_DIR,
+                    timestamp=timestamp,
+                    style="intense" if mood in ("epic_warrior", "dark_philosophical") else "calm",
+                )
+                if voiceover:
+                    log.info(f"  [phase3] Enhanced voiceover generated: {len(voiceover)} scenes")
+            except Exception as e:
+                log.warning(f"  [phase3] Enhanced voiceover failed ({e}) — trying legacy fallback")
                 try:
                     voiceover = prepare_reel_voiceover(
                         hook_text=hook_text,
@@ -640,11 +657,10 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                         output_dir=OUTPUT_DIR,
                         timestamp=timestamp,
                     )
-                    log.info(f"  Voiceover: {voiceover['voice']} voice")
-                except Exception as e:
-                    log.warning(f"  Voiceover generation failed: {e}")
-            else:
-                log.info("  OPENAI_API_KEY not set — skipping voiceover")
+                except Exception as e2:
+                    log.warning(f"  Legacy voiceover also failed: {e2}")
+        else:
+            log.info("  OPENAI_API_KEY not set — skipping voiceover")
 
         # Assemble multi-scene reel
         reel_path = generate_reel(

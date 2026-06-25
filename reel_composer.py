@@ -59,12 +59,26 @@ def _xfade_available() -> bool:
 
 def _audio_path(mood: str, output_dir: str = "output") -> Path | None:
     """Get path to audio file for the given mood.
-    Prefers real music in audio/music/, then prepares looped reel audio,
-    falls back to generated audio in audio/."""
+    Prefers real music in audio/music/, then tries trending audio download,
+    then prepares looped reel audio, falls back to generated audio in audio/."""
     # Try real music first (downloaded from Pixabay)
     real_path = MUSIC_DIR / f"{mood}.mp3"
     if real_path.exists() and real_path.stat().st_size > 1000:
         return real_path
+
+    # Phase 3: Try trending audio engine to download royalty-free track
+    try:
+        from trending_audio import download_music_for_mood
+        downloaded = download_music_for_mood(mood, output_dir=str(MUSIC_DIR))
+        if downloaded and downloaded.exists():
+            # Symlink/copy to expected filename
+            target = MUSIC_DIR / f"{mood}.mp3"
+            if not target.exists():
+                import shutil
+                shutil.copy(str(downloaded), str(target))
+            return target
+    except Exception:
+        pass
 
     # Prepare looped, normalized reel audio from generated tracks
     try:
