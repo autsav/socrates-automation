@@ -494,6 +494,20 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     )
     log.info(f"Background: {image_path}")
 
+    # ── Phase 2: Apply atmospheric overlays ───────────────────────────────────
+    try:
+        from overlays.particles import add_particles_to_image, add_light_rays_to_image
+        from PIL import Image
+        bg_img = Image.open(image_path)
+        bg_with_particles = add_particles_to_image(bg_img, mood=mood, seed=quote_data.get("row_number", 0))
+        bg_with_rays = add_light_rays_to_image(bg_with_particles, mood=mood)
+        overlay_path = OUTPUT_DIR / f"bg_enhanced_{timestamp}.jpg"
+        bg_with_rays.save(overlay_path, quality=95)
+        image_path = overlay_path
+        log.info(f"  [phase2] Atmospheric overlays applied: particles + light rays")
+    except Exception as e:
+        log.warning(f"  [phase2] Overlay application failed (non-blocking): {e}")
+
     # ── Step 4: Compose final post image ──────────────────────────────────────
     log.info("Step 4/5: Composing post image...")
     final_image_path = compose_post(

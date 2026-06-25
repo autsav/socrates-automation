@@ -200,22 +200,36 @@ def generate_reel(
             sub_lines.append(" ".join(line))
     sub_text = "\\n".join(sub_lines) if sub_lines else ""
 
+    # ── Phase 2: Motion Effects — enhanced camera movement ────────────────────
+    from motion_effects import MotionEngine, build_ken_burns_preset
+
+    hook_move = build_ken_burns_preset("hook", hook_dur, seed=hash(timestamp) % 10000)
+    quote_move = build_ken_burns_preset("quote", quote_dur, seed=hash(timestamp) % 10000 + 1)
+    cta_move = build_ken_burns_preset("cta", cta_dur, seed=hash(timestamp) % 10000 + 2)
+
+    engine = MotionEngine(image_size=(1080, 1920), fps=30)
+    hook_filter_str = engine.build_ken_burns_filter(hook_move, motion_blur=False)
+    quote_filter_str = engine.build_ken_burns_filter(quote_move, motion_blur=True)
+    cta_filter_str = engine.build_ken_burns_filter(cta_move, motion_blur=False)
+
+    # Phase 2: Randomize transition type for variety
+    transition_type = MotionEngine.random_transition(seed=hash(timestamp) % 10000)
+    print(f"  [motion] Transition: {transition_type}")
+
     # Vignette filter string
     vignette = "vignette=PI/4"
 
-    # Hook scene: subtle zoom-in from 1.0 to 1.03
+    # Hook scene: enhanced with motion engine
     hook_filter = (
         f"[0:v]trim=duration={hook_dur},"
-        f"zoompan=z='min(zoom+0.0010,1.03)':d={hook_dur*30}:s=1080x1920:fps=30,"
+        f"{hook_filter_str},"
         f"{vignette},format=yuv420p[v0]"
     )
 
-    # Quote scene: stronger Ken Burns zoom 1.0→1.12 with horizontal pan
+    # Quote scene: stronger Ken Burns with motion blur
     quote_filter = (
         f"[1:v]trim=duration={quote_dur},"
-        f"zoompan=z='min(zoom+0.0015,1.12)':d={zoom_frames}:s=1080x1920:fps=30"
-        f":x='(iw-iw/zoom)/2+in*0.15',"
-        f"{vignette}"
+        f"{quote_filter_str}"
     )
 
     # Add burned-in subtitles if font available and text present
@@ -231,11 +245,12 @@ def generate_reel(
             f"line_spacing=8:shadowx=2:shadowy=2:shadowcolor=black@0.6"
         )
 
-    quote_filter += ",format=yuv420p[v1]"
+    quote_filter += f",{vignette},format=yuv420p[v1]"
 
-    # CTA scene: static with vignette
+    # CTA scene: enhanced with motion engine
     cta_filter = (
         f"[2:v]trim=duration={cta_dur},"
+        f"{cta_filter_str},"
         f"{vignette},format=yuv420p[v2]"
     )
 
