@@ -29,6 +29,13 @@ from notifier import Notifier
 from trending_music import get_trending_suggestion
 from voiceover import prepare_reel_voiceover, voiceover_available
 
+# ── Phase 1 Viral Upgrades ─────────────────────────────────────────────────────
+from hooks.pattern_interrupt import PatternInterrupter
+from brand_design import get_design
+from engagement.comment_bait import CommentBait
+from prompts.architect import PromptArchitect
+from wallpapers.composer import WallpaperComposer
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -447,6 +454,30 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         log.info("Step 1: Reading quote + legacy templated content...")
         quote_data, mood, controversy, caption_variant = _legacy_content(cfg)
 
+    # ── Phase 1: Inject viral engagement into caption ───────────────────────────
+    bait = CommentBait(audience=quote_data["audience"], mood=mood)
+    engagement_block = bait.generate_full_engagement_block(
+        quote=quote_data["quote"],
+        include_question=True,
+        include_cta=True,
+        include_booster=False,
+    )
+    quote_data["caption"] = f"{quote_data['caption']}\n\n{engagement_block}"
+    log.info(f"  [viral] Engagement block injected ({len(engagement_block)} chars)")
+
+    # ── Phase 1: Build enhanced FLUX prompt ────────────────────────────────────
+    flux_override = ""
+    if studio:
+        flux_override = quote_data.get("flux_prompt", "")
+    if not flux_override:
+        architect = PromptArchitect(anthropic_api_key=cfg.ANTHROPIC_API_KEY)
+        flux_override = architect.build(
+            quote=quote_data["quote"],
+            mood=mood,
+            seed=quote_data.get("row_number", 0),
+        )
+        log.info(f"  [viral] FLUX prompt enhanced ({len(flux_override)} chars)")
+
     log.info(f"Quote:    {quote_data['quote'][:60]}...")
     log.info(f"Audience: {quote_data['audience']}")
     log.info(f"Slot: {slot}, Variant: {caption_variant}, Mood: {mood}")
@@ -475,6 +506,23 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         controversy_text=controversy,
     )
     log.info(f"Final image: {final_image_path}")
+
+    # ── Phase 1: Generate Wallpaper Series (save-bait) ────────────────────────
+    wallpaper_paths = {}
+    try:
+        wp_composer = WallpaperComposer(mood=mood)
+        from PIL import Image as PILImage
+        bg_img = PILImage.open(image_path)
+        wallpaper_paths = wp_composer.create_wallpaper_set(
+            quote=quote_data["quote"],
+            author="Socrates",
+            output_dir=OUTPUT_DIR / "wallpapers",
+            background_image=bg_img,
+            seed=quote_data.get("row_number", 0),
+        )
+        log.info(f"  [viral] Wallpaper series created: {len(wallpaper_paths)} formats")
+    except Exception as e:
+        log.warning(f"  [viral] Wallpaper generation failed (non-blocking): {e}")
 
     # ── Save to SQLite state store ────────────────────────────────────────────
     post_row_id = save_post(
@@ -529,8 +577,19 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
         # Compose 3 vertical scenes
         log.info("  Composing scenes...")
+
+        # ── Phase 1: Pattern Interrupt on Hook Scene ─────────────────────────
+        # Apply scroll-stopping visual effect to hook scene background
+        from PIL import Image
+        hook_bg = Image.open(bg_hook_path)
+        interrupter = PatternInterrupter(mode=PatternInterrupter.random_mode(seed=quote_data.get("row_number", 0)))
+        hook_bg_interrupted = interrupter.apply(hook_bg, text=hook_text)
+        hook_interrupted_path = OUTPUT_DIR / f"hook_scene_interrupted_{timestamp}.jpg"
+        hook_bg_interrupted.save(hook_interrupted_path, quality=95)
+        log.info(f"  [viral] Pattern interrupt applied: {interrupter.mode}")
+
         scene_hook = compose_hook_scene(
-            background_path=bg_hook_path,
+            background_path=hook_interrupted_path,
             hook_text=hook_text,
             output_dir=OUTPUT_DIR,
             timestamp=timestamp,
@@ -600,7 +659,13 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                 mood=mood,
                 trending_suggestion=trending,
             )
-            log.info("✅ Reel sent to Telegram! Download it and post to Instagram with trending music.")
+            # ── Phase 1: Send wallpaper series too ────────────────────────────
+            if wallpaper_paths:
+                notifier.notify_wallpapers_ready(
+                    wallpaper_paths=wallpaper_paths,
+                    quote_preview=quote_data["quote"][:60],
+                )
+            log.info("✅ Reel + wallpapers sent to Telegram! Download and post to Instagram with trending music.")
         except Exception as e:
             log.error(f"Failed to send Reel to Telegram: {e}")
 

@@ -78,7 +78,57 @@ class TelegramBackend:
             print(f"  [notify] Sent video via Telegram: {video_path.name} ({video_path.stat().st_size / 1024:.0f} KB)")
             return True
         except Exception as e:
-            print(f"  [notify] Telegram video failed: {e}")
+            print(f"  [notify] Telegram video send failed: {e}")
+            return False
+
+    def send_photo(self, photo_path: Path, caption: str = "") -> bool:
+        """Send image file via Telegram sendPhoto API."""
+        import requests
+        photo_path = Path(photo_path)
+        if not photo_path.exists():
+            print(f"  [notify] Photo file not found: {photo_path}")
+            return False
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+            with open(photo_path, "rb") as f:
+                resp = requests.post(
+                    url,
+                    data={"chat_id": self.chat_id, "caption": caption},
+                    files={"photo": (photo_path.name, f, "image/jpeg")},
+                    timeout=60,
+                )
+            if not resp.ok:
+                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                return False
+            print(f"  [notify] Sent photo via Telegram: {photo_path.name}")
+            return True
+        except Exception as e:
+            print(f"  [notify] Telegram photo send failed: {e}")
+            return False
+
+    def send_document(self, doc_path: Path, caption: str = "") -> bool:
+        """Send document file via Telegram sendDocument API."""
+        import requests
+        doc_path = Path(doc_path)
+        if not doc_path.exists():
+            print(f"  [notify] Document file not found: {doc_path}")
+            return False
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
+            with open(doc_path, "rb") as f:
+                resp = requests.post(
+                    url,
+                    data={"chat_id": self.chat_id, "caption": caption},
+                    files={"document": (doc_path.name, f, "image/jpeg")},
+                    timeout=60,
+                )
+            if not resp.ok:
+                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                return False
+            print(f"  [notify] Sent document via Telegram: {doc_path.name}")
+            return True
+        except Exception as e:
+            print(f"  [notify] Telegram document send failed: {e}")
             return False
 
 
@@ -279,6 +329,73 @@ class Notifier:
 
         if not sent_video:
             print("  [notify] ⚠️  Could not send video — check logs/notifications.jsonl and GitHub artifacts")
+
+    def notify_wallpapers_ready(
+        self,
+        wallpaper_paths: dict,
+        quote_preview: str = "",
+    ):
+        """
+        Send wallpaper series (square + vertical) to Telegram for manual posting.
+        These are save-bait content designed for high saves/shares.
+        """
+        if not wallpaper_paths:
+            return
+
+        lines = [
+            "🖼️ BONUS: Wallpaper Series Ready!",
+            "",
+            f"Quote: {quote_preview}...",
+            "",
+            "These are optimized for saves & shares:",
+            "  • Square → Feed post or Pinterest",
+            "  • Vertical → Story or lock screen",
+            "",
+            "📌 Use them as:",
+            "  1. Carousel post (first image = quote, rest = wallpapers)",
+            "  2. Story series with 'swipe up to save' sticker",
+            "  3. DM to loyal followers as exclusive content",
+            "",
+        ]
+        message = "\n".join(lines)
+
+        _log_notification({
+            "event": "wallpapers_ready",
+            "timestamp": datetime.now().isoformat(),
+            "wallpaper_count": len(wallpaper_paths),
+            "paths": {k: str(v) for k, v in wallpaper_paths.items()},
+            "quote_preview": quote_preview,
+            "message": message,
+        })
+
+        # Send text message
+        sent_any = False
+        for backend in self.backends:
+            try:
+                ok = backend.send(message)
+                if ok:
+                    sent_any = True
+            except Exception:
+                pass
+
+        # Send wallpaper images
+        for fmt, path in wallpaper_paths.items():
+            for backend in self.backends:
+                if backend.name == "telegram" and hasattr(backend, "send_photo"):
+                    try:
+                        backend.send_photo(path, caption=f"Wallpaper ({fmt})")
+                        sent_any = True
+                    except Exception as e:
+                        print(f"  [notify] Wallpaper send failed: {e}")
+                elif backend.name == "telegram" and hasattr(backend, "send_document"):
+                    try:
+                        backend.send_document(path, caption=f"Wallpaper ({fmt})")
+                        sent_any = True
+                    except Exception as e:
+                        print(f"  [notify] Wallpaper send failed: {e}")
+
+        if not sent_any:
+            print("  [notify] ⚠️  No wallpaper notification backend succeeded")
 
 
 # ── CLI helper ───────────────────────────────────────────────────────────────
