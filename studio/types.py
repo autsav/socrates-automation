@@ -92,19 +92,29 @@ PERFORMANCE_BRIEF_SCHEMA = _obj({
     "generated_at": {"type": "string"},
     "sample_size": {"type": "integer"},
     "window_days": {"type": "integer"},
-    "top_hooks": {"type": "array", "items": {"type": "object"}},
-    "top_topics": {"type": "array", "items": {"type": "object"}},
-    "top_moods": {"type": "array", "items": {"type": "object"}},
-    "best_formats": {"type": "object"},
-    "best_slots": {"type": "object"},
-    "dying": {"type": "array", "items": {"type": "object"}},
+    "top_hooks": {"type": "array", "items": _obj(
+        {"hook": {"type": "string"}, "lift": {"type": "number"}}, ["hook", "lift"])},
+    "top_topics": {"type": "array", "items": _obj(
+        {"topic": {"type": "string"}, "lift": {"type": "number"}}, ["topic", "lift"])},
+    "top_moods": {"type": "array", "items": _obj(
+        {"mood": {"type": "string"}, "lift": {"type": "number"}}, ["mood", "lift"])},
+    "best_formats": _obj(
+        {"reel": {"type": "number"}, "carousel": {"type": "number"}, "image": {"type": "number"}}, []),
+    "best_slots": _obj(
+        {"morning": {"type": "number"}, "lunch": {"type": "number"}, "evening": {"type": "number"}}, []),
+    "dying": {"type": "array", "items": _obj(
+        {"pattern": {"type": "string"}, "reason": {"type": "string"}}, ["pattern", "reason"])},
     "headline": {"type": "string"},
 }, ["generated_at", "sample_size", "window_days", "headline"])
 
 CREATIVE_BRIEF_SCHEMA = _obj({
     "audience": {"type": "string", "enum": list(AUDIENCES)},
     "topic_theme": {"type": "string"},
-    "quote": {"type": "object"},
+    "quote": _obj({
+        "text": {"type": "string"},
+        "author": {"type": "string"},
+        "source": {"type": "string"},
+    }, ["text", "author"]),
     "format": {"type": "string", "enum": ["reel", "carousel", "image"]},
     "angle": {"type": "string"},
     "must_include": {"type": "array", "items": {"type": "string"}},
@@ -127,10 +137,16 @@ CONCEPTS_SCHEMA = _obj(
     {"concepts": {"type": "array", "items": CONCEPT_SCHEMA}}, ["concepts"])
 
 DECISION_SCHEMA = _obj({
-    "scores": {"type": "array", "items": {"type": "object"}},
+    "scores": {"type": "array", "items": _obj(
+        {"concept_id": {"type": "string"}, "score": {"type": "number"}, "note": {"type": "string"}},
+        ["concept_id", "score"])},
     "top_pick": {"type": "string"},
     "alt_pick": {"type": ["string", "null"]},
-    "revision": {"type": "object"},
+    "revision": _obj({
+        "requested": {"type": "boolean"},
+        "concept_id": {"type": "string"},
+        "feedback": {"type": "string"},
+    }, ["requested"]),
     "visual_direction": _obj({
         "mood": {"type": "string", "enum": list(VALID_MOODS)},
         "flux_prompt": {"type": "string"},
