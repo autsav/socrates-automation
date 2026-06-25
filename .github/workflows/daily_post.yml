@@ -152,6 +152,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
+          META_ACCESS_TOKEN:      ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID:          ${{ secrets.IG_ACCOUNT_ID }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] || [ -n "$SLACK_WEBHOOK_URL" ]; then
             echo "📨 Sending post notification..."
@@ -167,8 +174,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Force-add because data/ and logs/ are in .gitignore
           git add -f data/pipeline.db logs/
-          git diff --staged --quiet || git commit -m "chore: update pipeline.db + logs [skip ci]"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: update pipeline.db + logs [skip ci]"
+          # NOTE: GitHub Actions default GITHUB_TOKEN may not have write access.
+          # If this fails with 403, go to Settings → Actions → Workflow permissions
+          # and select "Read and write permissions".
+          git push || echo "⚠️ git push failed — see comment above"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
