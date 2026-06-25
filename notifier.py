@@ -59,6 +59,10 @@ class TelegramBackend:
     def send_video(self, video_path: Path, caption: str = "") -> bool:
         """Send MP4 video file via Telegram sendVideo API (max 50MB)."""
         import requests
+        video_path = Path(video_path)  # coerce string → Path
+        if not video_path.exists():
+            print(f"  [notify] Video file not found: {video_path}")
+            return False
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendVideo"
             with open(video_path, "rb") as f:
@@ -68,7 +72,9 @@ class TelegramBackend:
                     files={"video": (video_path.name, f, "video/mp4")},
                     timeout=120,
                 )
-            resp.raise_for_status()
+            if not resp.ok:
+                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                return False
             print(f"  [notify] Sent video via Telegram: {video_path.name} ({video_path.stat().st_size / 1024:.0f} KB)")
             return True
         except Exception as e:
