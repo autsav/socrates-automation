@@ -55,11 +55,28 @@ class StudioClient:
         self._record_usage(model, resp.usage)
         if getattr(resp, "stop_reason", None) == "refusal":
             raise StudioError(f"{role} refused")
-        text = next((b.text for b in resp.content if b.type == "text"), "")
+        # Extract text — handle thinking blocks (skip them) and empty responses
+        text = ""
+        for block in resp.content:
+            if hasattr(block, "text") and block.type == "text":
+                text = block.text
+                break
+        if not text:
+            # Fallback: try to get text from any block that has text attr
+            text = getattr(resp, "output_text", "") or ""
+        if not text:
+            raise StudioError(f"{role} produced empty response (stop={resp.stop_reason}, content_types={[b.type for b in resp.content]})")
+        # Strip markdown code fences if present
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
         try:
             return json.loads(text)
         except (ValueError, TypeError) as e:
-            raise StudioError(f"{role} produced non-JSON: {e}") from e
+            raise StudioError(f"{role} produced non-JSON: {e}\nText was: {text[:200]}") from e
 
     # ── spend tracking ────────────────────────────────────────────────────
     def _record_usage(self, model, usage):
