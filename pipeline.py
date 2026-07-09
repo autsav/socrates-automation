@@ -39,6 +39,7 @@ from src.wallpapers.composer import WallpaperComposer
 # ── Phase 3 Audio Engineering ──────────────────────────────────────────────────
 from src.audio.trending_audio import TrendingAudioEngine, download_music_for_mood
 from src.audio.voiceover_engine import VoiceoverEngine, generate_enhanced_voiceover
+from src.audio.edge_tts_engine import prepare_reel_voiceover_edge_tts, edge_tts_available
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
@@ -674,7 +675,25 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                 except Exception as e2:
                     log.warning(f"  Legacy voiceover also failed: {e2}")
         else:
-            log.info("  OPENAI_API_KEY not set — skipping voiceover")
+            log.info("  OPENAI_API_KEY not set — trying edge-tts (free) voiceover")
+
+        if not voiceover and edge_tts_available():
+            cta_text = _pick_cta(quote_data["row_number"])
+            try:
+                voiceover = prepare_reel_voiceover_edge_tts(
+                    hook_text=hook_text,
+                    quote_text=quote_data["quote"],
+                    cta_text=cta_text,
+                    mood=mood,
+                    output_dir=OUTPUT_DIR,
+                    timestamp=timestamp,
+                )
+                if voiceover:
+                    log.info(f"  [edge-tts] Free voiceover generated: {voiceover.get('voice')}")
+            except Exception as e3:
+                log.warning(f"  edge-tts voiceover also failed: {e3}")
+        elif not voiceover:
+            log.info("  edge-tts not installed — skipping voiceover entirely")
 
         # Assemble multi-scene reel
         reel_path = generate_reel(
