@@ -12,6 +12,7 @@ import json
 from team.base_agent import BaseAgent
 from team.models import ContentPlan, CopySpec, EngagementSpec, ENGAGEMENT_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import EngagementSpecsSchema
 
 _PREFIX = (
     "Approved 7-day ContentPlan and its CopySpecs — plan engagement tactics for "
@@ -34,6 +35,7 @@ def build_prompt(plan: ContentPlan, copy_specs: list[CopySpec]) -> str:
 
 
 def parse_response(d: dict) -> list[EngagementSpec]:
+    EngagementSpecsSchema.model_validate(d)
     return [EngagementSpec.from_dict(item) for item in d["items"]]
 
 

@@ -11,6 +11,7 @@ import json
 from team.base_agent import BaseAgent
 from team.models import ContentPlan, CopySpec, VisualSpec, VISUAL_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import VisualSpecsSchema
 
 _PREFIX = (
     "Approved 7-day ContentPlan and its CopySpecs — design the visuals for every post "
@@ -31,6 +32,7 @@ def build_prompt(plan: ContentPlan, copy_specs: list[CopySpec]) -> str:
 
 
 def parse_response(d: dict) -> list[VisualSpec]:
+    VisualSpecsSchema.model_validate(d)
     return [VisualSpec.from_dict(item) for item in d["items"]]
 
 

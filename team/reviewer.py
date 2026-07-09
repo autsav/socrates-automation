@@ -12,6 +12,7 @@ import json
 from team.base_agent import BaseAgent
 from team.models import AnalyticsReport, ContentPlan, REVIEWER_OUTPUT_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import ReviewerOutputSchema
 
 _PREFIX = (
     "Content plan to review:\n{plan}\n"
@@ -30,6 +31,7 @@ def build_prompt(plan: ContentPlan, analytics_report: AnalyticsReport) -> str:
 
 
 def parse_response(d: dict) -> dict:
+    ReviewerOutputSchema.model_validate(d)
     return d
 
 

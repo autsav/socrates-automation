@@ -18,6 +18,7 @@ import json
 from team.base_agent import BaseAgent
 from team.models import ContentPlan, VisualSpec, AudioSpec, VideoSpec, VIDEO_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import VideoSpecsSchema
 
 _PREFIX = (
     "Approved 7-day ContentPlan and its VisualSpecs/AudioSpecs — edit the video for "
@@ -45,6 +46,7 @@ def build_prompt(plan: ContentPlan, visual_specs: list[VisualSpec],
 
 
 def parse_response(d: dict) -> list[VideoSpec]:
+    VideoSpecsSchema.model_validate(d)
     return [VideoSpec.from_dict(item) for item in d["items"]]
 
 

@@ -11,6 +11,7 @@ import json
 from team.base_agent import BaseAgent
 from team.models import ContentPlan, CopySpec, COPY_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import CopySpecsSchema
 
 _PREFIX = (
     "Approved 7-day ContentPlan — write copy for every post below, one CopySpec "
@@ -29,6 +30,7 @@ def build_prompt(plan: ContentPlan) -> str:
 
 
 def parse_response(d: dict) -> list[CopySpec]:
+    CopySpecsSchema.model_validate(d)
     return [CopySpec.from_dict(item) for item in d["items"]]
 
 

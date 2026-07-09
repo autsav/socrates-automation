@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from team.base_agent import BaseAgent
 from team.models import AnalyticsReport, ContentPlan, CONTENT_PLAN_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import ContentPlanSchema
 
 _PREFIX = (
     "Plan start date (the plan covers the 7 days beginning this date): {plan_date}\n"
@@ -52,6 +53,7 @@ def build_prompt(analytics_report: AnalyticsReport, quotes_pool: list[dict],
 
 
 def parse_response(d: dict) -> ContentPlan:
+    ContentPlanSchema.model_validate(d)
     return ContentPlan.from_dict(d)
 
 

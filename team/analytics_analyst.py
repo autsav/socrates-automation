@@ -8,12 +8,18 @@ from studio.client import StudioClient
 from team.base_agent import BaseAgent
 from team.models import AnalyticsReport, ANALYTICS_REPORT_SCHEMA
 from team.prompt_loader import load_prompt
+from team.schemas import AnalyticsReportSchema
 from src.core import data_store
 from src.analytics import hook_tracker
 
 _PREFIX = (
     "Account performance stats for the analytics report (as of {date}):\n{stats}"
 )
+
+
+def parse_response(d: dict) -> AnalyticsReport:
+    AnalyticsReportSchema.model_validate(d)
+    return AnalyticsReport.from_dict(d)
 
 
 class AnalyticsAnalystAgent(BaseAgent):
@@ -45,5 +51,5 @@ class AnalyticsAnalystAgent(BaseAgent):
             self.system_prompt,
             "Generate the AnalyticsReport now.",
             ANALYTICS_REPORT_SCHEMA,
-            AnalyticsReport.from_dict,
+            parse_response,
         )
