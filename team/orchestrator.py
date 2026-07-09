@@ -12,8 +12,9 @@ posting via pipeline.py; this module deliberately never imports pipeline.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date as date_cls, datetime
 from pathlib import Path
+from typing import Callable
 
 from studio.client import StudioClient
 from studio.run import _build_pool
@@ -32,26 +33,155 @@ from team.engagement_strategist import EngagementStrategistAgent
 _OUTPUT_DIR = Path(__file__).parent / "output"
 
 
-def run_team_pipeline(dry_run: bool = True, *, client=None, now: datetime | None = None) -> dict:
+def _current_spend_usd() -> float:
+    """Today's cumulative spend from studio's daily spend log (best-effort)."""
+    from studio import settings as studio_settings
+    try:
+        log = json.loads(studio_settings.SPEND_LOG_PATH.read_text())
+    except (FileNotFoundError, ValueError):
+        return 0.0
+    return log.get(date_cls.today().isoformat(), 0.0)
+
+
+def _stage(
+    name: str,
+    fn: Callable[[], object],
+    summarize: Callable[[object], str],
+    *,
+    on_stage_start: Callable[[str], None] | None,
+    on_stage_done: Callable[[str, str], None] | None,
+    on_stage_failed: Callable[[str, str], None] | None,
+    on_cost_update: Callable[[float], None] | None,
+) -> object:
+    if on_stage_start is not None:
+        on_stage_start(name)
+    try:
+        result = fn()
+    except Exception as exc:
+        if on_stage_failed is not None:
+            on_stage_failed(name, str(exc))
+        raise
+    if on_cost_update is not None:
+        on_cost_update(_current_spend_usd())
+    if on_stage_done is not None:
+        on_stage_done(name, summarize(result))
+    return result
+
+
+def run_team_pipeline(
+    dry_run: bool = True,
+    *,
+    client=None,
+    now: datetime | None = None,
+    on_stage_start: Callable[[str], None] | None = None,
+    on_stage_done: Callable[[str, str], None] | None = None,
+    on_stage_failed: Callable[[str, str], None] | None = None,
+    on_agent_activity: Callable[[str, str], None] | None = None,
+    on_debate_round: Callable[[int, str, str, float, bool], None] | None = None,
+    on_log: Callable[[str, str], None] | None = None,
+    on_cost_update: Callable[[float], None] | None = None,
+    on_deliverable: Callable[[str, str], None] | None = None,
+) -> dict:
     if client is None:
         from config import Config
         cfg = Config()
         client = StudioClient(cfg.ANTHROPIC_API_KEY)
 
+    if on_log is not None:
+        on_log("info", "Pipeline starting")
+
     data_store.init_db()
 
-    analytics_report = AnalyticsAnalystAgent(client).run(now=now)
+    def stage(name, fn, summarize):
+        return _stage(
+            name, fn, summarize,
+            on_stage_start=on_stage_start, on_stage_done=on_stage_done,
+            on_stage_failed=on_stage_failed, on_cost_update=on_cost_update,
+        )
+
+    if on_agent_activity is not None:
+        on_agent_activity("Analytics Analyst", "Analyzing recent post performance...")
+    analytics_report = stage(
+        "analytics",
+        lambda: AnalyticsAnalystAgent(client).run(now=now),
+        lambda r: f"{r.total_posts} posts analyzed, avg engagement {r.avg_engagement_rate:.1%}",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Analytics Analyst", f"Top hooks: {', '.join(analytics_report.top_performing_hooks)}")
+
     quotes_pool = _build_pool("quotes.xlsx")
 
-    approved_plan, debate_history = run_debate(
-        PlannerAgent(client), ReviewerAgent(client), analytics_report, quotes_pool, now=now
-    )
+    if on_agent_activity is not None:
+        on_agent_activity("Planner", "Drafting content plan and debating with Reviewer...")
 
-    copy_specs = ContentWriterAgent(client).run(approved_plan)
-    visual_specs = VisualDesignerAgent(client).run(approved_plan, copy_specs)
-    audio_specs = AudioEngineerAgent(client).run(approved_plan, copy_specs)
-    video_specs = VideoEditorAgent(client).run(approved_plan, visual_specs, audio_specs)
-    engagement_specs = EngagementStrategistAgent(client).run(approved_plan, copy_specs)
+    def _on_round(round_number, planner_output, reviewer_output, score, approved):
+        if on_agent_activity is not None:
+            verdict = "APPROVED" if approved else "REVISE"
+            on_agent_activity("Reviewer", f"Round {round_number} score {score:.1f}/10 — {verdict}")
+        if on_debate_round is not None:
+            on_debate_round(round_number, planner_output, reviewer_output, score, approved)
+
+    approved_plan, debate_history = stage(
+        "debate",
+        lambda: run_debate(
+            PlannerAgent(client), ReviewerAgent(client), analytics_report, quotes_pool,
+            now=now, on_round=_on_round,
+        ),
+        lambda result: f"Plan approved after {len(result[1])} round(s), "
+                       f"score {result[1][-1].reviewer_score:.1f}/10",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Planner", f"7-day plan approved for {approved_plan.date}")
+
+    if on_agent_activity is not None:
+        on_agent_activity("Content Writer", "Writing hooks, captions, and CTAs...")
+    copy_specs = stage(
+        "content_writer",
+        lambda: ContentWriterAgent(client).run(approved_plan),
+        lambda specs: f"Copy written for {len(specs)} posts",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Content Writer", f"Hooks, captions, CTAs for {len(copy_specs)} posts")
+
+    if on_agent_activity is not None:
+        on_agent_activity("Visual Designer", "Designing FLUX prompts and color palettes...")
+    visual_specs = stage(
+        "visual_designer",
+        lambda: VisualDesignerAgent(client).run(approved_plan, copy_specs),
+        lambda specs: f"Visual specs designed for {len(specs)} posts",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Visual Designer", f"FLUX prompts, color palettes for {len(visual_specs)} posts")
+
+    if on_agent_activity is not None:
+        on_agent_activity("Audio Engineer", "Selecting music tracks and voiceover scripts...")
+    audio_specs = stage(
+        "audio_engineer",
+        lambda: AudioEngineerAgent(client).run(approved_plan, copy_specs),
+        lambda specs: f"Audio specs designed for {len(specs)} posts",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Audio Engineer", f"Music tracks, voiceover scripts for {len(audio_specs)} posts")
+
+    if on_agent_activity is not None:
+        on_agent_activity("Video Editor", "Sequencing scenes and transitions...")
+    video_specs = stage(
+        "video_editor",
+        lambda: VideoEditorAgent(client).run(approved_plan, visual_specs, audio_specs),
+        lambda specs: f"Video specs designed for {len(specs)} posts",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Video Editor", f"Scene sequences, transitions for {len(video_specs)} posts")
+
+    if on_agent_activity is not None:
+        on_agent_activity("Engagement Strategist", "Writing seed comments and DM triggers...")
+    engagement_specs = stage(
+        "engagement_strategist",
+        lambda: EngagementStrategistAgent(client).run(approved_plan, copy_specs),
+        lambda specs: f"Engagement specs designed for {len(specs)} posts",
+    )
+    if on_deliverable is not None:
+        on_deliverable("Engagement Strategist", f"Seed comments, DM triggers for {len(engagement_specs)} posts")
 
     _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     date = approved_plan.date
@@ -71,6 +201,9 @@ def run_team_pipeline(dry_run: bool = True, *, client=None, now: datetime | None
         path = _OUTPUT_DIR / f"{key}_{date}.json"
         path.write_text(json.dumps(payload, indent=2))
         output_paths[key] = path
+
+    if on_log is not None:
+        on_log("info", "Pipeline complete")
 
     return {
         "analytics_report": analytics_report,

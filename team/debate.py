@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import Callable
 
 from team.models import ContentPlan, DebateResult
 from team.planner import PlannerAgent
@@ -34,6 +35,7 @@ def run_debate(
     max_rounds: int = 3,
     approval_threshold: float = 8.0,
     now: datetime | None = None,
+    on_round: Callable[[int, str, str, float, bool], None] | None = None,
 ) -> tuple[ContentPlan, list[DebateResult]]:
     history: list[DebateResult] = []
     feedback: str | None = None
@@ -44,15 +46,20 @@ def run_debate(
         plan = planner.run(analytics_report, quotes_pool, feedback=feedback, now=now)
         review = reviewer.run(plan, analytics_report)
         approved = review["score"] >= approval_threshold
+        planner_output = json.dumps(plan.to_dict())
+        reviewer_output = json.dumps(review)
 
         history.append(DebateResult(
             round_number=round_number,
-            planner_output=json.dumps(plan.to_dict()),
-            reviewer_output=json.dumps(review),
+            planner_output=planner_output,
+            reviewer_output=reviewer_output,
             reviewer_score=review["score"],
             approved=approved,
             final_plan=plan,
         ))
+
+        if on_round is not None:
+            on_round(round_number, planner_output, reviewer_output, review["score"], approved)
 
         if approved or round_number == max_rounds:
             return plan, history
