@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import team.orchestrator as orchestrator
 from team.models import (
-    AnalyticsReport, ContentPlan, PostPlan, DebateResult,
-    CopySpec, VisualSpec, AudioSpec, VideoSpec, EngagementSpec,
+    AnalyticsReport, ContentPlan, PostPlan, DebateResult, TrendReport,
+    CopySpec, VisualSpec, AudioSpec, VideoSpec, VideoQualityScore, EngagementSpec,
 )
 
 
@@ -99,6 +99,23 @@ def _video_specs():
     ) for n in range(1, 8)]
 
 
+def _trend_report():
+    return TrendReport(
+        niche="",
+        hashtags=[{"name": "fyp", "views": 0, "posts": 0, "trend": 1}],
+        sounds=[{"title": "Epic Theme", "author": "Composer X", "usage_count": 300}],
+        fetched_at="2026-07-09T00:00:00+00:00",
+    )
+
+
+def _video_quality_scores():
+    return [VideoQualityScore(
+        post_number=n, visual_appeal=8, text_readability=8, content_relevance=8,
+        production_quality=8, overall_score=8.0, is_acceptable=True,
+        feedback="solid", suggestions="none",
+    ) for n in range(1, 8)]
+
+
 def _engagement_specs():
     return [EngagementSpec(
         post_number=n, seed_comments=["comment"], reply_templates=["reply"],
@@ -129,11 +146,15 @@ class Harness:
         self.visual_specs = _visual_specs()
         self.audio_specs = _audio_specs()
         self.video_specs = _video_specs()
+        self.trend_report = _trend_report()
+        self.video_quality_scores = _video_quality_scores()
         self.engagement_specs = _engagement_specs()
         self.pool = [{"row_number": 1, "quote": "Know thyself", "audience": "stuck"}]
 
         self.analytics_cls, self.analytics_instance = _tracked_class(
             "AnalyticsAnalystAgent", self.analytics_report, self.call_log)
+        self.trend_scraper_cls, self.trend_scraper_instance = _tracked_class(
+            "TrendScraperAgent", self.trend_report, self.call_log)
         self.content_writer_cls, self.content_writer_instance = _tracked_class(
             "ContentWriterAgent", self.copy_specs, self.call_log)
         self.visual_designer_cls, self.visual_designer_instance = _tracked_class(
@@ -142,6 +163,9 @@ class Harness:
             "AudioEngineerAgent", self.audio_specs, self.call_log)
         self.video_editor_cls, self.video_editor_instance = _tracked_class(
             "VideoEditorAgent", self.video_specs, self.call_log)
+        self.video_quality_cls, self.video_quality_instance = _tracked_class(
+            "VideoQualityReviewerAgent", self.video_quality_scores, self.call_log)
+        self.video_quality_cls.needs_regeneration = Mock(return_value=[])
         self.engagement_cls, self.engagement_instance = _tracked_class(
             "EngagementStrategistAgent", self.engagement_specs, self.call_log)
 
@@ -163,6 +187,7 @@ class Harness:
 
     def apply(self, monkeypatch):
         monkeypatch.setattr(orchestrator, "AnalyticsAnalystAgent", self.analytics_cls)
+        monkeypatch.setattr(orchestrator, "TrendScraperAgent", self.trend_scraper_cls)
         monkeypatch.setattr(orchestrator, "PlannerAgent", self.planner_cls)
         monkeypatch.setattr(orchestrator, "ReviewerAgent", self.reviewer_cls)
         monkeypatch.setattr(orchestrator, "run_debate", self.run_debate_mock)
@@ -170,6 +195,7 @@ class Harness:
         monkeypatch.setattr(orchestrator, "VisualDesignerAgent", self.visual_designer_cls)
         monkeypatch.setattr(orchestrator, "AudioEngineerAgent", self.audio_engineer_cls)
         monkeypatch.setattr(orchestrator, "VideoEditorAgent", self.video_editor_cls)
+        monkeypatch.setattr(orchestrator, "VideoQualityReviewerAgent", self.video_quality_cls)
         monkeypatch.setattr(orchestrator, "EngagementStrategistAgent", self.engagement_cls)
         monkeypatch.setattr(orchestrator, "_build_pool", self.build_pool_mock)
         monkeypatch.setattr(orchestrator.data_store, "init_db", self.init_db_mock)
@@ -194,6 +220,8 @@ def test_calls_agents_in_correct_dependency_order(wired):
     assert names == [
         "AnalyticsAnalystAgent.__init__",
         "AnalyticsAnalystAgent.run",
+        "TrendScraperAgent.__init__",
+        "TrendScraperAgent.run",
         "PlannerAgent.__init__",
         "ReviewerAgent.__init__",
         "run_debate",
@@ -205,6 +233,8 @@ def test_calls_agents_in_correct_dependency_order(wired):
         "AudioEngineerAgent.run",
         "VideoEditorAgent.__init__",
         "VideoEditorAgent.run",
+        "VideoQualityReviewerAgent.__init__",
+        "VideoQualityReviewerAgent.run",
         "EngagementStrategistAgent.__init__",
         "EngagementStrategistAgent.run",
     ]
@@ -212,8 +242,13 @@ def test_calls_agents_in_correct_dependency_order(wired):
     # every Agent constructed with the injected client
     for cls in (wired.analytics_cls, wired.planner_cls, wired.reviewer_cls,
                 wired.content_writer_cls, wired.visual_designer_cls,
-                wired.audio_engineer_cls, wired.video_editor_cls, wired.engagement_cls):
+                wired.audio_engineer_cls, wired.video_editor_cls,
+                wired.video_quality_cls, wired.engagement_cls):
         cls.assert_called_once_with(fake_client)
+
+    # trend scraper needs no LLM client — constructed bare
+    wired.trend_scraper_cls.assert_called_once_with()
+    wired.trend_scraper_instance.run.assert_called_once_with()
 
     # run_debate got the planner/reviewer instances + analytics report + pool
     debate_args = wired.run_debate_mock.call_args
@@ -233,6 +268,11 @@ def test_calls_agents_in_correct_dependency_order(wired):
     wired.video_editor_instance.run.assert_called_once_with(
         wired.plan, wired.visual_specs, wired.audio_specs)
 
+    # video quality reviewer got the video_specs it's scoring + copy_specs for
+    # content-relevance grounding
+    wired.video_quality_instance.run.assert_called_once_with(
+        wired.video_specs, wired.copy_specs)
+
     # engagement got plan + copy_specs
     wired.engagement_instance.run.assert_called_once_with(wired.plan, wired.copy_specs)
 
@@ -251,7 +291,7 @@ def test_now_threaded_through_to_analytics_and_debate(wired):
     assert debate_kwargs.get("now") == fixed_now
 
 
-def test_writes_all_seven_output_files_with_expected_shapes(wired, tmp_path):
+def test_writes_all_output_files_with_expected_shapes(wired, tmp_path):
     fake_client = Mock(name="fake_client")
 
     result = orchestrator.run_team_pipeline(client=fake_client)
@@ -260,6 +300,7 @@ def test_writes_all_seven_output_files_with_expected_shapes(wired, tmp_path):
     expected_files = {
         "approved_plan": (f"approved_plan_{date}.json", wired.plan.to_dict()),
         "analytics_report": (f"analytics_report_{date}.json", wired.analytics_report.to_dict()),
+        "trend_report": (f"trend_report_{date}.json", wired.trend_report.to_dict()),
         "copy": (f"copy_{date}.json", {"items": [c.to_dict() for c in wired.copy_specs]}),
         "visual_specs": (f"visual_specs_{date}.json",
                           {"items": [v.to_dict() for v in wired.visual_specs]}),
@@ -267,6 +308,8 @@ def test_writes_all_seven_output_files_with_expected_shapes(wired, tmp_path):
                          {"items": [a.to_dict() for a in wired.audio_specs]}),
         "video_specs": (f"video_specs_{date}.json",
                          {"items": [v.to_dict() for v in wired.video_specs]}),
+        "video_quality_scores": (f"video_quality_scores_{date}.json",
+                                  {"items": [s.to_dict() for s in wired.video_quality_scores]}),
         "engagement_specs": (f"engagement_specs_{date}.json",
                               {"items": [e.to_dict() for e in wired.engagement_specs]}),
     }
@@ -287,16 +330,18 @@ def test_returned_dict_has_all_expected_keys(wired):
     result = orchestrator.run_team_pipeline(client=fake_client)
 
     assert result["analytics_report"] is wired.analytics_report
+    assert result["trend_report"] is wired.trend_report
     assert result["approved_plan"] is wired.plan
     assert result["debate_history"] is wired.debate_history
     assert result["copy_specs"] is wired.copy_specs
     assert result["visual_specs"] is wired.visual_specs
     assert result["audio_specs"] is wired.audio_specs
     assert result["video_specs"] is wired.video_specs
+    assert result["video_quality_scores"] is wired.video_quality_scores
     assert result["engagement_specs"] is wired.engagement_specs
     assert set(result["output_paths"].keys()) == {
-        "approved_plan", "analytics_report", "copy", "visual_specs",
-        "audio_specs", "video_specs", "engagement_specs",
+        "approved_plan", "analytics_report", "trend_report", "copy", "visual_specs",
+        "audio_specs", "video_specs", "video_quality_scores", "engagement_specs",
     }
 
 
@@ -324,9 +369,9 @@ def test_dry_run_false_returns_same_shape_and_does_not_touch_pipeline(wired):
     result = orchestrator.run_team_pipeline(dry_run=False, client=fake_client)
 
     assert set(result.keys()) == {
-        "analytics_report", "approved_plan", "debate_history", "copy_specs",
-        "visual_specs", "audio_specs", "video_specs", "engagement_specs",
-        "output_paths",
+        "analytics_report", "trend_report", "approved_plan", "debate_history", "copy_specs",
+        "visual_specs", "audio_specs", "video_specs", "video_quality_scores",
+        "engagement_specs", "output_paths",
     }
 
 
@@ -417,15 +462,18 @@ def test_resume_from_video_editor_skips_earlier_stages(monkeypatch, tmp_path):
 
     names = [entry[0] for entry in h2.call_log]
     assert "AnalyticsAnalystAgent.run" not in names
+    assert "TrendScraperAgent.run" not in names
     assert "run_debate" not in names
     assert "ContentWriterAgent.run" not in names
     assert "VisualDesignerAgent.run" not in names
     assert "AudioEngineerAgent.run" not in names
     assert "VideoEditorAgent.run" in names
+    assert "VideoQualityReviewerAgent.run" in names
     assert "EngagementStrategistAgent.run" in names
 
     assert result["approved_plan"] == h1.plan
     assert result["analytics_report"] == h1.analytics_report
+    assert result["trend_report"] == h1.trend_report
     assert result["copy_specs"] == h1.copy_specs
     assert result["visual_specs"] == h1.visual_specs
     assert result["audio_specs"] == h1.audio_specs

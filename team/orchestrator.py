@@ -1,10 +1,10 @@
 """Team orchestrator — wires every team agent into one sequential pipeline.
 
-Order: analytics -> (planner <-> reviewer debate) -> content writer -> visual
-designer -> audio engineer -> video editor -> engagement strategist. Every
-artifact is written to team/output/ as indent=2 JSON, keyed by the approved
-plan's date. Sequential by design (low-frequency batch job, not a hot path) —
-do not add concurrency here.
+Order: analytics -> trend scraper -> (planner <-> reviewer debate) -> content
+writer -> visual designer -> audio engineer -> video editor -> video quality
+reviewer -> engagement strategist. Every artifact is written to team/output/
+as indent=2 JSON, keyed by the approved plan's date. Sequential by design
+(low-frequency batch job, not a hot path) — do not add concurrency here.
 
 `dry_run` is accepted and threaded through for a future task to wire real
 posting via pipeline.py; this module deliberately never imports pipeline.
@@ -14,7 +14,7 @@ written to team/output/checkpoint_{run_date}.json. Passing resume_from=<stage
 name> loads that checkpoint and skips every stage before it (reconstructing
 their typed results from disk) instead of re-running them — so a run that
 died at, say, "video_editor" can resume from there without re-paying for
-analytics/debate/content_writer/visual_designer/audio_engineer.
+analytics/trend_scraper/debate/content_writer/visual_designer/audio_engineer.
 """
 from __future__ import annotations
 
@@ -28,8 +28,9 @@ from studio.run import _build_pool
 from src.core import data_store
 
 from team.analytics_analyst import AnalyticsAnalystAgent
+from team.trend_scraper import TrendScraperAgent
 from team.planner import PlannerAgent
-from team.reviewer import ReviewerAgent
+from team.reviewer import ReviewerAgent, VideoQualityReviewerAgent
 from team.debate import run_debate
 from team.content_writer import ContentWriterAgent
 from team.visual_designer import VisualDesignerAgent
@@ -37,16 +38,16 @@ from team.audio_engineer import AudioEngineerAgent
 from team.video_editor import VideoEditorAgent
 from team.engagement_strategist import EngagementStrategistAgent
 from team.models import (
-    AnalyticsReport, ContentPlan, DebateResult,
-    CopySpec, VisualSpec, AudioSpec, VideoSpec, EngagementSpec,
+    AnalyticsReport, ContentPlan, DebateResult, TrendReport,
+    CopySpec, VisualSpec, AudioSpec, VideoSpec, VideoQualityScore, EngagementSpec,
 )
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
 
 # Stage execution order — resume_from must be one of these names.
 _STAGE_ORDER = [
-    "analytics", "debate", "content_writer", "visual_designer",
-    "audio_engineer", "video_editor", "engagement_strategist",
+    "analytics", "trend_scraper", "debate", "content_writer", "visual_designer",
+    "audio_engineer", "video_editor", "video_quality_reviewer", "engagement_strategist",
 ]
 
 
@@ -194,6 +195,19 @@ def run_team_pipeline(
     if on_deliverable is not None:
         on_deliverable("Analytics Analyst", f"Top hooks: {', '.join(analytics_report.top_performing_hooks)}")
 
+    if on_agent_activity is not None:
+        on_agent_activity("Trend Scraper", "Fetching trending hashtags and sounds from TikTok...")
+    trend_report = checkpointed(
+        "trend_scraper",
+        lambda: TrendScraperAgent().run(),
+        lambda r: f"{len(r.hashtags)} trending hashtags, {len(r.sounds)} trending sounds fetched",
+        lambda r: r.to_dict(),
+        TrendReport.from_dict,
+    )
+    if on_deliverable is not None:
+        on_deliverable("Trend Scraper", f"{len(trend_report.hashtags)} hashtags, "
+                                        f"{len(trend_report.sounds)} sounds trending")
+
     quotes_pool = _build_pool("quotes.xlsx")
 
     if on_agent_activity is not None:
@@ -281,6 +295,24 @@ def run_team_pipeline(
         on_deliverable("Video Editor", f"Scene sequences, transitions for {len(video_specs)} posts")
 
     if on_agent_activity is not None:
+        on_agent_activity("Video Quality Reviewer", "Scoring video quality against the acceptance threshold...")
+    video_quality_scores = checkpointed(
+        "video_quality_reviewer",
+        lambda: VideoQualityReviewerAgent(client).run(video_specs, copy_specs),
+        lambda scores: f"Quality scored for {len(scores)} posts, "
+                       f"{len(VideoQualityReviewerAgent.needs_regeneration(scores))} flagged for regeneration",
+        lambda scores: [s.to_dict() for s in scores],
+        lambda d: [VideoQualityScore.from_dict(x) for x in d],
+    )
+    needs_regeneration = VideoQualityReviewerAgent.needs_regeneration(video_quality_scores)
+    if needs_regeneration and on_log is not None:
+        on_log("warning", f"Posts flagged for video regeneration: {needs_regeneration}")
+    if on_deliverable is not None:
+        on_deliverable("Video Quality Reviewer", f"Quality scored for {len(video_quality_scores)} posts"
+                                                  + (f"; regeneration flagged: {needs_regeneration}"
+                                                     if needs_regeneration else "; all posts passed"))
+
+    if on_agent_activity is not None:
         on_agent_activity("Engagement Strategist", "Writing seed comments and DM triggers...")
     engagement_specs = checkpointed(
         "engagement_strategist",
@@ -298,10 +330,12 @@ def run_team_pipeline(
     artifacts = {
         "approved_plan": approved_plan.to_dict(),
         "analytics_report": analytics_report.to_dict(),
+        "trend_report": trend_report.to_dict(),
         "copy": {"items": [c.to_dict() for c in copy_specs]},
         "visual_specs": {"items": [v.to_dict() for v in visual_specs]},
         "audio_specs": {"items": [a.to_dict() for a in audio_specs]},
         "video_specs": {"items": [v.to_dict() for v in video_specs]},
+        "video_quality_scores": {"items": [s.to_dict() for s in video_quality_scores]},
         "engagement_specs": {"items": [e.to_dict() for e in engagement_specs]},
     }
 
@@ -316,12 +350,14 @@ def run_team_pipeline(
 
     return {
         "analytics_report": analytics_report,
+        "trend_report": trend_report,
         "approved_plan": approved_plan,
         "debate_history": debate_history,
         "copy_specs": copy_specs,
         "visual_specs": visual_specs,
         "audio_specs": audio_specs,
         "video_specs": video_specs,
+        "video_quality_scores": video_quality_scores,
         "engagement_specs": engagement_specs,
         "output_paths": output_paths,
     }

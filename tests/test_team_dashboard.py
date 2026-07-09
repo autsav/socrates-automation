@@ -11,8 +11,8 @@ import team.dashboard as dashboard
 import team.orchestrator as orchestrator
 from team.dashboard import EventBus, make_callbacks
 from team.models import (
-    AnalyticsReport, ContentPlan, PostPlan, DebateResult,
-    CopySpec, VisualSpec, AudioSpec, VideoSpec, EngagementSpec,
+    AnalyticsReport, ContentPlan, PostPlan, DebateResult, TrendReport,
+    CopySpec, VisualSpec, AudioSpec, VideoSpec, VideoQualityScore, EngagementSpec,
 )
 
 
@@ -190,6 +190,15 @@ def wired_pipeline(monkeypatch, tmp_path):
     video_specs = _specs_of(VideoSpec, scenes=[{}], total_duration=30.0,
                             transitions=["cut"], motion_effects=["kb"],
                             text_overlays=[{}], aspect_ratio="9:16")
+    trend_report = TrendReport(
+        niche="", hashtags=[{"name": "fyp", "views": 0, "posts": 0, "trend": 1}],
+        sounds=[], fetched_at="2026-07-09T00:00:00+00:00",
+    )
+    video_quality_scores = _specs_of(VideoQualityScore, visual_appeal=8,
+                                     text_readability=8, content_relevance=8,
+                                     production_quality=8, overall_score=8.0,
+                                     is_acceptable=True, feedback="solid",
+                                     suggestions="none")
     engagement_specs = _specs_of(EngagementSpec, seed_comments=["c"],
                                  reply_templates=["r"], dm_trigger="d",
                                  save_bait_frame="f", story_teaser="t",
@@ -201,6 +210,8 @@ def wired_pipeline(monkeypatch, tmp_path):
         return Mock(return_value=instance)
 
     monkeypatch.setattr(orchestrator, "AnalyticsAnalystAgent", _agent(analytics_report))
+    trend_scraper_cls = Mock(return_value=Mock(run=Mock(return_value=trend_report)))
+    monkeypatch.setattr(orchestrator, "TrendScraperAgent", trend_scraper_cls)
     monkeypatch.setattr(orchestrator, "PlannerAgent", Mock(return_value=Mock()))
     monkeypatch.setattr(orchestrator, "ReviewerAgent", Mock(return_value=Mock()))
 
@@ -215,6 +226,9 @@ def wired_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(orchestrator, "VisualDesignerAgent", _agent(visual_specs))
     monkeypatch.setattr(orchestrator, "AudioEngineerAgent", _agent(audio_specs))
     monkeypatch.setattr(orchestrator, "VideoEditorAgent", _agent(video_specs))
+    video_quality_cls = _agent(video_quality_scores)
+    video_quality_cls.needs_regeneration = Mock(return_value=[])
+    monkeypatch.setattr(orchestrator, "VideoQualityReviewerAgent", video_quality_cls)
     monkeypatch.setattr(orchestrator, "EngagementStrategistAgent", _agent(engagement_specs))
     monkeypatch.setattr(orchestrator, "_build_pool", Mock(return_value=[]))
     monkeypatch.setattr(orchestrator.data_store, "init_db", Mock())
@@ -233,12 +247,12 @@ def test_run_team_pipeline_drives_dashboard_events_end_to_end(wired_pipeline):
     stages_done = [e["stage"] for e in bus._history if e["type"] == "stage_done"]
 
     assert stages_started == [
-        "analytics", "debate", "content_writer", "visual_designer",
-        "audio_engineer", "video_editor", "engagement_strategist",
+        "analytics", "trend_scraper", "debate", "content_writer", "visual_designer",
+        "audio_engineer", "video_editor", "video_quality_reviewer", "engagement_strategist",
     ]
     assert stages_done == stages_started
-    assert types.count("deliverable") == 7
-    assert types.count("cost_update") == 7
+    assert types.count("deliverable") == 9
+    assert types.count("cost_update") == 9
     assert any(e["type"] == "debate_round" and e["round"] == 1 and e["approved"] is True
                for e in bus._history)
     assert any(e["type"] == "log" and e["message"] == "Pipeline complete"
