@@ -189,3 +189,24 @@ class AnalyticsReportSchema(BaseModel):
     recommendations: list[str]
     follower_growth: int
     save_rate: float
+
+
+class VideoQualityScoreSchema(BaseModel):
+    post_number: int = Field(ge=1, le=_WEEK_SIZE)
+    visual_appeal: int = Field(ge=1, le=10)
+    text_readability: int = Field(ge=1, le=10)
+    content_relevance: int = Field(ge=1, le=10)
+    production_quality: int = Field(ge=1, le=10)
+    overall_score: float = Field(ge=0, le=10)
+    is_acceptable: bool
+    feedback: str
+    suggestions: str
+
+
+class VideoQualityScoresSchema(BaseModel):
+    items: list[VideoQualityScoreSchema] = Field(min_length=_WEEK_SIZE, max_length=_WEEK_SIZE)
+
+    @field_validator("items")
+    @classmethod
+    def _items_numbered_one_through_seven(cls, v):
+        return _validate_post_numbers_are_one_through_seven(v)

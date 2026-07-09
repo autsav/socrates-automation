@@ -193,6 +193,26 @@ class AnalyticsReport:
 
 
 @dataclass
+class VideoQualityScore:
+    post_number: int
+    visual_appeal: int
+    text_readability: int
+    content_relevance: int
+    production_quality: int
+    overall_score: float
+    is_acceptable: bool
+    feedback: str
+    suggestions: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "VideoQualityScore":
+        return cls(**d)
+
+
+@dataclass
 class TrendReport:
     niche: str
     hashtags: list[dict]
@@ -333,3 +353,19 @@ ANALYTICS_REPORT_SCHEMA = _obj({
 }, ["date", "total_posts", "avg_engagement_rate", "top_performing_hooks",
     "top_performing_moods", "best_posting_times", "worst_performing_content",
     "recommendations", "follower_growth", "save_rate"])
+
+VIDEO_QUALITY_SCORE_ITEM_SCHEMA = _obj({
+    "post_number": {"type": "integer"},
+    "visual_appeal": {"type": "integer"},
+    "text_readability": {"type": "integer"},
+    "content_relevance": {"type": "integer"},
+    "production_quality": {"type": "integer"},
+    "overall_score": {"type": "number"},
+    "is_acceptable": {"type": "boolean"},
+    "feedback": {"type": "string"},
+    "suggestions": {"type": "string"},
+}, ["post_number", "visual_appeal", "text_readability", "content_relevance",
+    "production_quality", "overall_score", "is_acceptable", "feedback", "suggestions"])
+
+VIDEO_QUALITY_SCORES_SCHEMA = _obj(
+    {"items": {"type": "array", "items": VIDEO_QUALITY_SCORE_ITEM_SCHEMA}}, ["items"])
