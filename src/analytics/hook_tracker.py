@@ -77,11 +77,25 @@ def _get_connection():
 
 
 def get_hook_performance(hook_id: str, window_days: int = 30) -> dict:
-    """Return avg metrics for a specific hook template."""
+    """Return avg metrics for a specific hook template.
+    Gracefully returns zeroed dict if hook_id column doesn't exist in posts table."""
     cutoff = (datetime.utcnow() - timedelta(days=window_days)).strftime("%Y-%m-%d %H:%M:%S")
     conn = _get_connection()
     try:
         cursor = conn.cursor()
+        # Check if hook_id column exists in posts table
+        cursor.execute("PRAGMA table_info(posts)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "hook_id" not in columns:
+            return {
+                "hook_id": hook_id,
+                "n": 0,
+                "avg_saved": 0.0,
+                "avg_comments": 0.0,
+                "avg_reach": 0.0,
+                "avg_likes": 0.0,
+                "composite_score": 0.0,
+            }
         cursor.execute(
             """
             SELECT COUNT(*) as n,

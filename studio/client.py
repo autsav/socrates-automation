@@ -28,12 +28,10 @@ class StudioClient:
     def call(self, role, shared_prefix, role_system, user_content, schema):
         model = settings.ROLE_MODELS[role]
         effort = settings.ROLE_EFFORT[role]
-        resp = self._sdk.messages.create(
+        is_haiku = "haiku" in model
+        kwargs = dict(
             model=model,
             max_tokens=8000,
-            thinking={"type": "adaptive"},
-            output_config={"effort": effort,
-                           "format": {"type": "json_schema", "schema": schema}},
             system=[
                 {"type": "text", "text": shared_prefix,
                  "cache_control": {"type": "ephemeral"}},
@@ -41,6 +39,19 @@ class StudioClient:
             ],
             messages=[{"role": "user", "content": user_content}],
         )
+        if not is_haiku:
+            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["output_config"] = {"effort": effort,
+                                        "format": {"type": "json_schema", "schema": schema}}
+        else:
+            # Haiku doesn't support thinking or effort; use simple JSON mode
+            from anthropic.types import TextBlock
+            kwargs["system"] = [
+                {"type": "text", "text": shared_prefix + "\n\n" + role_system +
+                 "\n\nIMPORTANT: Respond with ONLY valid JSON matching this schema. No markdown, no commentary:\n" +
+                 json.dumps(schema, indent=2)},
+            ]
+        resp = self._sdk.messages.create(**kwargs)
         self._record_usage(model, resp.usage)
         if getattr(resp, "stop_reason", None) == "refusal":
             raise StudioError(f"{role} refused")
