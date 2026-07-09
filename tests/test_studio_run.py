@@ -47,6 +47,15 @@ def test_run_studio_fallback_on_error(monkeypatch):
     assert run.run_studio(_OkClient(), 0, [], []) is None
 
 
+def test_run_studio_fallback_on_raw_sdk_exception(monkeypatch):
+    """A raw (non-StudioError) exception — e.g. a network error or timeout
+    from the underlying SDK — must still trigger the legacy fallback instead
+    of crashing the scheduled run."""
+    monkeypatch.setattr(run.analyst, "get_or_build_brief",
+                        lambda c: (_ for _ in ()).throw(ConnectionError("timeout")))
+    assert run.run_studio(_OkClient(), 0, [], []) is None
+
+
 def test_run_studio_fallback_on_ceiling():
     class _Over:
         def over_daily_ceiling(self):

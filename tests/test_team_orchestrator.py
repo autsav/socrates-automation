@@ -348,3 +348,34 @@ def test_orchestrator_module_never_imports_pipeline():
 
     assert not any(m == "pipeline" or m.startswith("pipeline.") for m in imported_modules)
     assert "import pipeline" not in source
+
+
+def test_unapproved_plan_raises_and_stops_before_downstream_agents(monkeypatch, tmp_path):
+    """Regression: when the reviewer never crosses the approval threshold
+    within max_rounds, the orchestrator used to unconditionally label and
+    save the plan as "approved" and run 5 more paid agents on it anyway."""
+    h = Harness(tmp_path)
+    unapproved = DebateResult(
+        round_number=3,
+        planner_output=json.dumps(h.plan.to_dict()),
+        reviewer_output=json.dumps({"score": 5.0}),
+        reviewer_score=5.0,
+        approved=False,
+        final_plan=h.plan,
+    )
+    h.debate_history = [unapproved]
+    h.apply(monkeypatch)
+    fake_client = Mock(name="fake_client")
+    failed_stages = []
+
+    with pytest.raises(orchestrator.PlanNotApprovedError):
+        orchestrator.run_team_pipeline(
+            client=fake_client,
+            on_stage_failed=lambda name, msg: failed_stages.append((name, msg)),
+        )
+
+    assert failed_stages and failed_stages[0][0] == "debate"
+    names = [entry[0] for entry in h.call_log]
+    assert "ContentWriterAgent.__init__" not in names
+    assert "ContentWriterAgent.run" not in names
+    assert not (h.tmp_path / f"approved_plan_{h.plan.date}.json").exists()

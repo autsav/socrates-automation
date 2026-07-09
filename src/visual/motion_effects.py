@@ -44,20 +44,20 @@ class Easing(Enum):
             return t
         elif self == Easing.EASE_IN_OUT_QUAD:
             return t * t * (3 - 2 * t)
-        elif self == EASE_OUT_EXPO:
+        elif self == Easing.EASE_OUT_EXPO:
             return 1 - math.pow(2, -10 * t)
-        elif self == EASE_IN_BACK:
+        elif self == Easing.EASE_IN_BACK:
             c1 = 1.70158
             c3 = c1 + 1
             return c3 * t * t * t - c1 * t * t
-        elif self == EASE_OUT_ELASTIC:
+        elif self == Easing.EASE_OUT_ELASTIC:
             c4 = (2 * math.pi) / 3
             if t == 0:
                 return 0
             if t == 1:
                 return 1
             return math.pow(2, -10 * t) * math.sin((t * 10 - 0.75) * c4) + 1
-        elif self == EASE_IN_OUT_CUBIC:
+        elif self == Easing.EASE_IN_OUT_CUBIC:
             return t * t * t * (t * (t * 6 - 15) + 10)
         return t
 
@@ -149,33 +149,50 @@ class MotionEngine:
 
         return zoompan
 
+    @staticmethod
+    def _eased_t_expr(easing: Easing, frames: int) -> str:
+        """ffmpeg per-frame expression for eased progress t in [0,1], using
+        the same curves as Easing.apply() but evaluated by ffmpeg itself
+        (via the builtin 'in' frame-index variable) instead of Python."""
+        t = f"(in/{frames})"
+        if easing == Easing.EASE_IN_OUT_QUAD:
+            return f"({t}*{t}*(3-2*{t}))"
+        if easing == Easing.EASE_OUT_EXPO:
+            return f"(1-pow(2,-10*{t}))"
+        if easing == Easing.EASE_IN_BACK:
+            c1 = 1.70158
+            c3 = c1 + 1
+            return f"({c3:.5f}*{t}*{t}*{t}-{c1:.5f}*{t}*{t})"
+        if easing == Easing.EASE_OUT_ELASTIC:
+            c4 = (2 * math.pi) / 3
+            return f"(pow(2,-10*{t})*sin(({t}*10-0.75)*{c4:.6f})+1)"
+        if easing == Easing.EASE_IN_OUT_CUBIC:
+            return f"({t}*{t}*{t}*({t}*({t}*6-15)+10))"
+        return t  # LINEAR
+
     def _build_zoom_expression(
         self, z_start: float, z_end: float, frames: int, easing: Easing
     ) -> str:
         """Build zoom expression with easing using ffmpeg's expression evaluator."""
-        # ffmpeg zoompan uses 'in' (frame number, 0-based)
-        # We need to interpolate between z_start and z_end
-        # Since ffmpeg expressions are limited, we use a linear approximation
-        # of easing by pre-computing keyframe-like steps
-        step = (z_end - z_start) / frames
-        return f"min(zoom+{step:.6f},{z_end:.3f})"
+        eased_t = self._eased_t_expr(easing, frames)
+        return f"({z_start:.6f}+({z_end - z_start:.6f})*{eased_t})"
 
     def _build_pan_expressions(
         self, p_start: tuple, p_end: tuple, frames: int, easing: Easing
     ) -> tuple[str, str]:
         """Build x/y pan expressions."""
+        eased_t = self._eased_t_expr(easing, frames)
+
         # x offset in pixels
         x_start_px = int(p_start[0] * self.width)
         x_end_px = int(p_end[0] * self.width)
-        x_step = (x_end_px - x_start_px) / frames
 
         y_start_px = int(p_start[1] * self.height)
         y_end_px = int(p_end[1] * self.height)
-        y_step = (y_end_px - y_start_px) / frames
 
         # Standard centering formula with offset: (iw-iw/zoom)/2 + offset
-        x_expr = f"(iw-iw/zoom)/2+{x_start_px}+in*{x_step:.3f}"
-        y_expr = f"(ih-ih/zoom)/2+{y_start_px}+in*{y_step:.3f}"
+        x_expr = f"(iw-iw/zoom)/2+{x_start_px}+({x_end_px - x_start_px})*{eased_t}"
+        y_expr = f"(ih-ih/zoom)/2+{y_start_px}+({y_end_px - y_start_px})*{eased_t}"
 
         return x_expr, y_expr
 
@@ -183,8 +200,8 @@ class MotionEngine:
         self, t_start: float, t_end: float, frames: int, easing: Easing
     ) -> str:
         """Build rotation expression in radians."""
-        step = (t_end - t_start) / frames
-        return f"{math.radians(t_start)}+in*{math.radians(step):.6f}"
+        eased_t = self._eased_t_expr(easing, frames)
+        return f"({math.radians(t_start):.6f}+{math.radians(t_end - t_start):.6f}*{eased_t})"
 
     # ── Pre-computed Eased Keyframes (higher quality) ──────────────────────────
 

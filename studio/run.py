@@ -2,7 +2,7 @@
 import logging
 
 from studio import analyst, strategist, copywriter, director
-from studio.client import StudioClient, StudioError
+from studio.client import StudioClient
 
 log = logging.getLogger(__name__)
 
@@ -24,8 +24,9 @@ def run_studio(client, slot, pool, recent_posts):
         decision = director.review(client, perf, brief, concepts)
         cmap = {c.id: c for c in concepts}
         return brief, decision, cmap
-    except StudioError as e:
-        log.warning("[studio] agent failure (%s) — falling back to legacy", e)
+    except Exception as e:
+        log.warning("[studio] agent failure (%s: %s) — falling back to legacy",
+                    type(e).__name__, e)
         return None
 
 

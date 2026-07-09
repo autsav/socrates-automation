@@ -33,6 +33,11 @@ from team.engagement_strategist import EngagementStrategistAgent
 _OUTPUT_DIR = Path(__file__).parent / "output"
 
 
+class PlanNotApprovedError(RuntimeError):
+    """Raised when the reviewer never approves the plan within max_rounds —
+    stops the pipeline before any downstream (paid) agents run on it."""
+
+
 def _current_spend_usd() -> float:
     """Today's cumulative spend from studio's daily spend log (best-effort)."""
     from studio import settings as studio_settings
@@ -121,12 +126,22 @@ def run_team_pipeline(
         if on_debate_round is not None:
             on_debate_round(round_number, planner_output, reviewer_output, score, approved)
 
-    approved_plan, debate_history = stage(
-        "debate",
-        lambda: run_debate(
+    def _run_debate_or_raise():
+        plan, history = run_debate(
             PlannerAgent(client), ReviewerAgent(client), analytics_report, quotes_pool,
             now=now, on_round=_on_round,
-        ),
+        )
+        if not history[-1].approved:
+            raise PlanNotApprovedError(
+                f"reviewer never approved the plan after {len(history)} round(s) "
+                f"(final score {history[-1].reviewer_score:.1f}/10) — aborting "
+                "before any downstream agents run"
+            )
+        return plan, history
+
+    approved_plan, debate_history = stage(
+        "debate",
+        _run_debate_or_raise,
         lambda result: f"Plan approved after {len(result[1])} round(s), "
                        f"score {result[1][-1].reviewer_score:.1f}/10",
     )

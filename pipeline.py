@@ -365,7 +365,12 @@ def save_log(data: dict):
 def _apply_studio_decision(brief, decision, concepts_by_id):
     """Map a studio Decision onto the quote_data dict the renderer consumes.
     Stamps caption_marker (the hook) onto visual_direction for reconcile."""
-    concept = concepts_by_id[decision.top_pick]
+    concept = concepts_by_id.get(decision.top_pick)
+    if concept is None:
+        from studio.client import StudioError
+        raise StudioError(
+            f"director picked unknown concept id {decision.top_pick!r} "
+            f"(known ids: {list(concepts_by_id)})")
     decision.visual_direction["caption_marker"] = concept.hook
     return {
         "row_number": brief.quote.get("row_number"),
@@ -396,6 +401,10 @@ def _studio_stage(cfg, slot):
         match = next((r for r in pool if r["row_number"] == brief.quote["row_number"]), None)
         if match:
             brief.quote["text"] = match["quote"]
+    if not brief.quote.get("text"):
+        log.warning("[studio] strategist returned no resolvable quote text "
+                    "(need_new=%s) — falling back to legacy", brief.quote.get("need_new"))
+        return None
     return _apply_studio_decision(brief, decision, cmap), decision
 
 
@@ -442,7 +451,12 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     flux_override = ""
     if studio:
         log.info("Step 1: AI Creative Studio...")
-        bundle = _studio_stage(cfg, slot)
+        try:
+            bundle = _studio_stage(cfg, slot)
+        except Exception as e:
+            log.warning("[studio] stage crashed (%s: %s) — falling back to legacy",
+                        type(e).__name__, e)
+            bundle = None
         if bundle is not None:
             quote_data, studio_decision = bundle
             mood = quote_data["mood"]

@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from studio.types import (
     Concept, Decision, CreativeBrief, PerformanceBrief,
-    DECISION_SCHEMA,
+    CREATIVE_BRIEF_SCHEMA, DECISION_SCHEMA,
 )
 from studio.settings import ROLE_MODELS, AUDIENCES
 from src.core.excel_reader import VALID_MOODS
@@ -44,3 +44,16 @@ def test_audiences_match_renderer():
 def test_decision_schema_is_strict_object():
     assert DECISION_SCHEMA["type"] == "object"
     assert DECISION_SCHEMA["additionalProperties"] is False
+
+
+def test_creative_brief_quote_schema_matches_strategist_prompt_contract():
+    """The strategist's prompt tells the model to emit either
+    {"row_number": N, "text": ...} or {"need_new": true, "theme": ...} —
+    the enforced schema must actually allow both shapes (regression for the
+    row_number/need_new vs. strict text/author contradiction)."""
+    quote_schema = CREATIVE_BRIEF_SCHEMA["properties"]["quote"]
+    assert quote_schema["additionalProperties"] is False
+    for key in ("row_number", "text", "author", "source", "need_new", "theme"):
+        assert key in quote_schema["properties"], key
+    # Neither shape has every key, so nothing can be unconditionally required.
+    assert quote_schema["required"] == []
