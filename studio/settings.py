@@ -10,12 +10,28 @@ ROLE_MODELS = {
     "strategist": "claude-sonnet-4-6",
     "copywriter": "claude-opus-4-8",
     "director":   "claude-opus-4-8",
+    "planner":               "claude-sonnet-4-6",
+    "reviewer":               "claude-sonnet-4-6",
+    "content_writer":         "claude-opus-4-8",
+    "visual_designer":        "claude-sonnet-4-6",
+    "audio_engineer":         "claude-sonnet-4-6",
+    "video_editor":           "claude-sonnet-4-6",
+    "engagement_strategist":  "claude-sonnet-4-6",
+    "analytics_analyst":      "claude-haiku-4-5",
 }
 ROLE_EFFORT = {
     "analyst":    "medium",
     "strategist": "medium",
     "copywriter": "high",
     "director":   "high",
+    "planner":               "medium",
+    "reviewer":               "medium",
+    "content_writer":         "high",
+    "visual_designer":        "medium",
+    "audio_engineer":         "medium",
+    "video_editor":           "medium",
+    "engagement_strategist":  "medium",
+    "analytics_analyst":      "low",
 }
 N_CONCEPTS = 4
 DAILY_SPEND_CEILING_USD = 2.0

@@ -15,6 +15,7 @@ __pycache__/
 
 # Generated artifacts
 output/
+team/output/
 audio/music/
 audio/*.mp3
 !audio/.gitkeep
