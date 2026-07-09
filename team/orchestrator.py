@@ -91,6 +91,6 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true",
                         help="Run the full team chain and save outputs; do not post.")
     args = parser.parse_args()
-    result = run_team_pipeline(dry_run=args.dry_run or True)
+    result = run_team_pipeline(dry_run=args.dry_run)
     print(json.dumps({"output_paths": {k: str(v) for k, v in
                       result["output_paths"].items()}}, indent=2))
