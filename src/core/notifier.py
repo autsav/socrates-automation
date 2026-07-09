@@ -106,6 +106,92 @@ class TelegramBackend:
             print(f"  [notify] Telegram photo send failed: {e}")
             return False
 
+    def send_with_buttons(self, message: str, buttons: list) -> int | None:
+        """Send a text message with an inline keyboard. `buttons` is a list
+        of rows, each row a list of {"text": ..., "callback_data": ...} (or
+        {"text": ..., "url": ...}) dicts. Returns the sent message_id, or
+        None on failure."""
+        import requests
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+                json={"chat_id": self.chat_id, "text": message,
+                     "reply_markup": {"inline_keyboard": buttons}},
+                timeout=15,
+            )
+            if not resp.ok:
+                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                return None
+            return resp.json().get("result", {}).get("message_id")
+        except Exception as e:
+            print(f"  [notify] Telegram send_with_buttons failed: {e}")
+            return None
+
+    def send_video_with_buttons(self, video_path: Path, caption: str,
+                                buttons: list) -> int | None:
+        """Send a video with an inline keyboard attached (see
+        send_with_buttons for the `buttons` shape). Returns the sent
+        message_id, or None on failure."""
+        import json as _json
+        import requests
+        video_path = Path(video_path)
+        if not video_path.exists():
+            print(f"  [notify] Video file not found: {video_path}")
+            return None
+        try:
+            with open(video_path, "rb") as f:
+                resp = requests.post(
+                    f"https://api.telegram.org/bot{self.bot_token}/sendVideo",
+                    data={"chat_id": self.chat_id, "caption": caption,
+                         "supports_streaming": True,
+                         "reply_markup": _json.dumps({"inline_keyboard": buttons})},
+                    files={"video": (video_path.name, f, "video/mp4")},
+                    timeout=120,
+                )
+            if not resp.ok:
+                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                return None
+            return resp.json().get("result", {}).get("message_id")
+        except Exception as e:
+            print(f"  [notify] Telegram send_video_with_buttons failed: {e}")
+            return None
+
+    def get_updates(self, offset: int | None = None, timeout: int = 0) -> list:
+        """Long-poll Telegram's getUpdates for new updates (messages, button
+        presses). `offset` should be one past the highest update_id already
+        processed, to avoid reprocessing. Returns [] on any failure —
+        callers should treat that as "no new updates" and retry later."""
+        import requests
+        params = {"timeout": timeout}
+        if offset is not None:
+            params["offset"] = offset
+        try:
+            resp = requests.get(
+                f"https://api.telegram.org/bot{self.bot_token}/getUpdates",
+                params=params, timeout=timeout + 15,
+            )
+            if not resp.ok:
+                print(f"  [notify] getUpdates failed: {resp.status_code} {resp.text[:200]}")
+                return []
+            return resp.json().get("result", [])
+        except Exception as e:
+            print(f"  [notify] getUpdates failed: {e}")
+            return []
+
+    def answer_callback_query(self, callback_query_id: str, text: str = "") -> bool:
+        """Acknowledge a button press so Telegram stops showing its spinner."""
+        import requests
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{self.bot_token}/answerCallbackQuery",
+                json={"callback_query_id": callback_query_id, "text": text},
+                timeout=10,
+            )
+            return resp.ok
+        except Exception as e:
+            print(f"  [notify] answerCallbackQuery failed: {e}")
+            return False
+
     def send_document(self, doc_path: Path, caption: str = "") -> bool:
         """Send document file via Telegram sendDocument API."""
         import requests
@@ -271,10 +357,15 @@ class Notifier:
         caption: str,
         mood: str,
         trending_suggestion: str = "",
+        post_row_id: int | None = None,
     ):
         """
         MANUAL MODE: Send the generated Reel video file to the user via Telegram.
         User downloads it and manually posts to Instagram with trending music.
+
+        When post_row_id is given, the video is sent with inline Approve/
+        Reject buttons (two-way: src.core.approval.poll_once() picks up the
+        resulting tap) instead of a plain video message.
         """
         # Build caption message
         lines = [
@@ -316,16 +407,30 @@ class Notifier:
         # Send video + caption via Telegram (only Telegram supports video files)
         sent_video = False
         for backend in self.backends:
-            if backend.name == "telegram" and hasattr(backend, "send_video"):
-                try:
-                    ok = backend.send_video(reel_path, caption="🎬 Your Reel is ready! Download this video and upload to Instagram Reels.")
+            if backend.name != "telegram":
+                continue
+            try:
+                if post_row_id is not None and hasattr(backend, "send_video_with_buttons"):
+                    from src.core.approval import approve_reject_buttons, record_pending
+                    ok = backend.send_video_with_buttons(
+                        reel_path,
+                        caption="🎬 Your Reel is ready! Approve to confirm you'll post it, "
+                                "or reject to skip this proposal.",
+                        buttons=approve_reject_buttons(post_row_id),
+                    )
                     if ok:
-                        print(f"  [notify] Sent Reel video via {backend.name}")
-                        sent_video = True
-                        # Send follow-up text message with caption
-                        backend.send(message)
-                except Exception as e:
-                    print(f"  [notify] Video send via {backend.name} failed: {e}")
+                        record_pending(post_row_id)
+                elif hasattr(backend, "send_video"):
+                    ok = backend.send_video(reel_path, caption="🎬 Your Reel is ready! Download this video and upload to Instagram Reels.")
+                else:
+                    ok = False
+                if ok:
+                    print(f"  [notify] Sent Reel video via {backend.name}")
+                    sent_video = True
+                    # Send follow-up text message with caption
+                    backend.send(message)
+            except Exception as e:
+                print(f"  [notify] Video send via {backend.name} failed: {e}")
 
         if not sent_video:
             print("  [notify] ⚠️  Could not send video — check logs/notifications.jsonl and GitHub artifacts")

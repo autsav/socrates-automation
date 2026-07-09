@@ -702,6 +702,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                 caption=quote_data["caption"],
                 mood=mood,
                 trending_suggestion=trending,
+                post_row_id=post_row_id,
             )
             # ── Phase 1: Send wallpaper series too ────────────────────────────
             if wallpaper_paths:
