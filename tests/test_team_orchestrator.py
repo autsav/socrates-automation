@@ -379,3 +379,79 @@ def test_unapproved_plan_raises_and_stops_before_downstream_agents(monkeypatch, 
     assert "ContentWriterAgent.__init__" not in names
     assert "ContentWriterAgent.run" not in names
     assert not (h.tmp_path / f"approved_plan_{h.plan.date}.json").exists()
+
+
+def test_checkpoint_saved_after_each_stage(monkeypatch, tmp_path):
+    h = Harness(tmp_path)
+    h.apply(monkeypatch)
+    fixed_now = datetime(2026, 7, 9, 8, 0, 0)
+
+    orchestrator.run_team_pipeline(client=Mock(name="fake_client"), now=fixed_now)
+
+    checkpoint_path = tmp_path / "checkpoint_2026-07-09.json"
+    assert checkpoint_path.exists()
+    data = json.loads(checkpoint_path.read_text())
+    assert data["last_checkpoint"] == "engagement_strategist"
+    assert set(data["results"].keys()) == set(orchestrator._STAGE_ORDER)
+
+
+def test_resume_from_video_editor_skips_earlier_stages(monkeypatch, tmp_path):
+    """A run that already completed through audio_engineer (checkpointed to
+    disk) must, on resume_from='video_editor', skip analytics/debate/
+    content_writer/visual_designer/audio_engineer entirely — reconstructing
+    their results from the checkpoint instead of re-running (and re-paying
+    for) them."""
+    fixed_now = datetime(2026, 7, 9, 8, 0, 0)
+
+    h1 = Harness(tmp_path)
+    h1.apply(monkeypatch)
+    orchestrator.run_team_pipeline(client=Mock(name="fake_client_1"), now=fixed_now)
+
+    h2 = Harness(tmp_path)
+    h2.apply(monkeypatch)
+    fake_client_2 = Mock(name="fake_client_2")
+
+    result = orchestrator.run_team_pipeline(
+        client=fake_client_2, now=fixed_now, resume_from="video_editor",
+    )
+
+    names = [entry[0] for entry in h2.call_log]
+    assert "AnalyticsAnalystAgent.run" not in names
+    assert "run_debate" not in names
+    assert "ContentWriterAgent.run" not in names
+    assert "VisualDesignerAgent.run" not in names
+    assert "AudioEngineerAgent.run" not in names
+    assert "VideoEditorAgent.run" in names
+    assert "EngagementStrategistAgent.run" in names
+
+    assert result["approved_plan"] == h1.plan
+    assert result["analytics_report"] == h1.analytics_report
+    assert result["copy_specs"] == h1.copy_specs
+    assert result["visual_specs"] == h1.visual_specs
+    assert result["audio_specs"] == h1.audio_specs
+
+    call_args = h2.video_editor_instance.run.call_args
+    assert call_args.args[0] == h1.plan
+    assert call_args.args[1] == h1.visual_specs
+    assert call_args.args[2] == h1.audio_specs
+
+
+def test_resume_from_first_stage_behaves_like_a_normal_run(monkeypatch, tmp_path):
+    """resume_from='analytics' is the first stage, so nothing precedes it —
+    every stage should still run normally even though resume_from is set."""
+    h = Harness(tmp_path)
+    h.apply(monkeypatch)
+    fixed_now = datetime(2026, 7, 9, 8, 0, 0)
+
+    orchestrator.run_team_pipeline(
+        client=Mock(name="fake_client"), now=fixed_now, resume_from="analytics",
+    )
+
+    names = [entry[0] for entry in h.call_log]
+    assert "AnalyticsAnalystAgent.run" in names
+    assert "run_debate" in names
+
+
+def test_resume_from_invalid_stage_name_raises():
+    with pytest.raises(ValueError):
+        orchestrator.run_team_pipeline(client=Mock(), resume_from="not_a_real_stage")
