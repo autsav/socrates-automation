@@ -1,0 +1,10 @@
+.git
+.env
+output/
+logs/
+audio/
+__pycache__
+*.pyc
+.DS_Store
+quotes.xlsx
+server.log
