@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 
+from team.base_agent import BaseAgent
 from team.models import AnalyticsReport, ContentPlan, CONTENT_PLAN_SCHEMA
 from team.prompt_loader import load_prompt
 
@@ -54,9 +55,9 @@ def parse_response(d: dict) -> ContentPlan:
     return ContentPlan.from_dict(d)
 
 
-class PlannerAgent:
+class PlannerAgent(BaseAgent):
     def __init__(self, client):
-        self.client = client
+        super().__init__(client)
         self.system_prompt = load_prompt("planner")
 
     def run(self, analytics_report: AnalyticsReport, quotes_pool: list[dict],
@@ -68,8 +69,7 @@ class PlannerAgent:
                                      feedback=feedback)
         user_content = _USER_REVISION_ROUND if feedback is not None else _USER_FIRST_ROUND
 
-        data = self.client.call("planner", shared_prefix, self.system_prompt,
-                                user_content, CONTENT_PLAN_SCHEMA)
-        plan = parse_response(data)
+        plan = self.call_with_retry("planner", shared_prefix, self.system_prompt,
+                                    user_content, CONTENT_PLAN_SCHEMA, parse_response)
         plan.date = plan_date
         return plan

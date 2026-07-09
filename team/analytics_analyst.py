@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 
 from studio.client import StudioClient
+from team.base_agent import BaseAgent
 from team.models import AnalyticsReport, ANALYTICS_REPORT_SCHEMA
 from team.prompt_loader import load_prompt
 from src.core import data_store
@@ -15,9 +16,9 @@ _PREFIX = (
 )
 
 
-class AnalyticsAnalystAgent:
+class AnalyticsAnalystAgent(BaseAgent):
     def __init__(self, client: StudioClient):
-        self.client = client
+        super().__init__(client)
         self.system_prompt = load_prompt("analytics_analyst")
 
     def run(self, window_days: int = 90, now: datetime | None = None) -> AnalyticsReport:
@@ -38,11 +39,11 @@ class AnalyticsAnalystAgent:
         }
         shared_prefix = _PREFIX.format(date=date_str, stats=json.dumps(stats, indent=2))
 
-        data = self.client.call(
+        return self.call_with_retry(
             "analytics_analyst",
             shared_prefix,
             self.system_prompt,
             "Generate the AnalyticsReport now.",
             ANALYTICS_REPORT_SCHEMA,
+            AnalyticsReport.from_dict,
         )
-        return AnalyticsReport.from_dict(data)

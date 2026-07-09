@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+from team.base_agent import BaseAgent
 from team.models import ContentPlan, CopySpec, EngagementSpec, ENGAGEMENT_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
 
@@ -36,14 +37,13 @@ def parse_response(d: dict) -> list[EngagementSpec]:
     return [EngagementSpec.from_dict(item) for item in d["items"]]
 
 
-class EngagementStrategistAgent:
+class EngagementStrategistAgent(BaseAgent):
     def __init__(self, client):
-        self.client = client
+        super().__init__(client)
         self.system_prompt = load_prompt("engagement_strategist")
 
     def run(self, plan: ContentPlan, copy_specs: list[CopySpec]) -> list[EngagementSpec]:
         shared_prefix = build_prompt(plan, copy_specs)
 
-        data = self.client.call("engagement_strategist", shared_prefix, self.system_prompt,
-                                _USER_CONTENT, ENGAGEMENT_SPECS_SCHEMA)
-        return parse_response(data)
+        return self.call_with_retry("engagement_strategist", shared_prefix, self.system_prompt,
+                                    _USER_CONTENT, ENGAGEMENT_SPECS_SCHEMA, parse_response)

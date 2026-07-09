@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 
+from team.base_agent import BaseAgent
 from team.models import ContentPlan, CopySpec, COPY_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
 
@@ -31,14 +32,13 @@ def parse_response(d: dict) -> list[CopySpec]:
     return [CopySpec.from_dict(item) for item in d["items"]]
 
 
-class ContentWriterAgent:
+class ContentWriterAgent(BaseAgent):
     def __init__(self, client):
-        self.client = client
+        super().__init__(client)
         self.system_prompt = load_prompt("content_writer")
 
     def run(self, plan: ContentPlan) -> list[CopySpec]:
         shared_prefix = build_prompt(plan)
 
-        data = self.client.call("content_writer", shared_prefix, self.system_prompt,
-                                _USER_CONTENT, COPY_SPECS_SCHEMA)
-        return parse_response(data)
+        return self.call_with_retry("content_writer", shared_prefix, self.system_prompt,
+                                    _USER_CONTENT, COPY_SPECS_SCHEMA, parse_response)

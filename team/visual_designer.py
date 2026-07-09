@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 
+from team.base_agent import BaseAgent
 from team.models import ContentPlan, CopySpec, VisualSpec, VISUAL_SPECS_SCHEMA
 from team.prompt_loader import load_prompt
 
@@ -33,14 +34,13 @@ def parse_response(d: dict) -> list[VisualSpec]:
     return [VisualSpec.from_dict(item) for item in d["items"]]
 
 
-class VisualDesignerAgent:
+class VisualDesignerAgent(BaseAgent):
     def __init__(self, client):
-        self.client = client
+        super().__init__(client)
         self.system_prompt = load_prompt("visual_designer")
 
     def run(self, plan: ContentPlan, copy_specs: list[CopySpec]) -> list[VisualSpec]:
         shared_prefix = build_prompt(plan, copy_specs)
 
-        data = self.client.call("visual_designer", shared_prefix, self.system_prompt,
-                                _USER_CONTENT, VISUAL_SPECS_SCHEMA)
-        return parse_response(data)
+        return self.call_with_retry("visual_designer", shared_prefix, self.system_prompt,
+                                    _USER_CONTENT, VISUAL_SPECS_SCHEMA, parse_response)

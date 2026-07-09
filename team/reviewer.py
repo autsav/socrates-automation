@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+from team.base_agent import BaseAgent
 from team.models import AnalyticsReport, ContentPlan, REVIEWER_OUTPUT_SCHEMA
 from team.prompt_loader import load_prompt
 
@@ -32,13 +33,12 @@ def parse_response(d: dict) -> dict:
     return d
 
 
-class ReviewerAgent:
+class ReviewerAgent(BaseAgent):
     def __init__(self, client):
-        self.client = client
+        super().__init__(client)
         self.system_prompt = load_prompt("reviewer")
 
     def run(self, plan: ContentPlan, analytics_report: AnalyticsReport) -> dict:
         shared_prefix = build_prompt(plan, analytics_report)
-        data = self.client.call("reviewer", shared_prefix, self.system_prompt,
-                                _USER_CONTENT, REVIEWER_OUTPUT_SCHEMA)
-        return parse_response(data)
+        return self.call_with_retry("reviewer", shared_prefix, self.system_prompt,
+                                    _USER_CONTENT, REVIEWER_OUTPUT_SCHEMA, parse_response)
