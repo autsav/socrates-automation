@@ -29,6 +29,7 @@ logs/
 
 # Claude IDE
 .claude/
+.superpowers/
 
 # macOS
 .DS_Store
