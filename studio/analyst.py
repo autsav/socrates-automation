@@ -5,8 +5,7 @@ from datetime import datetime
 from studio import settings
 from studio.client import StudioError
 from studio.types import PerformanceBrief, PERFORMANCE_BRIEF_SCHEMA
-import data_store
-
+from src.core import data_store
 _PREFIX = (
     "You are the Data Analyst for a stoic-philosophy Instagram account. "
     "You mine real post performance to tell the creative team what is working "

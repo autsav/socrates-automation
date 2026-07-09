@@ -1,7 +1,7 @@
 """Studio configuration constants (non-secret). Models / effort / budget dials."""
 from pathlib import Path
 
-from excel_reader import AUDIENCE_TO_MOOD
+from src.core.excel_reader import AUDIENCE_TO_MOOD
 
 AUDIENCES = list(AUDIENCE_TO_MOOD.keys())
 

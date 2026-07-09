@@ -5,13 +5,13 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data_store import init_db, save_post, mark_posted, get_ab_results, record_ab_win, get_last_posted_for_audience, has_posted_today
+from src.core.data_store import init_db, save_post, mark_posted, get_ab_results, record_ab_win, get_last_posted_for_audience, has_posted_today
 
 
 @pytest.fixture
 def db(tmp_path):
     db_path = tmp_path / "test.db"
-    import data_store
+    from src.core import data_store
     data_store.DB_PATH = db_path
     init_db()
     return db_path

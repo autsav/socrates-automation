@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
+from src.analytics.ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 
 
 class MockDataStore:

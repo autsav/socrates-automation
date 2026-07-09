@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict, field
 
-from excel_reader import VALID_MOODS
+from src.core.excel_reader import VALID_MOODS
 from studio.settings import AUDIENCES
 
 

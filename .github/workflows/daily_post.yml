@@ -84,13 +84,13 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: |
           if [ -n "$PIXABAY_API_KEY" ]; then
-            python download_music.py
+            python -m src.audio.download_music
           else
             echo "⚠️ PIXABAY_API_KEY not set — using generated audio fallback"
           fi
 
       - name: Init SQLite database
-        run: python -c "from data_store import init_db; init_db()"
+        run: python -c "from src.core.data_store import init_db; init_db()"
 
       - name: Restore SQLite database from repo
         run: |
@@ -162,7 +162,7 @@ jobs:
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] || [ -n "$SLACK_WEBHOOK_URL" ]; then
             echo "📨 Sending post notification..."
-            python notifier.py --latest || echo "Notification skipped (no recent post)"
+            python -m src.core.notifier --latest || echo "Notification skipped (no recent post)"
           else
             echo "ℹ️ No notification backend configured — check logs/notifications.jsonl"
           fi

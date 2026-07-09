@@ -41,7 +41,7 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: |
           if [ -n "$PIXABAY_API_KEY" ]; then
-            python download_music.py --refresh
+            python -m src.audio.download_music --refresh
           else
             echo "⚠️ PIXABAY_API_KEY not set — skipping music refresh"
             exit 0

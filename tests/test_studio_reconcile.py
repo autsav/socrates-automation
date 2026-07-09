@@ -41,7 +41,7 @@ def test_fetch_recent_media_parses():
 
 
 def test_reconcile_pending_backfills(tmp_path, monkeypatch):
-    import data_store
+    from src.core import data_store
     data_store.DB_PATH = tmp_path / "pipeline.db"
     data_store.init_db()
     decision_json = '{"visual_direction": {"caption_marker": "Stop waiting."}}'

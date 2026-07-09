@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from PIL import Image
-from image_composer import (
+from src.visual.image_composer import (
     compose_hook_scene,
     compose_quote_scene,
     compose_cta_scene,

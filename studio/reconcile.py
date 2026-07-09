@@ -8,8 +8,7 @@ import json
 import logging
 
 import requests
-import data_store
-
+from src.core import data_store
 GRAPH_URL = "https://graph.instagram.com/v22.0"
 log = logging.getLogger(__name__)
 

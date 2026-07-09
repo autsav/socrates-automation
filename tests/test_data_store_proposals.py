@@ -3,9 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import data_store
-
-
+from src.core import data_store
 def _fresh_db(tmp_path):
     db = tmp_path / "pipeline.db"
     data_store.DB_PATH = db

@@ -16,29 +16,29 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from excel_reader import read_todays_quote, get_mood_prompt, mark_as_posted, _current_slot
-from image_generator import generate_background
-from image_composer import compose_post, compose_hook_scene, compose_quote_scene, compose_cta_scene
-from instagram_poster import post_to_instagram, post_reel_to_instagram
-from reel_composer import generate_reel, ffmpeg_available
+from src.core.excel_reader import read_todays_quote, get_mood_prompt, mark_as_posted, _current_slot
+from src.visual.image_generator import generate_background
+from src.visual.image_composer import compose_post, compose_hook_scene, compose_quote_scene, compose_cta_scene
+from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram
+from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
-from ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
-from token_manager import get_valid_token_with_fallback
-from notifier import Notifier
-from trending_music import get_trending_suggestion
-from voiceover import prepare_reel_voiceover, voiceover_available
+from src.core.data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
+from src.analytics.ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
+from src.core.token_manager import get_valid_token_with_fallback
+from src.core.notifier import Notifier
+from src.audio.trending_music import get_trending_suggestion
+from src.audio.voiceover import prepare_reel_voiceover, voiceover_available
 
 # ── Phase 1 Viral Upgrades ─────────────────────────────────────────────────────
-from hooks.pattern_interrupt import PatternInterrupter
-from brand_design import get_design
-from engagement.comment_bait import CommentBait
-from prompts.architect import PromptArchitect
-from wallpapers.composer import WallpaperComposer
+from src.hooks.pattern_interrupt import PatternInterrupter
+from src.visual.brand_design import get_design
+from src.engagement.comment_bait import CommentBait
+from src.prompts.architect import PromptArchitect
+from src.wallpapers.composer import WallpaperComposer
 
 # ── Phase 3 Audio Engineering ──────────────────────────────────────────────────
-from trending_audio import TrendingAudioEngine, download_music_for_mood
-from voiceover_engine import VoiceoverEngine, generate_enhanced_voiceover
+from src.audio.trending_audio import TrendingAudioEngine, download_music_for_mood
+from src.audio.voiceover_engine import VoiceoverEngine, generate_enhanced_voiceover
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
@@ -500,7 +500,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
     # ── Phase 2: Apply atmospheric overlays ───────────────────────────────────
     try:
-        from overlays.particles import add_particles_to_image, add_light_rays_to_image
+        from src.overlays.particles import add_particles_to_image, add_light_rays_to_image
         from PIL import Image
         bg_img = Image.open(image_path)
         bg_with_particles = add_particles_to_image(bg_img, mood=mood, seed=quote_data.get("row_number", 0))

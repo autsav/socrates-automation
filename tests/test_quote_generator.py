@@ -6,7 +6,7 @@ import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from quote_generator import _generate_quote_batch, generate_quotes, build_excel_from_quotes
+from src.content.quote_generator import _generate_quote_batch, generate_quotes, build_excel_from_quotes
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def test_generate_quote_batch_parses_json():
 
 def test_generate_quotes_deduplicates():
     """Should deduplicate quotes by lowercase text."""
-    with patch("quote_generator._generate_quote_batch") as mock_batch:
+    with patch("src.content.quote_generator._generate_quote_batch") as mock_batch:
         mock_batch.return_value = [
             ("Duplicate quote", "stuck"),
             ("duplicate quote", "procrastinator"),  # same text, different case
@@ -56,7 +56,7 @@ def test_generate_quotes_deduplicates():
 
 def test_generate_quotes_raises_on_empty():
     """Should raise RuntimeError if all generation attempts fail."""
-    with patch("quote_generator._generate_quote_batch") as mock_batch:
+    with patch("src.content.quote_generator._generate_quote_batch") as mock_batch:
         mock_batch.return_value = []
         with pytest.raises(RuntimeError, match="Failed to generate any quotes"):
             generate_quotes("fake_key", target_count=5)

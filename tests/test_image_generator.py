@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from image_generator import generate_background, MOOD_PROMPTS
+from src.visual.image_generator import generate_background, MOOD_PROMPTS
 
 
 def test_generate_background_success(tmp_path):
     """Happy path: API returns image URL, download succeeds, file saved correctly."""
-    with patch("image_generator.requests.post") as mock_post, \
-         patch("image_generator.requests.get") as mock_get, \
-         patch("image_generator.time.time", return_value=1234567890):
+    with patch("src.visual.image_generator.requests.post") as mock_post, \
+         patch("src.visual.image_generator.requests.get") as mock_get, \
+         patch("src.visual.image_generator.time.time", return_value=1234567890):
         # Mock Fal.ai API response
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status = MagicMock()
@@ -52,9 +52,9 @@ def test_generate_background_success(tmp_path):
 
 def test_generate_background_default_mood(tmp_path):
     """Unknown mood falls back to default prompt."""
-    with patch("image_generator.requests.post") as mock_post, \
-         patch("image_generator.requests.get") as mock_get, \
-         patch("image_generator.time.time", return_value=0):
+    with patch("src.visual.image_generator.requests.post") as mock_post, \
+         patch("src.visual.image_generator.requests.get") as mock_get, \
+         patch("src.visual.image_generator.time.time", return_value=0):
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status = MagicMock()
         mock_post_resp.json.return_value = {"images": [{"url": "https://fal.ai/images/x.jpg"}]}
@@ -73,7 +73,7 @@ def test_generate_background_default_mood(tmp_path):
 
 def test_generate_background_api_401(tmp_path):
     """Fal.ai API returns 401 — should raise HTTPError."""
-    with patch("image_generator.requests.post") as mock_post:
+    with patch("src.visual.image_generator.requests.post") as mock_post:
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status.side_effect = requests.HTTPError("401 Client Error")
         mock_post.return_value = mock_post_resp
@@ -84,14 +84,14 @@ def test_generate_background_api_401(tmp_path):
 
 def test_generate_background_api_timeout(tmp_path):
     """Fal.ai API call times out."""
-    with patch("image_generator.requests.post", side_effect=Exception("Read timed out.")):
+    with patch("src.visual.image_generator.requests.post", side_effect=Exception("Read timed out.")):
         with pytest.raises(Exception, match="timed out"):
             generate_background("dark_philosophical", api_key="key", output_dir=str(tmp_path))
 
 
 def test_generate_background_no_images(tmp_path):
     """Fal.ai returns 200 but empty images list — should raise ValueError."""
-    with patch("image_generator.requests.post") as mock_post:
+    with patch("src.visual.image_generator.requests.post") as mock_post:
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status = MagicMock()
         mock_post_resp.json.return_value = {"images": []}
@@ -103,7 +103,7 @@ def test_generate_background_no_images(tmp_path):
 
 def test_generate_background_invalid_json(tmp_path):
     """Fal.ai returns non-JSON response — should raise on response.json()."""
-    with patch("image_generator.requests.post") as mock_post:
+    with patch("src.visual.image_generator.requests.post") as mock_post:
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status = MagicMock()
         mock_post_resp.json.side_effect = ValueError("No JSON")
@@ -115,8 +115,8 @@ def test_generate_background_invalid_json(tmp_path):
 
 def test_generate_background_image_download_fails(tmp_path):
     """Image URL returns 404 on download — should raise HTTPError."""
-    with patch("image_generator.requests.post") as mock_post, \
-         patch("image_generator.requests.get") as mock_get:
+    with patch("src.visual.image_generator.requests.post") as mock_post, \
+         patch("src.visual.image_generator.requests.get") as mock_get:
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status = MagicMock()
         mock_post_resp.json.return_value = {"images": [{"url": "https://bad.url/img.jpg"}]}
@@ -132,7 +132,7 @@ def test_generate_background_image_download_fails(tmp_path):
 
 def test_generate_background_missing_image_url(tmp_path):
     """API response has images list but dict missing 'url' key — should raise KeyError."""
-    with patch("image_generator.requests.post") as mock_post:
+    with patch("src.visual.image_generator.requests.post") as mock_post:
         mock_post_resp = MagicMock()
         mock_post_resp.raise_for_status = MagicMock()
         mock_post_resp.json.return_value = {"images": [{}]}

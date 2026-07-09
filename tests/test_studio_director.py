@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from studio import director
 from studio.types import PerformanceBrief, CreativeBrief, Concept, Decision
-from excel_reader import VALID_MOODS
+from src.core.excel_reader import VALID_MOODS
 
 
 def _perf():

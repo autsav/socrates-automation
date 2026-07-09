@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import openpyxl
 import pytest
 
-from excel_reader import (
+from src.core.excel_reader import (
     AUDIENCE_TO_MOOD,
     VALID_MOODS,
     get_mood_prompt,
@@ -120,7 +120,7 @@ def test_read_todays_quote_picks_by_slot(tmp_path):
     ])
     fake_dt = MagicMock()
     fake_dt.timetuple.return_value.tm_yday = 1  # day=1
-    with patch("excel_reader.datetime") as mock_datetime:
+    with patch("src.core.excel_reader.datetime") as mock_datetime:
         mock_datetime.now.return_value = fake_dt
         # Slot 0: (1*3+0) % 3 = 0 → Quote 0
         result0 = read_todays_quote(str(excel_path), slot=0)

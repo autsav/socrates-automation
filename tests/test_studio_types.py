@@ -8,7 +8,7 @@ from studio.types import (
     DECISION_SCHEMA,
 )
 from studio.settings import ROLE_MODELS, AUDIENCES
-from excel_reader import VALID_MOODS
+from src.core.excel_reader import VALID_MOODS
 
 
 def test_concept_roundtrip():

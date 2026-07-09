@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from unittest.mock import MagicMock, patch
-from excel_reader import get_mood_prompt
+from src.core.excel_reader import get_mood_prompt
 
 
 def test_get_mood_prompt_returns_string():

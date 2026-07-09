@@ -51,9 +51,8 @@ if __name__ == "__main__":
     import argparse
     import json
     from config import Config
-    from excel_reader import _current_slot
-    import data_store
-
+    from src.core.excel_reader import _current_slot
+    from src.core import data_store
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true",
                         help="Run the chain and print the proposal; do not post.")

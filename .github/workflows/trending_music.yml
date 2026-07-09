@@ -18,7 +18,7 @@ jobs:
       - name: Check last update date
         id: check
         run: |
-          LAST_UPDATE=$(grep -oP '"updated": "\K[^"]+' trending_music.py || echo "never")
+          LAST_UPDATE=$(grep -oP '"updated": "\K[^"]+' src/audio/trending_music.py || echo "never")
           echo "last_update=$LAST_UPDATE" >> $GITHUB_OUTPUT
           echo "Last curated update: $LAST_UPDATE"
 
@@ -28,7 +28,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          MESSAGE="📅 Weekly Trending Music Reminder\n\nLast update: ${{ steps.check.outputs.last_update }}\n\nAction: Review trending sounds on Instagram/TikTok for stoic/motivational niche, then update trending_music.py.\n\nInstructions: github.com/autsav/socrates-automation/blob/main/trending_music.py"
+          MESSAGE="📅 Weekly Trending Music Reminder\n\nLast update: ${{ steps.check.outputs.last_update }}\n\nAction: Review trending sounds on Instagram/TikTok for stoic/motivational niche, then update trending_music.py.\n\nInstructions: github.com/autsav/socrates-automation/blob/main/src/audio/trending_music.py"
 
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \

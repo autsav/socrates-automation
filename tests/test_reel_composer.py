@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from unittest.mock import patch
-from reel_composer import generate_reel, ffmpeg_available, _audio_path, MOOD_AUDIO
+from src.video.reel_composer import generate_reel, ffmpeg_available, _audio_path, MOOD_AUDIO
 
 
 def test_ffmpeg_available():
@@ -71,7 +71,7 @@ def test_generate_reel_silent_fallback(tmp_path):
     scenes = _make_test_scenes(tmp_path, prefix="silent")
 
     # Patch _audio_path to return None (missing audio)
-    with patch("reel_composer._audio_path", return_value=None):
+    with patch("src.video.reel_composer._audio_path", return_value=None):
         result = generate_reel(
             scene_images=scenes,
             mood="calm_stoic",

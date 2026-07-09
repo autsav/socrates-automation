@@ -81,9 +81,9 @@ jobs:
           META_APP_SECRET:        ${{ secrets.META_APP_SECRET }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            python analytics.py --dry-run
+            python -m src.analytics.metrics --dry-run
           else
-            python analytics.py
+            python -m src.analytics.metrics
           fi
 
       - name: Commit SQLite database back to repo
