@@ -36,12 +36,17 @@ text should appear at or just before the word it reinforces, not lag behind the 
 
 ## Duration and structure
 
-Target 15-22 seconds total per Reel — this window is short enough to protect completion rate
-without sacrificing room for a real hook + quote + CTA arc; note the `total_duration` field so it
-falls inside that range unless the plan's `format`/`rationale` explicitly calls for a longer
-carousel-style video. Structure scenes so the hook lands its payoff before the 3-second mark,
-the quote/substance section carries the bulk of the runtime, and the CTA scene is short and sharp
-with no fluff before the share/save prompt.
+15-22 seconds is this plan's stated outer range for `total_duration` — short enough to protect
+completion rate without sacrificing room for a real hook + quote + CTA arc; don't exceed it unless
+the plan's `format`/`rationale` explicitly calls for a longer carousel-style video. But treat that
+range as a ceiling, not a target to fill: `src/video/reel_composer.py` documents the research
+rationale directly (7-15s Reels get 5-10x more reach than longer ones) and its own scene-duration
+defaults were deliberately shortened from a 21s total to a 14s total for that reason. Default
+toward the lower end of the 15-22s range — nearer 14-15s — and only push higher when the content
+genuinely needs the extra runtime (a denser quote, a multi-beat CTA), not as a routine choice.
+Structure scenes so the hook lands its payoff before the 3-second mark, the quote/substance
+section carries the bulk of the runtime, and the CTA scene is short and sharp with no fluff before
+the share/save prompt.
 
 ## Cross-platform portability
 

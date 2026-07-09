@@ -61,3 +61,46 @@ codebase's docstring.
 - Concrete numbers/thresholds/named techniques: every file contains well over 3 (posting-time
   windows, hold-rate percentages, mood/emotion mappings, hex color values, transition-type names,
   duration targets, score thresholds, etc.) — verified by grepping numeric tokens per file.
+
+## Follow-up fix — mood/duration guidance corrections (post-review)
+
+Task review flagged two inaccuracies in `team/prompts/` files vs. actual code behavior. Both fixed
+directly, no tests added (prose-only files).
+
+### 1. `team/prompts/audio_engineer.md` — voiceover emotion per mood
+
+Original text asserted `dramatic_ancient`, `stark_minimal`, and `mystical_greek` all default to a
+"balanced" style with whispered reserved for confessional posts only. Re-read
+`src/audio/voiceover_engine.py`'s `_scene_configs` `mood_configs` dict (the mapping used when style
+isn't explicitly `intense`/`calm`/`whispered`) and found:
+
+- `mystical_greek` has an explicit entry with `hook`/`cta` emotion = `whispered` (medium pace) —
+  whispered is this mood's own default, not a confessional-only override.
+- `dramatic_ancient` and `stark_minimal` have **no entry** in `mood_configs` at all; the code's
+  `.get(mood, mood_configs["dark_philosophical"])` fallback means both silently inherit the
+  `dark_philosophical` arc (urgent/medium hook+cta, intense/slow quote) by default.
+
+Rewrote the section to state each of these three moods' true default explicitly, kept the
+intense/calm/whispered override styles as optional overrides, and narrowed the
+"reserve-whispered-for-confessional" guidance to apply outside `mystical_greek`'s own default.
+
+### 2. `team/prompts/video_editor.md` — duration and structure
+
+Original text presented 15-22s as a target range to fill. Re-read `src/video/reel_composer.py`:
+its module docstring and inline comments state the research finding directly — "7-15s Reels get
+5-10x more reach than longer ones" — and `SCENE_DURATIONS = [4, 8, 3]` / `TOTAL_DURATION` (14s) was
+deliberately shortened from a prior 21s total for that reason.
+
+Kept 15-22s as the plan's stated outer ceiling (per instruction — this number traces to the source
+plan doc's dataclass comment and should not be silently dropped), but added a sentence citing
+`reel_composer.py`'s finding and its 21s→14s shortening, and instructed the video editor to default
+toward the lower end (nearer 14-15s) rather than treating the full range as a target, reserving the
+higher end for content that genuinely needs the extra runtime.
+
+### Re-verification
+
+Re-read both source files after writing the new prose and confirmed: `mood_configs` dict in
+`voiceover_engine.py` has exactly 5 explicit entries (`dark_philosophical`, `cinematic_hopeful`,
+`epic_warrior`, `calm_stoic`, `mystical_greek`) — `dramatic_ancient`/`stark_minimal` are absent and
+fall back to `dark_philosophical` as stated; `reel_composer.py`'s `TOTAL_DURATION` comment and
+docstring confirm the 14s current total / 21s prior total / 7-15s research figure as written.

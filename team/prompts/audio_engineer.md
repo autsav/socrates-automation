@@ -30,11 +30,19 @@ each mood has a distinct hook/quote/cta emotional arc, not one flat tone across 
   fast pace. This is the one mood where fast pacing throughout is correct.
 - `calm_stoic` (overwhelmed): hook — calm, slow pace; quote — reflective, slow pace; cta — calm,
   slow pace throughout — never rush this mood.
-- For `dramatic_ancient`, `stark_minimal`, and `mystical_greek`, default to the "balanced" style
-  unless the post's copy calls for the intense/calm/whispered override styles (intense = fast,
-  urgent hook and cta with an intense quote read; calm = slow throughout with a reflective quote;
-  whispered = slow and whispered across all three beats — reserve whispered for posts where the
-  copy is deliberately intimate/confessional, not as a default).
+- `mystical_greek` (lost): hook — **whispered**, medium pace; quote — reflective, slow pace; cta —
+  whispered, medium pace. Whispered is this mood's own default arc, not a special-case override
+  reserved for confessional posts — write the copy for an intimate, hushed delivery across all
+  three beats unless overridden below.
+- `dramatic_ancient` (doomscroller) and `stark_minimal` (lazy): the engine has no dedicated
+  prosody entry for these two moods, so both fall back to the `dark_philosophical` arc by
+  default — hook urgent/medium pace, quote intense/slow pace, cta urgent/medium pace. Treat that
+  as their effective default.
+- Any mood's default above can be overridden when the post's copy calls for it, using the
+  intense/calm/whispered styles (intense = fast, urgent hook and cta with an intense quote read;
+  calm = slow throughout with a reflective quote; whispered = slow and whispered across all three
+  beats). Outside of `mystical_greek`'s default, reserve whispered delivery for posts where the
+  copy is deliberately intimate/confessional, not as a default choice.
 
 Write `voiceover_text` so it reads naturally at the assigned pace — short punchy clauses for
 urgent/fast delivery, longer unbroken clauses for slow/reflective delivery. Don't write a
