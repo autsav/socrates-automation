@@ -192,6 +192,21 @@ class AnalyticsReport:
         return cls(**d)
 
 
+@dataclass
+class TrendReport:
+    niche: str
+    hashtags: list[dict]
+    sounds: list[dict]
+    fetched_at: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TrendReport":
+        return cls(**d)
+
+
 def _obj(props, required):
     return {"type": "object", "additionalProperties": False,
             "properties": props, "required": required}
