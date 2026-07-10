@@ -305,6 +305,10 @@ def generate_pov_reel(
         cmd += ["-framerate", str(fps), "-loop", "1", "-t", str(total_duration), "-i", str(quote_path)]
         cmd += ["-framerate", str(fps), "-loop", "1", "-t", str(total_duration), "-i", str(cta_path)]
 
+        if audio is not None:
+            cmd += ["-i", str(audio)]
+            audio_idx = 4
+
         if animate_background:
             bg_filter = (
                 f"[0:v]zoompan=z='min(zoom+0.0008,1.06)':d=1:"
@@ -341,8 +345,6 @@ def generate_pov_reel(
         cmd += ["-filter_complex", filter_complex, "-map", "[outv]"]
 
         if audio is not None:
-            cmd += ["-i", str(audio)]
-            audio_idx = 4
             cmd += [
                 "-map", f"{audio_idx}:a",
                 "-c:a", "aac", "-b:a", "128k",
