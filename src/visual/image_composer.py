@@ -124,24 +124,44 @@ def _create_gradient_text(text: str, font: ImageFont.FreeTypeFont,
     """
     Render text with a vertical color gradient (e.g. gold → white).
     Returns an RGBA image with the gradient text.
+
+    Uses font.getbbox() to compute the true glyph bounds (which can have
+    negative x-offsets and non-zero y-offsets) and renders into a canvas
+    large enough to avoid any clipping.
     """
+    # Measure the true glyph bounds for this text + font
+    bbox = font.getbbox(text)
+    text_x0, text_y0, text_x1, text_y1 = bbox
+    glyph_w = text_x1 - text_x0
+    glyph_h = text_y1 - text_y0
+
+    # Make the canvas large enough for the full glyph extents.
+    # When text is drawn at (draw_x, draw_y), the actual pixel bounds are:
+    #   x: draw_x + text_x0  to  draw_x + text_x1
+    #   y: draw_y + text_y0  to  draw_y + text_y1
+    # So the canvas must be at least (draw_x + text_x1, draw_y + text_y1).
+    draw_x = 4  # small left padding
+    draw_y = 4  # small top padding
+    canvas_w = int(max(width, draw_x + text_x1 + 4))
+    canvas_h = int(max(height, draw_y + text_y1 + 4))
+
     # Create a monochrome text mask
-    mask = Image.new("L", (width, height), 0)
+    mask = Image.new("L", (canvas_w, canvas_h), 0)
     mask_draw = ImageDraw.Draw(mask)
-    mask_draw.text((0, 0), text, font=font, fill=255)
+    mask_draw.text((draw_x, draw_y), text, font=font, fill=255)
 
     # Build gradient image
-    gradient = Image.new("RGB", (width, height))
-    for y in range(height):
-        ratio = y / max(height - 1, 1)
+    gradient = Image.new("RGB", (canvas_w, canvas_h))
+    for y in range(canvas_h):
+        ratio = y / max(canvas_h - 1, 1)
         r = int(start_color[0] * (1 - ratio) + end_color[0] * ratio)
         g = int(start_color[1] * (1 - ratio) + end_color[1] * ratio)
         b = int(start_color[2] * (1 - ratio) + end_color[2] * ratio)
-        for x in range(width):
+        for x in range(canvas_w):
             gradient.putpixel((x, y), (r, g, b))
 
     # Composite gradient through text mask
-    result = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    result = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
     result.paste(gradient, (0, 0), mask)
     return result
 
@@ -195,11 +215,20 @@ def _draw_text_centered(draw, text: str, font: ImageFont.FreeTypeFont,
                 start_color=GOLD_COLOR,
                 end_color=WHITE_COLOR,
             )
+            # The gradient image has 4px padding on all sides, so the actual
+            # glyph starts at (4, 4) inside the gradient image. We need to
+            # paste at a position that aligns the glyph with where draw.text()
+            # would have placed it at (x, y). Since draw.text() at (x, y) puts
+            # the first glyph pixel at (x + bbox[0], y + bbox[1]), and the
+            # gradient glyph is at (4, 4), we paste at:
+            #   (x + bbox[0] - 4, y + bbox[1] - 4)
+            paste_x = x + int(bbox[0]) - 4
+            paste_y = y + int(bbox[1]) - 4
             if stroke:
-                # Draw stroke underneath
+                # Draw stroke underneath at the same position as the text
                 _draw_text_stroke(draw, line, font, x, y, fill=(0, 0, 0, 0),
                                   stroke_color=(0, 0, 0), stroke_width=2)
-            draw._image.paste(grad_img, (x, y), grad_img)
+            draw._image.paste(grad_img, (paste_x, paste_y), grad_img)
         elif stroke:
             _draw_text_stroke(draw, line, font, x, y, fill=color,
                               stroke_color=(0, 0, 0), stroke_width=2)
