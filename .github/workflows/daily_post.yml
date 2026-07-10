@@ -2,11 +2,15 @@ name: Socrates Pipeline
 
 on:
   schedule:
-    # REEL posts — 3x daily every day at peak engagement windows
-    # Research (Buffer 9.6M posts): mornings 8-10am, evenings 6-9pm perform best
-    - cron: '0 8 * * *'    # 08:00 UTC — morning scroll (commute)
-    - cron: '0 12 * * *'   # 12:00 UTC — lunch break
-    - cron: '0 18 * * *'   # 18:00 UTC — evening wind-down (peak)
+    # 6 posts/day, alternating POV text Reels (zero-cost) and regular content
+    # Research (Buffer 9.6M posts): mornings 8-10am, evenings 6-9pm perform best;
+    # the 3 added slots (03:00, 15:00, 21:00) fill the gaps for growth volume.
+    - cron: '0 3 * * *'    # 03:00 UTC — POV Reel
+    - cron: '0 8 * * *'    # 08:00 UTC — morning scroll (commute) — regular
+    - cron: '0 12 * * *'   # 12:00 UTC — lunch break — POV Reel
+    - cron: '0 15 * * *'   # 15:00 UTC — afternoon — regular
+    - cron: '0 18 * * *'   # 18:00 UTC — evening wind-down (peak) — regular
+    - cron: '0 21 * * *'   # 21:00 UTC — night scroll — POV Reel
 
     # CAROUSEL posts — Wed + Thu only (highest engagement days per 2026 data)
     # Carousels get 1.92% vs 0.50% engagement, 3x more saves — use on best days
@@ -101,15 +105,19 @@ jobs:
             mkdir -p data
           fi
 
-      - name: Detect post format (reel vs carousel)
+      - name: Detect post format (reel vs carousel vs pov)
         id: format
         run: |
-          # Carousel runs at :30 past the hour (Wed/Thu 09:30)
-          # Reels run on the hour (08:00, 12:00, 18:00)
+          # Carousel runs at :30 past the hour (Wed/Thu 09:30).
+          # Of the 6 daily on-the-hour slots, 03:00/12:00/21:00 are POV text
+          # Reels (zero-cost) and 08:00/15:00/18:00 are regular FLUX Reels.
           MINUTE=$(date -u +%M)
+          HOUR=$(date -u +%H)
           DAY=$(date -u +%u)  # 1=Mon … 7=Sun
           if [ "$MINUTE" = "30" ] && { [ "$DAY" = "3" ] || [ "$DAY" = "4" ]; }; then
             echo "mode=carousel" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "03" ] || [ "$HOUR" = "12" ] || [ "$HOUR" = "21" ]; then
+            echo "mode=pov" >> $GITHUB_OUTPUT
           else
             echo "mode=reel" >> $GITHUB_OUTPUT
           fi
@@ -138,6 +146,9 @@ jobs:
           elif [ "${{ steps.format.outputs.mode }}" = "carousel" ]; then
             echo "📸 Posting CAROUSEL (Wed/Thu — highest engagement day)"
             python pipeline.py --carousel
+          elif [ "${{ steps.format.outputs.mode }}" = "pov" ]; then
+            echo "🎬 POV Reel (zero-cost, ffmpeg + Pillow) → Telegram for manual upload"
+            python pipeline.py --manual --pov
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "🎬 MANUAL TRIGGER — AI Creative Studio → Telegram proposal for manual upload (test)"
             python pipeline.py --studio --manual

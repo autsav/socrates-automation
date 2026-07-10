@@ -43,6 +43,9 @@ from src.audio.trending_audio import TrendingAudioEngine, download_music_for_moo
 from src.audio.voiceover_engine import VoiceoverEngine, generate_enhanced_voiceover
 from src.audio.edge_tts_engine import prepare_reel_voiceover_edge_tts, edge_tts_available
 
+# ── Viral Growth: POV text Reels (zero-cost — ffmpeg + Pillow only) ───────────
+from src.video.pov_reel_generator import generate_pov_reel
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.resolve()
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -431,7 +434,109 @@ def _legacy_content(cfg):
     return quote_data, mood, controversy, caption_variant
 
 
-def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False, carousel: bool = False):
+def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
+                   dry_run: bool, manual: bool, access_token: str) -> dict:
+    """
+    POV mode: generate a zero-cost text Reel (ffmpeg + Pillow only — no FLUX,
+    no TTS) and post/send it exactly like the regular Reel flow, minus the
+    background-image generation steps.
+    """
+    hook_text = quote_data.get("hook") or _generate_psychology_hook(
+        quote_data["audience"], quote_data["row_number"])
+    cta_text = _pick_cta(quote_data["row_number"])
+    log.info(f"  [pov] Hook: {hook_text[:50]}...")
+
+    reel_path = generate_pov_reel(
+        quote=quote_data["quote"],
+        hook=hook_text,
+        cta=cta_text,
+        output_path=OUTPUT_DIR / f"pov_reel_{timestamp}.mp4",
+        mood=mood,
+    )
+    if reel_path:
+        log.info(f"POV Reel: {reel_path}")
+
+    hook_pick = pick_best_hook(audience=quote_data["audience"], quote_text=quote_data["quote"])
+    post_row_id = save_post(
+        quote_text=quote_data["quote"],
+        audience=quote_data["audience"],
+        mood=mood,
+        caption_variant=-1,
+        posting_slot=slot,
+        dry_run=dry_run,
+        hook_id=hook_pick["hook_id"],
+    )
+
+    post_id = None
+    if manual:
+        log.info("Step: MANUAL MODE — sending POV Reel to Telegram for manual posting...")
+        try:
+            notifier = Notifier(cfg)
+            trending = get_trending_suggestion(mood)
+            notifier.notify_manual_reel_ready(
+                reel_path=reel_path,
+                cover_path=None,
+                caption=quote_data["caption"],
+                mood=mood,
+                trending_suggestion=trending,
+                post_row_id=post_row_id,
+            )
+            log.info("✅ POV Reel sent to Telegram! Download and post with trending music.")
+        except Exception as e:
+            log.error(f"Failed to send POV Reel to Telegram: {e}")
+        mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
+        mark_posted(post_row_id, "PENDING_MANUAL", None, str(reel_path) if reel_path else None)
+    elif not dry_run and reel_path:
+        log.info("Step: Posting POV Reel to Instagram...")
+        post_id = post_reel_to_instagram(
+            video_path=reel_path,
+            caption=quote_data["caption"],
+            ig_account_id=cfg.IG_ACCOUNT_ID,
+            access_token=access_token,
+            cloudinary_config={
+                "cloud_name": cfg.CLOUDINARY_CLOUD_NAME,
+                "api_key": cfg.CLOUDINARY_API_KEY,
+                "api_secret": cfg.CLOUDINARY_API_SECRET,
+            },
+        )
+        log.info(f"✅ Posted! ID: {post_id}")
+        mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
+        mark_posted(post_row_id, post_id, None, str(reel_path))
+        if post_id:
+            try:
+                notifier = Notifier(cfg)
+                trending = get_trending_suggestion(mood)
+                notifier.notify_post_published(
+                    post_id=post_id,
+                    caption_preview=quote_data["caption"][:120],
+                    mood=mood,
+                    trending_suggestion=trending,
+                )
+            except Exception as e:
+                log.warning(f"Notification failed (non-blocking): {e}")
+    else:
+        log.info("⏭ dry_run=True — skip Instagram post")
+
+    record = {
+        "timestamp": timestamp,
+        "row_number": quote_data["row_number"],
+        "audience": quote_data["audience"],
+        "mood": mood,
+        "quote": quote_data["quote"],
+        "caption_preview": quote_data["caption"][:80],
+        "image_path": None,
+        "reel_path": str(reel_path) if reel_path else None,
+        "post_id": post_id,
+        "dry_run": dry_run,
+        "pov": True,
+    }
+    save_log(record)
+    log.info("▶ POV Pipeline complete")
+    return record
+
+
+def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
+                  carousel: bool = False, pov: bool = False):
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -485,6 +590,11 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     )
     quote_data["caption"] = f"{quote_data['caption']}\n\n{engagement_block}"
     log.info(f"  [viral] Engagement block injected ({len(engagement_block)} chars)")
+
+    # ── POV mode: zero-cost text Reel — bypasses FLUX entirely ────────────────
+    if pov:
+        log.info("Step 2: POV mode — generating zero-cost text Reel (ffmpeg + Pillow only)...")
+        return _run_pov_reel(cfg, quote_data, mood, slot, timestamp, dry_run, manual, access_token)
 
     # ── Phase 1: Build enhanced FLUX prompt ────────────────────────────────────
     flux_override = ""
@@ -849,10 +959,15 @@ if __name__ == "__main__":
     parser.add_argument("--carousel", action="store_true", help="Post as a 5-slide Carousel instead of a single image")
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
+    parser.add_argument("--pov", action="store_true", help="Generate a zero-cost POV text Reel (ffmpeg + Pillow only, no FLUX) instead of the FLUX-based Reel.")
+    parser.add_argument("--batch", action="store_true", help="Generate a week's worth of POV Reels (30) in one run and exit — does not post to Instagram.")
     args = parser.parse_args()
 
-    # --manual implies --reel (generate video) but skips API posting
-    if args.manual:
-        run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio)
+    if args.batch:
+        from src.video.batch_generator import generate_batch
+        generate_batch()
+    elif args.manual:
+        # --manual implies --reel (generate video) but skips API posting
+        run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio, pov=args.pov)
     else:
-        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio, carousel=args.carousel)
+        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio, carousel=args.carousel, pov=args.pov)

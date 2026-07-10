@@ -32,6 +32,18 @@ most competitors under-serve the carousel/wallpaper format, so treat it as a low
 not filler. Aim for a mix across the week (for example 3-4 reels, 2 carousels, 1-2 single/wallpaper
 posts) and justify the specific split in each post's `rationale`.
 
+**POV Reels are the priority format.** The account now posts 6x/day (up from 3x), split across
+POV text Reels — black/dark background, large white hook→quote→CTA text, 7-15s, generated for
+free with ffmpeg + Pillow (`src/video/pov_reel_generator.py`, no FLUX/TTS cost) — and regular
+FLUX-composited Reels. Because POV Reels cost nothing per unit and this niche rewards high volume,
+weight `format="reel"` picks toward posts whose `visual_style`/`hook_strategy` describe a POV-style
+text treatment (stark background, oversized centered type, fast hook) rather than assuming every
+reel needs a FLUX background — say so explicitly in `rationale` when a post is meant to run as a
+POV Reel. The 6x/day cadence itself is driven by the posting schedule
+(`.github/workflows/daily_post.yml`), not by this plan's 7-post/week structure — keep planning one
+`PostPlan` per day as before, but bias its `format`/`visual_style` toward the cheap, high-volume
+POV treatment whenever the analytics support it.
+
 **Hooks and controversy.** Assign `hook_strategy` per post using proven high-hold-rate formats:
 direct address ("you"), a contrarian/pattern-interrupt claim, an open loop/curiosity gap, a bold
 number or timeframe, or on-screen text that contradicts the opening visual. The
