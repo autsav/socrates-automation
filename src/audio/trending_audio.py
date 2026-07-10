@@ -40,89 +40,90 @@ FMA_SEARCH_URL = "https://freemusicarchive.org/api/trackSearch"
 CACHE_DIR = Path(__file__).parent.parent.parent / "audio" / "music"
 CACHE_METADATA = CACHE_DIR / ".cache.json"
 
-# Curated fallback tracks by mood (public domain / CC0)
-# These are URLs to actual downloadable MP3s from Pixabay / FreePD
+# Curated fallback tracks by mood. URLs are intentionally blank — no verified
+# royalty-free source is wired up yet, so find_and_download() falls through to
+# generate_audio.py's locally-synthesized ambient tracks instead of 404ing.
 FALLBACK_TRACKS = {
     "dark_philosophical": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/03/24/audio_6c7a4e4b1d.mp3",
+            "url": "",
             "title": "Dark Cinematic Piano",
             "tags": ["piano", "cinematic", "dark", "emotional"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3",
+            "url": "",
             "title": "Ethereal Atmosphere",
             "tags": ["ambient", "dark", "mystical"],
         },
     ],
     "cinematic_hopeful": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/03/10/audio_5670f3cc69.mp3",
+            "url": "",
             "title": "Inspiring Cinematic",
             "tags": ["cinematic", "inspiring", "orchestral"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3",
+            "url": "",
             "title": "Hopeful Piano",
             "tags": ["piano", "hopeful", "emotional"],
         },
     ],
     "dramatic_ancient": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3",
+            "url": "",
             "title": "Epic Orchestral",
             "tags": ["epic", "orchestral", "dramatic"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/02/07/audio_6f473ce804.mp3",
+            "url": "",
             "title": "Ancient Mystery",
             "tags": ["mystical", "ancient", "dark"],
         },
     ],
     "epic_warrior": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/03/10/audio_849f5c6f93.mp3",
+            "url": "",
             "title": "Epic Percussion",
             "tags": ["percussion", "epic", "warrior"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/02/10/audio_1a2b3c4d5e.mp3",
+            "url": "",
             "title": "Battle March",
             "tags": ["march", "battle", "drums"],
         },
     ],
     "calm_stoic": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/01/18/audio_e07e7f95d1.mp3",
+            "url": "",
             "title": "Calm Meditation",
             "tags": ["calm", "meditation", "peaceful"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/02/22/audio_f1a2b3c4d5.mp3",
+            "url": "",
             "title": "Stoic Reflection",
             "tags": ["stoic", "calm", "piano"],
         },
     ],
     "mystical_greek": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/03/24/audio_8d9e0f1a2b.mp3",
+            "url": "",
             "title": "Mystical Harp",
             "tags": ["harp", "mystical", "magical"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/01/10/audio_3c4d5e6f7a.mp3",
+            "url": "",
             "title": "Ethereal Voices",
             "tags": ["ethereal", "voices", "spiritual"],
         },
     ],
     "stark_minimal": [
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/02/14/audio_2b3c4d5e6f.mp3",
+            "url": "",
             "title": "Minimal Piano",
             "tags": ["minimal", "piano", "sparse"],
         },
         {
-            "url": "https://cdn.pixabay.com/download/audio/2022/01/05/audio_9a8b7c6d5e.mp3",
+            "url": "",
             "title": "Ambient Drone",
             "tags": ["ambient", "drone", "minimal"],
         },
@@ -156,6 +157,8 @@ class TrendingAudioEngine:
 
     def _download_track(self, url: str, filename: str) -> Path | None:
         """Download a track from URL to cache directory."""
+        if not url:
+            return None
         output_path = self.cache_dir / filename
         if output_path.exists() and output_path.stat().st_size > 10000:
             return output_path

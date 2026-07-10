@@ -4,6 +4,7 @@ WAL mode enabled for concurrent reader/writer safety.
 All public functions use try/finally to prevent connection leaks.
 """
 
+import os
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -36,9 +37,16 @@ def init_db() -> None:
                 post_id TEXT UNIQUE,
                 image_path TEXT,
                 reel_path TEXT,
-                dry_run BOOLEAN DEFAULT FALSE
+                dry_run BOOLEAN DEFAULT FALSE,
+                hook_id TEXT DEFAULT NULL
             )
         """)
+
+        # Migration: add hook_id to posts tables created before this column existed.
+        cursor.execute("PRAGMA table_info(posts)")
+        post_columns = {row[1] for row in cursor.fetchall()}
+        if "hook_id" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT NULL")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -85,6 +93,20 @@ def init_db() -> None:
                 post_id TEXT
             )
         """)
+
+        # Seed the "meta" token_state row from env on first run, so
+        # get_valid_token_with_fallback() has a row to check and the
+        # auto-refresh path actually activates instead of always
+        # falling through to the raw env token.
+        cursor.execute("SELECT 1 FROM token_state WHERE service = 'meta'")
+        if cursor.fetchone() is None:
+            env_token = os.getenv("META_ACCESS_TOKEN", "")
+            if env_token:
+                cursor.execute(
+                    "INSERT INTO token_state (service, token, expires_at) VALUES (?, ?, NULL)",
+                    ("meta", env_token),
+                )
+
         conn.commit()
     finally:
         conn.close()
@@ -97,6 +119,7 @@ def save_post(
     caption_variant: int,
     posting_slot: int,
     dry_run: bool = False,
+    hook_id: str | None = None,
 ) -> int:
     """Insert a new post record. Returns row id."""
     conn = _get_connection()
@@ -104,10 +127,10 @@ def save_post(
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO posts (quote_text, audience, mood, caption_variant, posting_slot, posted_at, dry_run)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO posts (quote_text, audience, mood, caption_variant, posting_slot, posted_at, dry_run, hook_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (quote_text, audience, mood, caption_variant, posting_slot, None, dry_run),
+            (quote_text, audience, mood, caption_variant, posting_slot, None, dry_run, hook_id),
         )
         row_id = cursor.lastrowid
         conn.commit()

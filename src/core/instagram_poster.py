@@ -260,6 +260,90 @@ def post_to_instagram(
     return post_id
 
 
+def _create_carousel_item_container(ig_account_id: str, image_url: str, access_token: str) -> str:
+    """Create a carousel child container (image, no caption). Returns container ID."""
+    url = f"{GRAPH_URL}/{ig_account_id}/media"
+    params = {
+        "image_url": image_url,
+        "is_carousel_item": "true",
+        "access_token": access_token,
+    }
+
+    def _post():
+        resp = requests.post(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp
+
+    response = _retry_request(_post, max_retries=3)
+
+    data = response.json()
+    container_id = data.get("id")
+    if not container_id:
+        raise ValueError(f"No container ID in response: {data}")
+
+    return container_id
+
+
+def _create_carousel_container(
+    ig_account_id: str, children_ids: list[str], caption: str, access_token: str
+) -> str:
+    """Create the parent carousel container referencing child item containers."""
+    url = f"{GRAPH_URL}/{ig_account_id}/media"
+    params = {
+        "media_type": "CAROUSEL",
+        "children": ",".join(children_ids),
+        "caption": caption,
+        "access_token": access_token,
+    }
+
+    def _post():
+        resp = requests.post(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp
+
+    response = _retry_request(_post, max_retries=3)
+
+    data = response.json()
+    container_id = data.get("id")
+    if not container_id:
+        raise ValueError(f"No container ID in response: {data}")
+
+    return container_id
+
+
+def post_carousel_to_instagram(
+    image_paths: list[str | Path],
+    caption: str,
+    ig_account_id: str,
+    access_token: str,
+    cloudinary_config: dict,
+) -> str:
+    """
+    Full flow: upload each slide → create carousel item containers →
+    create parent carousel container → publish.
+    Returns Instagram post ID.
+    """
+    children_ids = []
+    for i, image_path in enumerate(image_paths):
+        print(f"  Uploading carousel slide {i + 1}/{len(image_paths)} to Cloudinary...")
+        public_url = upload_to_cloudinary(image_path, cloudinary_config)
+        print(f"  Creating carousel item container {i + 1}/{len(image_paths)}...")
+        container_id = _create_carousel_item_container(ig_account_id, public_url, access_token)
+        children_ids.append(container_id)
+
+    print("  Creating parent carousel container...")
+    carousel_id = _create_carousel_container(ig_account_id, children_ids, caption, access_token)
+    print(f"  Carousel container ID: {carousel_id}")
+
+    print("  Waiting for carousel container to finish processing...")
+    _wait_for_container(carousel_id, access_token)
+
+    print("  Publishing carousel to Instagram...")
+    post_id = _publish_container(ig_account_id, carousel_id, access_token)
+
+    return post_id
+
+
 def post_reel_to_instagram(
     video_path: str | Path,
     caption: str,

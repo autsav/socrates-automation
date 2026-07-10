@@ -19,11 +19,13 @@ from pathlib import Path
 from src.core.excel_reader import read_todays_quote, get_mood_prompt, mark_as_posted, _current_slot
 from src.visual.image_generator import generate_background
 from src.visual.image_composer import compose_post, compose_hook_scene, compose_quote_scene, compose_cta_scene
-from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram
+from src.visual.carousel_composer import compose_carousel
+from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram, post_carousel_to_instagram
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
 from src.core.data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
 from src.analytics.ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
+from src.analytics.hook_tracker import pick_best_hook
 from src.core.token_manager import get_valid_token_with_fallback
 from src.core.notifier import Notifier
 from src.audio.trending_music import get_trending_suggestion
@@ -429,11 +431,11 @@ def _legacy_content(cfg):
     return quote_data, mood, controversy, caption_variant
 
 
-def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False):
+def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False, carousel: bool = False):
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    log.info(f"▶ HYBRID Pipeline start | dry_run={dry_run} reel={reel} manual={manual}")
+    log.info(f"▶ HYBRID Pipeline start | dry_run={dry_run} reel={reel} manual={manual} carousel={carousel}")
 
     # Initialize SQLite state store
     init_db()
@@ -528,17 +530,30 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         log.warning(f"  [phase2] Overlay application failed (non-blocking): {e}")
 
     # ── Step 4: Compose final post image ──────────────────────────────────────
-    log.info("Step 4/5: Composing post image...")
-    final_image_path = compose_post(
-        background_path=image_path,
-        quote=quote_data["quote"],
-        attribution="— Socrates",
-        output_dir=OUTPUT_DIR,
-        timestamp=timestamp,
-        quote_source=quote_data.get("source", "socrates"),
-        controversy_text=controversy,
-    )
-    log.info(f"Final image: {final_image_path}")
+    carousel_paths = None
+    if carousel:
+        log.info("Step 4/5: Composing 5-slide carousel...")
+        carousel_paths = compose_carousel(
+            quote=quote_data["quote"],
+            attribution="— Socrates",
+            bg_path=image_path,
+            output_dir=OUTPUT_DIR,
+            timestamp=timestamp,
+        )
+        final_image_path = carousel_paths[1]  # quote slide — used as cover/log image
+        log.info(f"Carousel slides: {len(carousel_paths)} → {final_image_path}")
+    else:
+        log.info("Step 4/5: Composing post image...")
+        final_image_path = compose_post(
+            background_path=image_path,
+            quote=quote_data["quote"],
+            attribution="— Socrates",
+            output_dir=OUTPUT_DIR,
+            timestamp=timestamp,
+            quote_source=quote_data.get("source", "socrates"),
+            controversy_text=controversy,
+        )
+        log.info(f"Final image: {final_image_path}")
 
     # ── Phase 1: Generate Wallpaper Series (save-bait) ────────────────────────
     wallpaper_paths = {}
@@ -558,6 +573,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         log.warning(f"  [viral] Wallpaper generation failed (non-blocking): {e}")
 
     # ── Save to SQLite state store ────────────────────────────────────────────
+    hook_pick = pick_best_hook(audience=quote_data["audience"], quote_text=quote_data["quote"])
     post_row_id = save_post(
         quote_text=quote_data["quote"],
         audience=quote_data["audience"],
@@ -565,6 +581,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         caption_variant=caption_variant,
         posting_slot=slot,
         dry_run=dry_run,
+        hook_id=hook_pick["hook_id"],
     )
 
     # ── Step 5: Generate Reel (if reel mode or dry-run) ───────────────────────
@@ -752,6 +769,19 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                 },
                 cover_path=final_image_path,
             )
+        elif carousel and carousel_paths:
+            log.info("Step 6/6: Posting carousel to Instagram...")
+            post_id = post_carousel_to_instagram(
+                image_paths=carousel_paths,
+                caption=quote_data["caption"],
+                ig_account_id=cfg.IG_ACCOUNT_ID,
+                access_token=access_token,
+                cloudinary_config={
+                    "cloud_name": cfg.CLOUDINARY_CLOUD_NAME,
+                    "api_key":    cfg.CLOUDINARY_API_KEY,
+                    "api_secret": cfg.CLOUDINARY_API_SECRET,
+                }
+            )
         else:
             log.info("Step 6/6: Posting image to Instagram...")
             post_id = post_to_instagram(
@@ -816,7 +846,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Skip Instagram post")
     parser.add_argument("--reel", action="store_true", help="Post as Reel with Ken Burns zoom + ambient audio")
-    parser.add_argument("--carousel", action="store_true", help="Post as Carousel (currently treated as standard post)")
+    parser.add_argument("--carousel", action="store_true", help="Post as a 5-slide Carousel instead of a single image")
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
     args = parser.parse_args()
@@ -825,4 +855,4 @@ if __name__ == "__main__":
     if args.manual:
         run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio)
     else:
-        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio)
+        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio, carousel=args.carousel)
