@@ -598,7 +598,8 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
-                  carousel: bool = False, pov: bool = False, remotion: bool = False):
+                  carousel: bool = False, pov: bool = False, remotion: bool = False,
+                  seed: int | None = None):
     # --remotion is a POV text-reel rendered with the Remotion project (falls
     # back to the ffmpeg POV generator if Node/Remotion isn't available).
     if remotion:
@@ -683,13 +684,14 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
     # ── Step 3: Generate background image via Fal.ai ─────────────────────────
     log.info("Step 3/5: Generating background via Fal.ai...")
-    image_path = generate_background(
+    image_path, image_seed = generate_background(
         mood=mood,
         api_key=cfg.FAL_API_KEY,
         output_dir=OUTPUT_DIR,
         quote=quote_data["quote"],
         anthropic_api_key=cfg.ANTHROPIC_API_KEY,
         prompt_override=flux_override,
+        seed=seed,
     )
     log.info(f"Background: {image_path}")
 
@@ -760,6 +762,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         posting_slot=slot,
         dry_run=dry_run,
         hook_id=hook_pick["hook_id"],
+        seed=image_seed,
     )
 
     if post_row_id is None:
@@ -783,7 +786,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
         # Generate 2 backgrounds for visual variety
         log.info("  Generating background 1 (hook scene)...")
-        bg_hook_path = generate_background(
+        bg_hook_path, _ = generate_background(
             mood=mood,
             api_key=cfg.FAL_API_KEY,
             output_dir=OUTPUT_DIR,
@@ -792,7 +795,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             prompt_override=flux_override,
         )
         log.info("  Generating background 2 (quote scene)...")
-        bg_quote_path = generate_background(
+        bg_quote_path, _ = generate_background(
             mood=mood,
             api_key=cfg.FAL_API_KEY,
             output_dir=OUTPUT_DIR,
@@ -801,7 +804,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             prompt_override=flux_override,
         )
         log.info("  Generating background 3 (CTA scene)...")
-        bg_cta_path = generate_background(
+        bg_cta_path, _ = generate_background(
             mood=mood,
             api_key=cfg.FAL_API_KEY,
             output_dir=OUTPUT_DIR,
@@ -1037,6 +1040,7 @@ if __name__ == "__main__":
     parser.add_argument("--pov", action="store_true", help="Generate a zero-cost POV text Reel (ffmpeg + Pillow only, no FLUX) instead of the FLUX-based Reel.")
     parser.add_argument("--remotion", action="store_true", help="Generate a POV text Reel with Remotion (professional physics-driven text animations). Implies --pov; falls back to the ffmpeg POV generator if Node/Remotion isn't installed.")
     parser.add_argument("--batch", action="store_true", help="Generate a week's worth of POV Reels (30) in one run and exit — does not post to Instagram.")
+    parser.add_argument("--seed", type=int, default=None, help="Force a FLUX image seed for reproducible backgrounds.")
     args = parser.parse_args()
 
     if args.batch:
@@ -1045,7 +1049,7 @@ if __name__ == "__main__":
     elif args.manual:
         # --manual implies --reel (generate video) but skips API posting
         run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio,
-                     pov=args.pov, remotion=args.remotion)
+                     pov=args.pov, remotion=args.remotion, seed=args.seed)
     else:
         run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio,
-                     carousel=args.carousel, pov=args.pov, remotion=args.remotion)
+                     carousel=args.carousel, pov=args.pov, remotion=args.remotion, seed=args.seed)
