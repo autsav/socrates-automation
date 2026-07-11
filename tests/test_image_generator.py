@@ -30,10 +30,11 @@ def test_generate_background_success(tmp_path):
         mock_get.return_value = mock_get_resp
 
         output_dir = tmp_path / "output"
-        result = generate_background(
+        result, _seed = generate_background(
             "dark_philosophical", api_key="test-key", output_dir=str(output_dir)
         )
 
+        assert isinstance(_seed, int)
         assert result.exists()
         assert result.read_bytes() == b"fake_image_bytes"
         assert result.name == "bg_dark_philosophical_1234567890.jpg"
