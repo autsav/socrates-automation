@@ -69,6 +69,14 @@ jobs:
       - name: Install ffmpeg (for Reel video generation)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
+      - name: Set up Node (for Remotion render)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Remotion deps
+        run: npm --prefix remotion ci
+
       - name: Generate ambient audio tracks
         run: python generate_audio.py
 
@@ -149,8 +157,8 @@ jobs:
             echo "📸 Posting CAROUSEL (Wed/Thu — highest engagement day)"
             python pipeline.py --carousel
           elif [ "${{ steps.format.outputs.mode }}" = "pov" ]; then
-            echo "🎬 POV Reel (zero-cost, ffmpeg + Pillow) → Telegram for manual upload"
-            python pipeline.py --manual --pov
+            echo "🎬 POV Reel (Remotion, narrated; auto-falls back to ffmpeg POV) → Telegram for manual upload"
+            python pipeline.py --manual --remotion
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "🎬 MANUAL TRIGGER — AI Creative Studio → Telegram proposal for manual upload (test)"
             python pipeline.py --studio --manual
