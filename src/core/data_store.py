@@ -102,9 +102,10 @@ def init_db() -> None:
         if cursor.fetchone() is None:
             env_token = os.getenv("META_ACCESS_TOKEN", "")
             if env_token:
+                seed_expiry = (datetime.utcnow() + timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute(
-                    "INSERT INTO token_state (service, token, expires_at) VALUES (?, ?, NULL)",
-                    ("meta", env_token),
+                    "INSERT INTO token_state (service, token, expires_at) VALUES (?, ?, ?)",
+                    ("meta", env_token, seed_expiry),
                 )
 
         conn.commit()
