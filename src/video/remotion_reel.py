@@ -102,6 +102,34 @@ def _probe_duration(path: Path) -> float | None:
         return None
 
 
+def _loudnorm(path: Path, timeout: int = 120) -> None:
+    """Best-effort EBU R128 loudness normalization to a social target.
+
+    Replaces `path` in place with a normalized copy. Never raises; if ffmpeg is
+    absent or fails, the original render is kept.
+    """
+    if not shutil.which("ffmpeg"):
+        return
+    tmp = path.with_suffix(".norm.mp4")
+    cmd = [
+        "ffmpeg", "-y", "-i", str(path),
+        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+        "-c:v", "copy", str(tmp),
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
+            tmp.replace(path)
+        else:
+            tmp.unlink(missing_ok=True)
+    except Exception as e:  # pragma: no cover - defensive
+        print(f"  [remotion] loudnorm skipped ({e})")
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def write_bridge_file(
     hook: str,
     quote: str,
@@ -283,6 +311,7 @@ def generate_remotion_reel(
 
     size = output_path.stat().st_size
     print(f"  [remotion] Saved: {output_path} ({size / 1024:.0f} KB)")
+    _loudnorm(output_path)
     return output_path
 
 

@@ -253,3 +253,39 @@ def test_generate_forwards_voices_to_bridge(tmp_path, monkeypatch):
     q = tmp_path / "q.wav"; q.write_bytes(b"x")
     rr.generate_remotion_reel(hook="h", quote="q", cta="c", output_path=out, quote_voice=q)
     assert seen.get("quote_voice") == q
+
+
+# ── Loudness normalization ──────────────────────────────────────────────────
+
+def test_loudnorm_invokes_ffmpeg_with_filter(tmp_path, monkeypatch):
+    src = tmp_path / "reel.mp4"
+    src.write_bytes(b"origvideo")
+    calls = {}
+
+    def fake_run(cmd, **k):
+        calls["cmd"] = cmd
+        (tmp_path / "reel.norm.mp4").write_bytes(b"normvideo")
+
+        class _R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return _R()
+
+    monkeypatch.setattr(rr.shutil, "which", lambda name: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(rr.subprocess, "run", fake_run)
+    rr._loudnorm(src)
+    assert "loudnorm=I=-14:TP=-1.5:LRA=11" in calls["cmd"]
+    assert src.read_bytes() == b"normvideo"  # replaced in place
+
+
+def test_loudnorm_skips_without_ffmpeg(tmp_path, monkeypatch):
+    src = tmp_path / "reel.mp4"
+    src.write_bytes(b"orig")
+    monkeypatch.setattr(rr.shutil, "which", lambda name: None)
+
+    def boom(*a, **k):
+        raise AssertionError("ffmpeg must not be called")
+    monkeypatch.setattr(rr.subprocess, "run", boom)
+    rr._loudnorm(src)
+    assert src.read_bytes() == b"orig"  # untouched
