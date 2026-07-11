@@ -38,7 +38,8 @@ def init_db() -> None:
                 image_path TEXT,
                 reel_path TEXT,
                 dry_run BOOLEAN DEFAULT FALSE,
-                hook_id TEXT DEFAULT NULL
+                hook_id TEXT DEFAULT NULL,
+                post_date TEXT DEFAULT (date('now'))
             )
         """)
 
@@ -47,6 +48,17 @@ def init_db() -> None:
         post_columns = {row[1] for row in cursor.fetchall()}
         if "hook_id" not in post_columns:
             cursor.execute("ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT NULL")
+
+        # Migration: add post_date + a partial unique index so the dedup guard
+        # is atomic (first-writer-wins per day/slot for real posts). SQLite
+        # forbids a non-constant DEFAULT on ADD COLUMN, so the column is added
+        # nullable and save_post sets post_date=date('now') explicitly.
+        if "post_date" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN post_date TEXT")
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_posts_slot_day "
+            "ON posts(post_date, posting_slot) WHERE dry_run = 0"
+        )
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -102,9 +114,10 @@ def init_db() -> None:
         if cursor.fetchone() is None:
             env_token = os.getenv("META_ACCESS_TOKEN", "")
             if env_token:
+                seed_expiry = (datetime.utcnow() + timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute(
-                    "INSERT INTO token_state (service, token, expires_at) VALUES (?, ?, NULL)",
-                    ("meta", env_token),
+                    "INSERT INTO token_state (service, token, expires_at) VALUES (?, ?, ?)",
+                    ("meta", env_token, seed_expiry),
                 )
 
         conn.commit()
@@ -120,21 +133,30 @@ def save_post(
     posting_slot: int,
     dry_run: bool = False,
     hook_id: str | None = None,
-) -> int:
-    """Insert a new post record. Returns row id."""
+) -> int | None:
+    """Atomically claim + insert a post record for (today, posting_slot).
+
+    Returns the new row id, or None when a non-dry-run post for this slot was
+    already claimed today (the partial unique index fired). dry_run inserts are
+    exempt from the guard and always return an id.
+    """
     conn = _get_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO posts (quote_text, audience, mood, caption_variant, posting_slot, posted_at, dry_run, hook_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO posts
+              (quote_text, audience, mood, caption_variant, posting_slot,
+               posted_at, dry_run, hook_id, post_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now'))
+            ON CONFLICT(post_date, posting_slot) WHERE dry_run = 0 DO NOTHING
             """,
-            (quote_text, audience, mood, caption_variant, posting_slot, None, dry_run, hook_id),
+            (quote_text, audience, mood, caption_variant, posting_slot,
+             None, dry_run, hook_id),
         )
-        row_id = cursor.lastrowid
+        inserted = cursor.rowcount == 1
         conn.commit()
-        return row_id
+        return cursor.lastrowid if inserted else None
     finally:
         conn.close()
 
@@ -230,9 +252,9 @@ def has_posted_today(slot: int) -> bool:
         cursor.execute(
             """
             SELECT 1 FROM posts
-            WHERE posted_at >= date('now')
+            WHERE post_date = date('now')
               AND posting_slot = ?
-              AND dry_run = FALSE
+              AND dry_run = 0
             LIMIT 1
             """,
             (slot,),

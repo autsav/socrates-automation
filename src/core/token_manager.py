@@ -31,6 +31,10 @@ def refresh_if_needed(
     Check token expiry. If < 7 days remaining, refresh using Meta endpoint.
     Returns valid token (new or current).
     """
+    if not app_id or not app_secret:
+        print("  [token] No app_id/secret configured — skipping refresh")
+        return current_token
+
     if not _is_token_expiring_soon(expires_at):
         print("  [token] Token is fresh, no refresh needed")
         return current_token
@@ -77,8 +81,13 @@ def get_valid_token_with_fallback(cfg) -> str:
                     pass
             token = refresh_if_needed(state["token"], cfg.META_APP_ID, cfg.META_APP_SECRET, expires_at)
             if token != state["token"]:
-                new_expiry = datetime.now(timezone.utc) + timedelta(days=60)
-                save_token("meta", token, new_expiry)
+                save_token("meta", token, datetime.now(timezone.utc) + timedelta(days=60))
+            elif expires_at is None and not (cfg.META_APP_ID and cfg.META_APP_SECRET):
+                # No creds → refresh can never happen; persist an estimate so a
+                # NULL-expiry token stops being re-checked every run. When creds
+                # ARE present, leave NULL so a failed refresh keeps retrying and
+                # we don't mask a genuinely broken/expiring token.
+                save_token("meta", token, datetime.now(timezone.utc) + timedelta(days=60))
             return token
     except Exception as e:
         print(f"  [token] data_store check failed: {e}")

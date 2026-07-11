@@ -21,11 +21,12 @@ audio/*.mp3
 !audio/.gitkeep
 
 # Data & logs
-data/
+data/*
 logs/
 *.db
 *.db-shm
 *.db-wal
+!data/pipeline.db
 
 # Claude IDE
 .claude/

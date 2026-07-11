@@ -19,6 +19,9 @@ on:
   workflow_dispatch:  # Manual trigger from GitHub UI
   pull_request:       # Safety check on every PR
 
+permissions:
+  contents: write
+
 jobs:
   post:
     runs-on: ubuntu-latest
@@ -93,17 +96,16 @@ jobs:
             echo "⚠️ PIXABAY_API_KEY not set — using generated audio fallback"
           fi
 
-      - name: Init SQLite database
-        run: python -c "from src.core.data_store import init_db; init_db()"
-
-      - name: Restore SQLite database from repo
+      - name: Verify tracked SQLite database present
         run: |
-          if [ -f "data/pipeline.db" ]; then
-            echo "✅ Restored pipeline.db from repo ($(du -h data/pipeline.db | cut -f1))"
-          else
-            echo "🆕 No existing database — fresh start"
-            mkdir -p data
+          if [ ! -f "data/pipeline.db" ]; then
+            echo "❌ data/pipeline.db missing after checkout — it must be committed to the repo (spec A2). Refusing to continue on an empty DB."
+            exit 1
           fi
+          echo "✅ pipeline.db present from repo ($(du -h data/pipeline.db | cut -f1))"
+
+      - name: Init/migrate SQLite database
+        run: python -c "from src.core.data_store import init_db; init_db()"
 
       - name: Detect post format (reel vs carousel vs pov)
         id: format
@@ -181,6 +183,7 @@ jobs:
       - name: Commit SQLite database + logs back to repo
         if: github.event_name != 'pull_request'
         run: |
+          python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state WHERE service='meta'\"); c.commit(); c.close()"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Force-add because data/ and logs/ are in .gitignore
