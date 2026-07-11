@@ -522,6 +522,13 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         hook_id=hook_pick["hook_id"],
     )
 
+    if post_row_id is None:
+        log.warning(
+            f"  [dedup] slot {slot} already claimed today (concurrent run) — "
+            f"skipping to avoid a double-post"
+        )
+        return {"skipped": True, "reason": f"slot {slot} already claimed today"}
+
     post_id = None
     if manual:
         log.info("Step: MANUAL MODE — sending POV Reel to Telegram for manual posting...")
@@ -754,6 +761,13 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         dry_run=dry_run,
         hook_id=hook_pick["hook_id"],
     )
+
+    if post_row_id is None:
+        log.warning(
+            f"  [dedup] slot {slot} already claimed today (concurrent run) — "
+            f"skipping to avoid a double-post"
+        )
+        return {"skipped": True, "reason": f"slot {slot} already claimed today"}
 
     # ── Step 5: Generate Reel (if reel mode or dry-run) ───────────────────────
     reel_path = None
