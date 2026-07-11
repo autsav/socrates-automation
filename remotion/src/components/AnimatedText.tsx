@@ -31,7 +31,7 @@ export interface AnimatedTextProps {
 
 /** Estimate a font size so the longest word and total text fill ~80%+ width
  *  without overflowing. Simple heuristic tuned for the 1080px canvas. */
-function autoFontSize(text: string, base: number): number {
+export function autoFontSize(text: string, base: number): number {
   const words = text.trim().split(/\s+/);
   const charCount = text.replace(/\s+/g, "").length;
   const longest = words.reduce((m, w) => Math.max(m, w.length), 0);
