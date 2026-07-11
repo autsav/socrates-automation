@@ -1,0 +1,30 @@
+import { describe, it, expect } from "vitest";
+import { pickEmphasisIndex } from "./emphasis";
+
+describe("pickEmphasisIndex", () => {
+  it("picks the last content word, skipping trailing punctuation", () => {
+    const words = "The beginning of wisdom is the desire to learn.".split(/\s+/);
+    // last word is "learn." -> index 8
+    expect(pickEmphasisIndex(words)).toBe(words.length - 1);
+  });
+
+  it("skips a trailing stopword to reach a content word", () => {
+    const words = ["Know", "thyself", "and", "the"];
+    // "the" is a stopword -> fall back to "and"? no, "and" is a stopword too -> "thyself"
+    expect(pickEmphasisIndex(words)).toBe(1);
+  });
+
+  it("falls back to the longest content word when all trailing are stopwords", () => {
+    const words = ["Wisdom", "is", "the", "of"];
+    // only "wisdom" is a content word -> index 0
+    expect(pickEmphasisIndex(words)).toBe(0);
+  });
+
+  it("handles a single word", () => {
+    expect(pickEmphasisIndex(["Courage"])).toBe(0);
+  });
+
+  it("handles empty input without throwing", () => {
+    expect(pickEmphasisIndex([])).toBe(0);
+  });
+});
