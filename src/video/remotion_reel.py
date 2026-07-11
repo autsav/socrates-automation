@@ -115,16 +115,25 @@ def write_bridge_file(
     beats: list[float] = []
     audio_name: str | None = None
     if voiceover_path is not None and Path(voiceover_path).exists():
+        voiceover_path = Path(voiceover_path)
+        # Copy the audio next to the bridge so Remotion's <Audio> can play it.
+        # A copy failure → silent reel (no audio, no beats), never raises.
         try:
-            voiceover_path = Path(voiceover_path)
             audio_name = "reel-audio" + voiceover_path.suffix
             bridge_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(voiceover_path, bridge_path.parent / audio_name)
-            beats = beat_sync.detect_beats(voiceover_path)
         except Exception as e:  # pragma: no cover - defensive
-            print(f"  [remotion] voiceover handling failed ({e}) — reel stays un-synced/silent")
+            print(f"  [remotion] voiceover copy failed ({e}) — silent reel")
             audio_name = None
-            beats = []
+        # Detect beats only when the audio is actually available to play. A
+        # detection failure keeps the (copied) audio — the reel is narrated,
+        # just not beat-synced.
+        if audio_name:
+            try:
+                beats = beat_sync.detect_beats(voiceover_path)
+            except Exception as e:  # pragma: no cover - defensive
+                print(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
+                beats = []
 
     payload = {
         "hook": hook or "",

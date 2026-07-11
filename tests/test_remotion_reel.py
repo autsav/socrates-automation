@@ -200,9 +200,8 @@ def test_write_bridge_file_beat_detection_failure_degrades_to_empty(tmp_path, mo
     )
     data = json.loads(p.read_text())
     assert data["beats"] == []
-    # the whole voiceover-handling body is one try/except (never-raises
-    # contract), so a detect_beats failure also drops the audio key
-    assert "audio" not in data
+    # beat detection fails but audio is still copied — reel is narrated, un-synced
+    assert data["audio"] == "reel-audio.wav"
 
 
 def test_write_bridge_file_copy_failure_degrades_to_empty(tmp_path, monkeypatch):
