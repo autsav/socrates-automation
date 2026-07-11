@@ -86,6 +86,22 @@ def _clamp_duration(quote: str, duration: float | None) -> float:
     return max(MIN_DURATION, min(MAX_DURATION, float(duration)))
 
 
+def _probe_duration(path: Path) -> float | None:
+    """Best-effort media duration in seconds via ffprobe; None if unavailable."""
+    if not shutil.which("ffprobe"):
+        return None
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True, text=True, timeout=15,
+        )
+        s = (r.stdout or "").strip()
+        return round(float(s), 3) if r.returncode == 0 and s else None
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
 def write_bridge_file(
     hook: str,
     quote: str,
@@ -95,16 +111,23 @@ def write_bridge_file(
     duration: float,
     fps: int,
     bridge_path: Path = BRIDGE_FILE,
-    voiceover_path: Path | None = None,
+    hook_voice: Path | None = None,
+    quote_voice: Path | None = None,
+    cta_voice: Path | None = None,
+    music_path: Path | None = None,
 ) -> Path:
     """Write the reel-data.json bridge file the Remotion composition reads.
 
-    When ``voiceover_path`` is supplied, its beats are detected and written as
-    ``beats`` (absolute seconds), and the audio is copied next to the bridge as
-    ``reel-audio<ext>`` and referenced by the ``audio`` key so Remotion's
-    ``<Audio>`` (via ``staticFile``) can play — and bake — it into the render.
-    With no voiceover, ``beats`` is ``[]`` and ``audio`` is omitted, giving the
-    original silent-reel behavior.
+    Up to three voiceover tracks (``hook_voice``/``quote_voice``/``cta_voice``)
+    and one music track (``music_path``) are copied next to the bridge as
+    ``vo-hook<ext>``/``vo-quote<ext>``/``vo-cta<ext>``/``music<ext>`` and
+    referenced via the ``voices``/``music`` keys so Remotion's ``<Audio>``
+    (via ``staticFile``) can play — and bake — them into the render. Per-voice
+    durations (best-effort, via ffprobe) are written as ``voiceDurations``.
+    Beats are detected from ``quote_voice`` (absolute seconds) and written as
+    ``beats``. With no audio, ``voices``/``voiceDurations`` are all-``None``,
+    ``beats`` is ``[]``, and ``music`` is omitted, giving the original
+    silent-reel behavior.
 
     Returns the path written. Exposed separately so tests can exercise it
     without invoking Node.
@@ -112,28 +135,42 @@ def write_bridge_file(
     if mood not in SUPPORTED_MOODS:
         mood = SUPPORTED_MOODS[0]
 
-    beats: list[float] = []
-    audio_name: str | None = None
-    if voiceover_path is not None and Path(voiceover_path).exists():
-        voiceover_path = Path(voiceover_path)
-        # Copy the audio next to the bridge so Remotion's <Audio> can play it.
-        # A copy failure → silent reel (no audio, no beats), never raises.
+    def _copy_audio(src: Path, name: str) -> str | None:
         try:
-            audio_name = "reel-audio" + voiceover_path.suffix
             bridge_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(voiceover_path, bridge_path.parent / audio_name)
+            dst = bridge_path.parent / name
+            # Source may already sit at the destination path (e.g. tests that
+            # stage fixtures directly next to the bridge) — shutil.copy raises
+            # SameFileError in that case even though nothing needs to happen.
+            if src.resolve() != dst.resolve():
+                shutil.copy(src, dst)
+            return name
         except Exception as e:  # pragma: no cover - defensive
-            print(f"  [remotion] voiceover copy failed ({e}) — silent reel")
-            audio_name = None
-        # Detect beats only when the audio is actually available to play. A
-        # detection failure keeps the (copied) audio — the reel is narrated,
-        # just not beat-synced.
-        if audio_name:
-            try:
-                beats = beat_sync.detect_beats(voiceover_path)
-            except Exception as e:  # pragma: no cover - defensive
-                print(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
-                beats = []
+            print(f"  [remotion] audio copy failed ({e})")
+            return None
+
+    voices: dict[str, str | None] = {"hook": None, "quote": None, "cta": None}
+    voice_durations: dict[str, float | None] = {"hook": None, "quote": None, "cta": None}
+    for key, p in (("hook", hook_voice), ("quote", quote_voice), ("cta", cta_voice)):
+        if p and Path(p).exists():
+            p = Path(p)
+            nm = _copy_audio(p, f"vo-{key}{p.suffix}")
+            if nm:
+                voices[key] = nm
+                voice_durations[key] = _probe_duration(p)
+
+    music_name: str | None = None
+    if music_path and Path(music_path).exists():
+        mp = Path(music_path)
+        music_name = _copy_audio(mp, f"music{mp.suffix}")
+
+    beats: list[float] = []
+    if quote_voice and Path(quote_voice).exists():
+        try:
+            beats = beat_sync.detect_beats(Path(quote_voice))
+        except Exception as e:  # pragma: no cover - defensive
+            print(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
+            beats = []
 
     payload = {
         "hook": hook or "",
@@ -144,9 +181,11 @@ def write_bridge_file(
         "duration": round(float(duration), 3),
         "fps": int(fps),
         "beats": beats,
+        "voices": voices,
+        "voiceDurations": voice_durations,
     }
-    if audio_name:
-        payload["audio"] = audio_name
+    if music_name:
+        payload["music"] = music_name
 
     bridge_path.parent.mkdir(parents=True, exist_ok=True)
     bridge_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -163,7 +202,10 @@ def generate_remotion_reel(
     duration: float | None = None,
     fps: int = 30,
     timeout: int = 600,
-    voiceover_path: Path | None = None,
+    hook_voice: Path | None = None,
+    quote_voice: Path | None = None,
+    cta_voice: Path | None = None,
+    music_path: Path | None = None,
 ) -> Path | None:
     """
     Render a POV Reel via Remotion (React-based, headless-browser rendering).
@@ -196,7 +238,10 @@ def generate_remotion_reel(
         mood=mood,
         duration=duration,
         fps=fps,
-        voiceover_path=voiceover_path,
+        hook_voice=hook_voice,
+        quote_voice=quote_voice,
+        cta_voice=cta_voice,
+        music_path=music_path,
     )
 
     # 2. Invoke the Remotion CLI. --props takes a path to the JSON bridge file.

@@ -82,6 +82,8 @@ def test_write_bridge_file_roundtrip(tmp_path):
         "duration": 10.5,
         "fps": 30,
         "beats": [],
+        "voices": {"hook": None, "quote": None, "cta": None},
+        "voiceDurations": {"hook": None, "quote": None, "cta": None},
     }
 
 
@@ -164,75 +166,61 @@ def test_real_render_produces_mp4(tmp_path):
 
 # ── Voiceover + beat detection ──────────────────────────────────────────────────
 
-def test_write_bridge_file_no_voiceover_has_empty_beats_no_audio(tmp_path):
+def test_bridge_no_audio_has_empty_voices_no_music(tmp_path):
     p = tmp_path / "reel-data.json"
     rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p)
     data = json.loads(p.read_text())
+    assert data["voices"] == {"hook": None, "quote": None, "cta": None}
+    assert data["voiceDurations"] == {"hook": None, "quote": None, "cta": None}
     assert data["beats"] == []
-    assert "audio" not in data
+    assert "music" not in data
 
 
-def test_write_bridge_file_with_voiceover_adds_beats_and_copies_audio(tmp_path, monkeypatch):
-    monkeypatch.setattr(rr.beat_sync, "detect_beats", lambda path, **k: [0.4, 1.1, 2.7])
-    vo = tmp_path / "voiceover.wav"
-    vo.write_bytes(b"RIFF....fake-wav")
+def test_bridge_three_voices_and_music_copied(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr.beat_sync, "detect_beats", lambda path, **k: [0.4, 1.1])
+    monkeypatch.setattr(rr, "_probe_duration", lambda path: 2.5)
+    files = {}
+    for key in ("hook", "quote", "cta", "music"):
+        f = tmp_path / f"{key}.wav"
+        f.write_bytes(b"RIFFfake")
+        files[key] = f
     p = tmp_path / "reel-data.json"
     rr.write_bridge_file(
-        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
-        bridge_path=p, voiceover_path=vo,
+        "h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p,
+        hook_voice=files["hook"], quote_voice=files["quote"],
+        cta_voice=files["cta"], music_path=files["music"],
     )
     data = json.loads(p.read_text())
-    assert data["beats"] == [0.4, 1.1, 2.7]
-    assert data["audio"] == "reel-audio.wav"
-    assert (tmp_path / "reel-audio.wav").read_bytes() == b"RIFF....fake-wav"
+    assert data["voices"] == {"hook": "vo-hook.wav", "quote": "vo-quote.wav", "cta": "vo-cta.wav"}
+    assert data["music"] == "music.wav"
+    assert data["voiceDurations"] == {"hook": 2.5, "quote": 2.5, "cta": 2.5}
+    assert data["beats"] == [0.4, 1.1]
+    for name in ("vo-hook.wav", "vo-quote.wav", "vo-cta.wav", "music.wav"):
+        assert (tmp_path / name).read_bytes() == b"RIFFfake"
 
 
-def test_write_bridge_file_beat_detection_failure_degrades_to_empty(tmp_path, monkeypatch):
-    def boom(path, **k):
-        raise RuntimeError("librosa exploded")
-    monkeypatch.setattr(rr.beat_sync, "detect_beats", boom)
-    vo = tmp_path / "voiceover.wav"
-    vo.write_bytes(b"x")
-    p = tmp_path / "reel-data.json"
-    rr.write_bridge_file(
-        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
-        bridge_path=p, voiceover_path=vo,
-    )
-    data = json.loads(p.read_text())
-    assert data["beats"] == []
-    # beat detection fails but audio is still copied — reel is narrated, un-synced
-    assert data["audio"] == "reel-audio.wav"
-
-
-def test_write_bridge_file_copy_failure_degrades_to_empty(tmp_path, monkeypatch):
-    """A shutil.copy failure (e.g. disk full) must not raise — it should degrade
-    to the silent-reel contract: beats == [] and no audio key."""
-    def boom(*args, **kwargs):
+def test_bridge_copy_failure_degrades(tmp_path, monkeypatch):
+    def boom(src, dst):
         raise OSError("disk full")
     monkeypatch.setattr(rr.shutil, "copy", boom)
-    vo = tmp_path / "voiceover.wav"
+    vo = tmp_path / "q.wav"
     vo.write_bytes(b"x")
     p = tmp_path / "reel-data.json"
-    result = rr.write_bridge_file(
-        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
-        bridge_path=p, voiceover_path=vo,
-    )
-    assert result == p
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p, quote_voice=vo)
     data = json.loads(p.read_text())
-    assert data["beats"] == []
-    assert "audio" not in data
+    assert data["voices"]["quote"] is None
+    assert "music" not in data
 
 
-def test_generate_forwards_voiceover_path_to_bridge(tmp_path, monkeypatch):
-    """generate_remotion_reel must pass voiceover_path into write_bridge_file."""
+def test_generate_forwards_voices_to_bridge(tmp_path, monkeypatch):
     monkeypatch.setattr(rr, "remotion_available", lambda: True)
     seen = {}
 
-    def fake_write(*args, **kwargs):
-        seen["voiceover_path"] = kwargs.get("voiceover_path")
-        p = tmp_path / "reel-data.json"
-        p.write_text("{}")
-        return p
+    def fake_write(*a, **k):
+        seen.update(k)
+        pth = tmp_path / "reel-data.json"
+        pth.write_text("{}")
+        return pth
 
     class _Ok:
         returncode = 0
@@ -242,15 +230,12 @@ def test_generate_forwards_voiceover_path_to_bridge(tmp_path, monkeypatch):
     out = tmp_path / "reel.mp4"
 
     def fake_run(*a, **k):
-        out.write_bytes(b"fake-mp4")
+        out.write_bytes(b"mp4")
         return _Ok()
 
     monkeypatch.setattr(rr, "write_bridge_file", fake_write)
     monkeypatch.setattr(rr.subprocess, "run", fake_run)
-
-    vo = tmp_path / "vo.wav"
-    vo.write_bytes(b"x")
-    rr.generate_remotion_reel(
-        hook="h", quote="q", cta="c", output_path=out, voiceover_path=vo,
-    )
-    assert seen["voiceover_path"] == vo
+    monkeypatch.setattr(rr.shutil, "which", lambda name: None)  # skip loudnorm
+    q = tmp_path / "q.wav"; q.write_bytes(b"x")
+    rr.generate_remotion_reel(hook="h", quote="q", cta="c", output_path=out, quote_voice=q)
+    assert seen.get("quote_voice") == q
