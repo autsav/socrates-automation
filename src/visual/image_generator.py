@@ -52,7 +52,59 @@ MOOD_PROMPTS = {
     ),
 }
 
-FAL_API_URL = "https://fal.run/fal-ai/flux/schnell"
+# FLUX tier map. Default "pro" for best fidelity; override with FAL_TIER env.
+FAL_TIER_URLS = {
+    "schnell": "fal-ai/flux/schnell",
+    "dev": "fal-ai/flux/dev",
+    "pro": "fal-ai/flux-pro/v1.1",
+}
+
+
+def _resolve_tier() -> str:
+    """Pick the FLUX tier from FAL_TIER env; default and fallback = 'pro'."""
+    t = os.getenv("FAL_TIER", "pro").lower()
+    if t not in FAL_TIER_URLS:
+        print(f"  [image] Unknown FAL_TIER={t!r} — falling back to 'pro'")
+        t = "pro"
+    return t
+
+
+def _fal_url(tier: str) -> str:
+    return f"https://fal.run/{FAL_TIER_URLS[tier]}"
+
+
+def _build_payload(tier: str, prompt: str, seed: int) -> dict:
+    """Emit only the params a given tier supports.
+
+    flux-pro/v1.1 schema verified 2026-07-11 against fal.ai's live OpenAPI spec
+    (FluxProV11Input): prompt, image_size, seed, sync_mode, num_images,
+    output_format (jpeg|png), safety_tolerance ("1"-"6"), enhance_prompt.
+    It does NOT accept num_inference_steps, guidance_scale, negative_prompt,
+    or enable_safety_checker — those are schnell/dev-only params, so
+    enable_safety_checker is deliberately excluded from `shared` below.
+    """
+    shared = {
+        "prompt": prompt,
+        "image_size": "portrait_16_9",  # 576x1024 native vertical (9:16)
+        "num_images": 1,
+        "seed": seed,
+    }
+    if tier == "pro":
+        return {**shared, "safety_tolerance": "5", "output_format": "jpeg"}
+    # schnell / dev
+    return {
+        **shared,
+        "enable_safety_checker": True,
+        "negative_prompt": NEGATIVE_PROMPT,
+        "num_inference_steps": 6,
+        "guidance_scale": 3.5,
+    }
+
+
+# Module-level alias kept for Task 3 — generate_background/_generate_with_retry
+# still reference FAL_API_URL directly until that task rewires them to
+# _resolve_tier()/_fal_url()/_build_payload().
+FAL_API_URL = _fal_url("pro")
 
 # ── Negative prompt to suppress common artifacts ──────────────────────────────
 NEGATIVE_PROMPT = (
