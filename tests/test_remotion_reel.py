@@ -81,6 +81,7 @@ def test_write_bridge_file_roundtrip(tmp_path):
         "mood": "epic_warrior",
         "duration": 10.5,
         "fps": 30,
+        "beats": [],
     }
 
 
@@ -159,3 +160,97 @@ def test_real_render_produces_mp4(tmp_path):
     assert result is not None
     assert out.exists()
     assert out.stat().st_size > 10_000
+
+
+# ── Voiceover + beat detection ──────────────────────────────────────────────────
+
+def test_write_bridge_file_no_voiceover_has_empty_beats_no_audio(tmp_path):
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p)
+    data = json.loads(p.read_text())
+    assert data["beats"] == []
+    assert "audio" not in data
+
+
+def test_write_bridge_file_with_voiceover_adds_beats_and_copies_audio(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr.beat_sync, "detect_beats", lambda path, **k: [0.4, 1.1, 2.7])
+    vo = tmp_path / "voiceover.wav"
+    vo.write_bytes(b"RIFF....fake-wav")
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file(
+        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
+        bridge_path=p, voiceover_path=vo,
+    )
+    data = json.loads(p.read_text())
+    assert data["beats"] == [0.4, 1.1, 2.7]
+    assert data["audio"] == "reel-audio.wav"
+    assert (tmp_path / "reel-audio.wav").read_bytes() == b"RIFF....fake-wav"
+
+
+def test_write_bridge_file_beat_detection_failure_degrades_to_empty(tmp_path, monkeypatch):
+    def boom(path, **k):
+        raise RuntimeError("librosa exploded")
+    monkeypatch.setattr(rr.beat_sync, "detect_beats", boom)
+    vo = tmp_path / "voiceover.wav"
+    vo.write_bytes(b"x")
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file(
+        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
+        bridge_path=p, voiceover_path=vo,
+    )
+    data = json.loads(p.read_text())
+    assert data["beats"] == []
+    # beat detection fails but audio is still copied — reel is narrated, un-synced
+    assert data["audio"] == "reel-audio.wav"
+
+
+def test_write_bridge_file_copy_failure_degrades_to_empty(tmp_path, monkeypatch):
+    """A shutil.copy failure (e.g. disk full) must not raise — it should degrade
+    to the silent-reel contract: beats == [] and no audio key."""
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(rr.shutil, "copy", boom)
+    vo = tmp_path / "voiceover.wav"
+    vo.write_bytes(b"x")
+    p = tmp_path / "reel-data.json"
+    result = rr.write_bridge_file(
+        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
+        bridge_path=p, voiceover_path=vo,
+    )
+    assert result == p
+    data = json.loads(p.read_text())
+    assert data["beats"] == []
+    assert "audio" not in data
+
+
+def test_generate_forwards_voiceover_path_to_bridge(tmp_path, monkeypatch):
+    """generate_remotion_reel must pass voiceover_path into write_bridge_file."""
+    monkeypatch.setattr(rr, "remotion_available", lambda: True)
+    seen = {}
+
+    def fake_write(*args, **kwargs):
+        seen["voiceover_path"] = kwargs.get("voiceover_path")
+        p = tmp_path / "reel-data.json"
+        p.write_text("{}")
+        return p
+
+    class _Ok:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    out = tmp_path / "reel.mp4"
+
+    def fake_run(*a, **k):
+        out.write_bytes(b"fake-mp4")
+        return _Ok()
+
+    monkeypatch.setattr(rr, "write_bridge_file", fake_write)
+    monkeypatch.setattr(rr.subprocess, "run", fake_run)
+
+    vo = tmp_path / "vo.wav"
+    vo.write_bytes(b"x")
+    rr.generate_remotion_reel(
+        hook="h", quote="q", cta="c", output_path=out, voiceover_path=vo,
+    )
+    assert seen["voiceover_path"] == vo
