@@ -82,8 +82,11 @@ def get_valid_token_with_fallback(cfg) -> str:
             token = refresh_if_needed(state["token"], cfg.META_APP_ID, cfg.META_APP_SECRET, expires_at)
             if token != state["token"]:
                 save_token("meta", token, datetime.now(timezone.utc) + timedelta(days=60))
-            elif expires_at is None:
-                # Persist an estimate so a NULL-expiry token stops being re-checked every run.
+            elif expires_at is None and not (cfg.META_APP_ID and cfg.META_APP_SECRET):
+                # No creds → refresh can never happen; persist an estimate so a
+                # NULL-expiry token stops being re-checked every run. When creds
+                # ARE present, leave NULL so a failed refresh keeps retrying and
+                # we don't mask a genuinely broken/expiring token.
                 save_token("meta", token, datetime.now(timezone.utc) + timedelta(days=60))
             return token
     except Exception as e:

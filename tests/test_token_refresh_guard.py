@@ -33,3 +33,21 @@ def test_get_valid_token_persists_estimate_when_expiry_missing(monkeypatch):
 
     assert tm.get_valid_token_with_fallback(Cfg()) == "tok"
     assert saved.get("expires") is not None
+
+
+def test_get_valid_token_does_not_mask_failed_refresh_when_creds_present(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(ds, "get_token", lambda s: {"token": "tok", "expires_at": None})
+    monkeypatch.setattr(ds, "save_token", lambda *a, **k: saved.update(called=True))
+
+    def failing_post(*a, **k):
+        raise tm.requests.RequestException("boom")
+    monkeypatch.setattr(tm.requests, "post", failing_post)
+
+    class Cfg:
+        META_APP_ID = "id"
+        META_APP_SECRET = "secret"
+        META_ACCESS_TOKEN = "env"
+
+    assert tm.get_valid_token_with_fallback(Cfg()) == "tok"
+    assert "called" not in saved  # must NOT persist an optimistic expiry after a failed refresh
