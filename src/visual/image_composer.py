@@ -26,10 +26,28 @@ DARK_COLOR = (20, 18, 15)
 SAFE_TOP = int(OUTPUT_SIZE[1] * 0.15)
 SAFE_BOTTOM = int(OUTPUT_SIZE[1] * 0.85)
 
+BUNDLED_FONT_DIR = Path(__file__).resolve().parents[2] / "assets" / "fonts"
+PLAYFAIR_UPRIGHT = BUNDLED_FONT_DIR / "PlayfairDisplay[wght].ttf"
+PLAYFAIR_ITALIC = BUNDLED_FONT_DIR / "PlayfairDisplay-Italic[wght].ttf"
+
 
 def _load_font(size: int, bold: bool = False, italic: bool = False):
     """Load system font or fallback to Pillow default.
     Supports bold and italic variants on Linux/Windows/macOS."""
+    # Prefer the bundled Playfair Display variable font — consistent premium
+    # typography everywhere, and never falls through to Pillow's bitmap default.
+    bundled = PLAYFAIR_ITALIC if italic else PLAYFAIR_UPRIGHT
+    if bundled.exists():
+        try:
+            f = ImageFont.truetype(str(bundled), size)
+            try:
+                f.set_variation_by_axes([900 if bold else 400])
+            except Exception:
+                pass  # non-variable build / axis unsupported — keep default instance
+            return f
+        except Exception:
+            pass  # fall through to system fonts below
+
     # Build candidate lists based on requested style
     if bold:
         font_candidates = [
