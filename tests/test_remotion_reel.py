@@ -200,8 +200,28 @@ def test_write_bridge_file_beat_detection_failure_degrades_to_empty(tmp_path, mo
     )
     data = json.loads(p.read_text())
     assert data["beats"] == []
-    # audio is still copied even if beat detection failed
-    assert data["audio"] == "reel-audio.wav"
+    # the whole voiceover-handling body is one try/except (never-raises
+    # contract), so a detect_beats failure also drops the audio key
+    assert "audio" not in data
+
+
+def test_write_bridge_file_copy_failure_degrades_to_empty(tmp_path, monkeypatch):
+    """A shutil.copy failure (e.g. disk full) must not raise — it should degrade
+    to the silent-reel contract: beats == [] and no audio key."""
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(rr.shutil, "copy", boom)
+    vo = tmp_path / "voiceover.wav"
+    vo.write_bytes(b"x")
+    p = tmp_path / "reel-data.json"
+    result = rr.write_bridge_file(
+        "h", "q", "a", "c", "calm_stoic", 10.0, 30,
+        bridge_path=p, voiceover_path=vo,
+    )
+    assert result == p
+    data = json.loads(p.read_text())
+    assert data["beats"] == []
+    assert "audio" not in data
 
 
 def test_generate_forwards_voiceover_path_to_bridge(tmp_path, monkeypatch):

@@ -14,9 +14,10 @@ describe("pickEmphasisIndex", () => {
     expect(pickEmphasisIndex(words)).toBe(1);
   });
 
-  it("falls back to the longest content word when all trailing are stopwords", () => {
+  it("picks the last content word, scanning back past trailing stopwords", () => {
     const words = ["Wisdom", "is", "the", "of"];
-    // only "wisdom" is a content word -> index 0
+    // "of" and "the" are stopwords -> last content word scan lands on "Wisdom" (index 0).
+    // The separate longest-word fallback (no content word at all) is covered below.
     expect(pickEmphasisIndex(words)).toBe(0);
   });
 

@@ -115,14 +115,15 @@ def write_bridge_file(
     beats: list[float] = []
     audio_name: str | None = None
     if voiceover_path is not None and Path(voiceover_path).exists():
-        voiceover_path = Path(voiceover_path)
-        audio_name = "reel-audio" + voiceover_path.suffix
-        bridge_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(voiceover_path, bridge_path.parent / audio_name)
         try:
+            voiceover_path = Path(voiceover_path)
+            audio_name = "reel-audio" + voiceover_path.suffix
+            bridge_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(voiceover_path, bridge_path.parent / audio_name)
             beats = beat_sync.detect_beats(voiceover_path)
         except Exception as e:  # pragma: no cover - defensive
-            print(f"  [remotion] beat detection failed ({e}) — reel stays un-synced")
+            print(f"  [remotion] voiceover handling failed ({e}) — reel stays un-synced/silent")
+            audio_name = None
             beats = []
 
     payload = {
