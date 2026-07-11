@@ -199,6 +199,20 @@ def test_bridge_three_voices_and_music_copied(tmp_path, monkeypatch):
         assert (tmp_path / name).read_bytes() == b"RIFFfake"
 
 
+def test_bridge_music_copied_from_distinct_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr, "_probe_duration", lambda path: None)
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    music = src_dir / "track.mp3"
+    music.write_bytes(b"MUSICBYTES")
+    p = tmp_path / "reel-data.json"   # bridge dir = tmp_path, distinct from src_dir
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p, music_path=music)
+    data = json.loads(p.read_text())
+    assert data["music"] == "music.mp3"
+    copied = tmp_path / "music.mp3"
+    assert copied.exists() and copied.read_bytes() == b"MUSICBYTES"  # a real copy, distinct path
+
+
 def test_bridge_copy_failure_degrades(tmp_path, monkeypatch):
     def boom(src, dst):
         raise OSError("disk full")
