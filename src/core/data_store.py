@@ -39,7 +39,8 @@ def init_db() -> None:
                 reel_path TEXT,
                 dry_run BOOLEAN DEFAULT FALSE,
                 hook_id TEXT DEFAULT NULL,
-                post_date TEXT DEFAULT (date('now'))
+                post_date TEXT DEFAULT (date('now')),
+                seed INTEGER DEFAULT NULL
             )
         """)
 
@@ -59,6 +60,11 @@ def init_db() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_posts_slot_day "
             "ON posts(post_date, posting_slot) WHERE dry_run = 0"
         )
+
+        # Migration: add seed (image reproducibility) to older posts tables.
+        if "seed" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN seed INTEGER DEFAULT NULL")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -133,6 +139,7 @@ def save_post(
     posting_slot: int,
     dry_run: bool = False,
     hook_id: str | None = None,
+    seed: int | None = None,
 ) -> int | None:
     """Atomically claim + insert a post record for (today, posting_slot).
 
@@ -147,12 +154,12 @@ def save_post(
             """
             INSERT INTO posts
               (quote_text, audience, mood, caption_variant, posting_slot,
-               posted_at, dry_run, hook_id, post_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now'))
+               posted_at, dry_run, hook_id, post_date, seed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now'), ?)
             ON CONFLICT(post_date, posting_slot) WHERE dry_run = 0 DO NOTHING
             """,
             (quote_text, audience, mood, caption_variant, posting_slot,
-             None, dry_run, hook_id),
+             None, dry_run, hook_id, seed),
         )
         inserted = cursor.rowcount == 1
         conn.commit()
