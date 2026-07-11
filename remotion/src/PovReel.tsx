@@ -16,6 +16,9 @@ import { QuoteScene } from "./components/QuoteScene";
 import { CtaScene } from "./components/CtaScene";
 import { getPalette } from "./styles/theme";
 import { duckVolume, DuckSpan } from "./lib/duckVolume";
+import { sceneFrames } from "./lib/sceneFrames";
+
+export { sceneFrames } from "./lib/sceneFrames";
 
 export interface PovReelProps {
   hook: string;
@@ -44,16 +47,6 @@ export const povReelDefaultProps: PovReelProps = {
   music: undefined,
   voiceDurations: {},
 };
-
-/** Split the total duration into hook / quote / cta scene lengths (in frames).
- *  Hook and CTA get fixed budgets; the quote (the payoff) takes the remainder. */
-export function sceneFrames(durationSec: number, fps: number) {
-  const total = Math.round(durationSec * fps);
-  const hook = Math.min(Math.round(3.5 * fps), Math.round(total * 0.34));
-  const cta = Math.min(Math.round(2.5 * fps), Math.round(total * 0.26));
-  const quote = Math.max(total - hook - cta, Math.round(2 * fps));
-  return { total: hook + quote + cta, hook, quote, cta };
-}
 
 /** A brief hard white flash — a pattern interrupt at each scene boundary. */
 const WhiteFlash: React.FC<{ at: number }> = ({ at }) => {
@@ -87,7 +80,8 @@ export const PovReel: React.FC<PovReelProps> = ({
   const palette = getPalette(mood);
   const { hook: hookF, quote: quoteF } = sceneFrames(
     durationInFrames / fps,
-    fps
+    fps,
+    voiceDurations
   );
   const quoteEnd = hookF + quoteF;
 
