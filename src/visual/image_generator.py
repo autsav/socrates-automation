@@ -101,10 +101,18 @@ def _build_payload(tier: str, prompt: str, seed: int) -> dict:
     }
 
 
-# Module-level alias kept for Task 3 — generate_background/_generate_with_retry
-# still reference FAL_API_URL directly until that task rewires them to
-# _resolve_tier()/_fal_url()/_build_payload().
-FAL_API_URL = _fal_url("pro")
+def _resolve_seed(seed: int | None = None) -> int:
+    """Use an explicit seed, else FAL_SEED env, else a random seed."""
+    if seed is not None:
+        return int(seed)
+    env = os.getenv("FAL_SEED")
+    if env:
+        try:
+            return int(env)
+        except ValueError:
+            pass
+    return random.randint(0, 999999)
+
 
 # ── Negative prompt to suppress common artifacts ──────────────────────────────
 NEGATIVE_PROMPT = (
@@ -166,12 +174,12 @@ def enhance_prompt(mood: str, quote: str, api_key: str = "") -> str:
     return base_prompt
 
 
-def _generate_with_retry(headers, payload, max_retries=2):
+def _generate_with_retry(headers, payload, max_retries=2, url="https://fal.run/fal-ai/flux-pro/v1.1"):
     """Post to Fal.ai with retry on transient failures."""
     last_error = None
     for attempt in range(max_retries + 1):
         try:
-            response = requests.post(FAL_API_URL, headers=headers, json=payload, timeout=60)
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
             response.raise_for_status()
             return response.json()
         except (requests.ConnectionError, requests.Timeout) as e:
@@ -202,14 +210,15 @@ def generate_background(
     quote: str = "",
     anthropic_api_key: str = "",
     prompt_override: str = "",
-) -> Path:
+    seed: int | None = None,
+) -> tuple[Path, int]:
     """
-    Generate background image via Fal.ai FLUX schnell.
-    Uses native vertical aspect ratio, seed for reproducibility, negative prompt,
-    and 6 inference steps for sharper detail. Optionally enhances prompt via Claude.
+    Generate background image via Fal.ai FLUX (tier-selectable, default pro).
+    Uses native vertical aspect ratio, seed for reproducibility, and a
+    per-tier payload. Optionally enhances prompt via Claude.
     If `prompt_override` is given (e.g. from the studio Creative Director), it is
     used verbatim and the Haiku enhancement is skipped.
-    Returns path to saved JPEG.
+    Returns (path to saved JPEG, seed used).
     """
     prompt = prompt_override or enhance_prompt(mood, quote, anthropic_api_key)
 
@@ -218,22 +227,12 @@ def generate_background(
         "Content-Type": "application/json",
     }
 
-    # Seed for reproducibility + variety
-    seed = random.randint(0, 999999)
+    tier = _resolve_tier()
+    seed = _resolve_seed(seed)
+    payload = _build_payload(tier, prompt, seed)
 
-    payload = {
-        "prompt": prompt,
-        "negative_prompt": NEGATIVE_PROMPT,
-        "image_size": "portrait_16_9",   # 576×1024 native vertical (9:16)
-        "num_inference_steps": 6,          # sharper detail than 4
-        "guidance_scale": 3.5,             # stronger prompt adherence
-        "num_images": 1,
-        "enable_safety_checker": True,
-        "seed": seed,
-    }
-
-    print(f"  [image] Generating {mood} background (seed={seed}, steps=6)...")
-    data = _generate_with_retry(headers, payload)
+    print(f"  [image] Generating {mood} background (tier={tier}, seed={seed})...")
+    data = _generate_with_retry(headers, payload, url=_fal_url(tier))
 
     # Extract image URL from response
     images = data.get("images", [])
@@ -260,17 +259,17 @@ def generate_background(
     with open(filename, "wb") as f:
         f.write(raw_bytes)
 
-    return filename
+    return filename, seed
 
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
 
-    path = generate_background(
+    path, seed = generate_background(
         "dark_philosophical",
         os.getenv("FAL_API_KEY"),
         quote="The unexamined life is not worth living.",
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
     )
-    print(f"Saved: {path}")
+    print(f"Saved: {path} (seed={seed})")
