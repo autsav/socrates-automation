@@ -435,24 +435,48 @@ def _legacy_content(cfg):
 
 
 def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
-                   dry_run: bool, manual: bool, access_token: str) -> dict:
+                   dry_run: bool, manual: bool, access_token: str,
+                   use_remotion: bool = False) -> dict:
     """
-    POV mode: generate a zero-cost text Reel (ffmpeg + Pillow only — no FLUX,
-    no TTS) and post/send it exactly like the regular Reel flow, minus the
-    background-image generation steps.
+    POV mode: generate a text Reel and post/send it exactly like the regular Reel
+    flow, minus the background-image generation steps.
+
+    Renderer selection:
+      - use_remotion=True → render with the Remotion project (professional,
+        physics-driven text animations). Falls back to the ffmpeg POV generator
+        automatically if Node/Remotion isn't installed or the render fails.
+      - otherwise → the zero-cost ffmpeg + Pillow POV generator.
     """
     hook_text = quote_data.get("hook") or _generate_psychology_hook(
         quote_data["audience"], quote_data["row_number"])
     cta_text = _pick_cta(quote_data["row_number"])
     log.info(f"  [pov] Hook: {hook_text[:50]}...")
 
-    reel_path = generate_pov_reel(
-        quote=quote_data["quote"],
-        hook=hook_text,
-        cta=cta_text,
-        output_path=OUTPUT_DIR / f"pov_reel_{timestamp}.mp4",
-        mood=mood,
-    )
+    reel_path = None
+    if use_remotion:
+        try:
+            from src.video.remotion_reel import generate_remotion_reel
+            reel_path = generate_remotion_reel(
+                hook=hook_text,
+                quote=quote_data["quote"],
+                attribution=quote_data.get("attribution", "— Socrates"),
+                cta=cta_text,
+                mood=mood,
+                output_path=OUTPUT_DIR / f"remotion_reel_{timestamp}.mp4",
+            )
+        except Exception as e:
+            log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
+        if reel_path is None:
+            log.info("  [remotion] unavailable/failed — using ffmpeg POV fallback")
+
+    if reel_path is None:
+        reel_path = generate_pov_reel(
+            quote=quote_data["quote"],
+            hook=hook_text,
+            cta=cta_text,
+            output_path=OUTPUT_DIR / f"pov_reel_{timestamp}.mp4",
+            mood=mood,
+        )
     if reel_path:
         log.info(f"POV Reel: {reel_path}")
 
@@ -536,7 +560,11 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
-                  carousel: bool = False, pov: bool = False):
+                  carousel: bool = False, pov: bool = False, remotion: bool = False):
+    # --remotion is a POV text-reel rendered with the Remotion project (falls
+    # back to the ffmpeg POV generator if Node/Remotion isn't available).
+    if remotion:
+        pov = True
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -593,8 +621,10 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
     # ── POV mode: zero-cost text Reel — bypasses FLUX entirely ────────────────
     if pov:
-        log.info("Step 2: POV mode — generating zero-cost text Reel (ffmpeg + Pillow only)...")
-        return _run_pov_reel(cfg, quote_data, mood, slot, timestamp, dry_run, manual, access_token)
+        renderer = "Remotion (professional animations)" if remotion else "ffmpeg + Pillow"
+        log.info(f"Step 2: POV mode — generating text Reel via {renderer}...")
+        return _run_pov_reel(cfg, quote_data, mood, slot, timestamp, dry_run, manual,
+                             access_token, use_remotion=remotion)
 
     # ── Phase 1: Build enhanced FLUX prompt ────────────────────────────────────
     flux_override = ""
@@ -960,6 +990,7 @@ if __name__ == "__main__":
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
     parser.add_argument("--pov", action="store_true", help="Generate a zero-cost POV text Reel (ffmpeg + Pillow only, no FLUX) instead of the FLUX-based Reel.")
+    parser.add_argument("--remotion", action="store_true", help="Generate a POV text Reel with Remotion (professional physics-driven text animations). Implies --pov; falls back to the ffmpeg POV generator if Node/Remotion isn't installed.")
     parser.add_argument("--batch", action="store_true", help="Generate a week's worth of POV Reels (30) in one run and exit — does not post to Instagram.")
     args = parser.parse_args()
 
@@ -968,6 +999,8 @@ if __name__ == "__main__":
         generate_batch()
     elif args.manual:
         # --manual implies --reel (generate video) but skips API posting
-        run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio, pov=args.pov)
+        run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio,
+                     pov=args.pov, remotion=args.remotion)
     else:
-        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio, carousel=args.carousel, pov=args.pov)
+        run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio,
+                     carousel=args.carousel, pov=args.pov, remotion=args.remotion)
