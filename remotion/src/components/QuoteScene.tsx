@@ -1,6 +1,6 @@
 import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { AnimatedText } from "./AnimatedText";
+import { AnimatedQuote } from "./AnimatedQuote";
 import { FONT_FAMILY, Palette } from "../styles/theme";
 
 /**
@@ -13,7 +13,8 @@ export const QuoteScene: React.FC<{
   quote: string;
   attribution: string;
   palette: Palette;
-}> = ({ quote, attribution, palette }) => {
+  beats?: number[];
+}> = ({ quote, attribution, palette, beats = [] }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -61,9 +62,10 @@ export const QuoteScene: React.FC<{
           paddingBottom: "14%",
         }}
       >
-        <AnimatedText
-          text={quote}
+        <AnimatedQuote
+          quote={quote}
           palette={palette}
+          beats={beats}
           fontSize={146}
           stagger={0.065}
         />

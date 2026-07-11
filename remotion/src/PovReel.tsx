@@ -1,8 +1,10 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Audio,
   Sequence,
   interpolate,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -22,6 +24,8 @@ export interface PovReelProps {
   mood: string;
   duration: number;
   fps: number;
+  beats?: number[];
+  audio?: string;
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -32,6 +36,8 @@ export const povReelDefaultProps: PovReelProps = {
   mood: "dark_philosophical",
   duration: 10.5,
   fps: 30,
+  beats: [],
+  audio: undefined,
 };
 
 /** Split the total duration into hook / quote / cta scene lengths (in frames).
@@ -67,6 +73,8 @@ export const PovReel: React.FC<PovReelProps> = ({
   attribution,
   cta,
   mood,
+  beats = [],
+  audio,
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -90,8 +98,19 @@ export const PovReel: React.FC<PovReelProps> = ({
       </Sequence>
 
       <Sequence from={hookF} durationInFrames={quoteF} name="Quote">
-        <QuoteScene quote={quote} attribution={attribution} palette={palette} />
+        <QuoteScene
+          quote={quote}
+          attribution={attribution}
+          palette={palette}
+          beats={beats}
+        />
       </Sequence>
+
+      {audio ? (
+        <Sequence from={hookF} durationInFrames={quoteF} name="QuoteAudio">
+          <Audio src={staticFile(audio)} />
+        </Sequence>
+      ) : null}
 
       <Sequence
         from={quoteEnd}
