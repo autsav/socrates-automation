@@ -183,6 +183,7 @@ jobs:
       - name: Commit SQLite database + logs back to repo
         if: github.event_name != 'pull_request'
         run: |
+          python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state WHERE service='meta'\"); c.commit(); c.close()"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Force-add because data/ and logs/ are in .gitignore

@@ -42,3 +42,12 @@ def test_committed_db_has_no_token():
     finally:
         conn.close()
     assert n == 0, "committed pipeline.db must not contain a token (secret leak)"
+
+
+def test_workflows_scrub_token_before_committing_db():
+    for wf in (".github/workflows/analytics.yml", ".github/workflows/daily_post.yml"):
+        t = _read(wf)
+        i_scrub = t.find("DELETE FROM token_state")
+        i_add = t.find("git add -f data/pipeline.db")
+        assert i_scrub != -1, f"{wf} must scrub token_state before committing the DB"
+        assert i_add != -1 and i_scrub < i_add, f"{wf}: token scrub must precede git add -f"
