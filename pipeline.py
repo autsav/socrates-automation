@@ -455,11 +455,6 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     reel_path = None
 
     if use_remotion:
-        # Produce the quote-scene voiceover up front so the Remotion path can
-        # beat-sync to it and play it under the quote scene. Best-effort: any
-        # failure → silent reel (unchanged behavior). Only the Remotion path
-        # consumes this, so it's generated here — the ffmpeg fallback below
-        # must make zero TTS calls.
         # Produce full VO (hook/quote/cta) + a music bed for the narrated
         # Remotion reel. Best-effort: any failure → that piece is simply absent
         # (the reel still renders; the ffmpeg fallback below makes zero TTS calls).
