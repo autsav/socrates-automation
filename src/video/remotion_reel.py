@@ -33,6 +33,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from src.video import beat_sync
+
 # Repo root: src/video/remotion_reel.py -> src -> <repo>
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REMOTION_DIR = REPO_ROOT / "remotion"
@@ -93,14 +95,36 @@ def write_bridge_file(
     duration: float,
     fps: int,
     bridge_path: Path = BRIDGE_FILE,
+    voiceover_path: Path | None = None,
 ) -> Path:
     """Write the reel-data.json bridge file the Remotion composition reads.
+
+    When ``voiceover_path`` is supplied, its beats are detected and written as
+    ``beats`` (absolute seconds), and the audio is copied next to the bridge as
+    ``reel-audio<ext>`` and referenced by the ``audio`` key so Remotion's
+    ``<Audio>`` (via ``staticFile``) can play — and bake — it into the render.
+    With no voiceover, ``beats`` is ``[]`` and ``audio`` is omitted, giving the
+    original silent-reel behavior.
 
     Returns the path written. Exposed separately so tests can exercise it
     without invoking Node.
     """
     if mood not in SUPPORTED_MOODS:
         mood = SUPPORTED_MOODS[0]
+
+    beats: list[float] = []
+    audio_name: str | None = None
+    if voiceover_path is not None and Path(voiceover_path).exists():
+        voiceover_path = Path(voiceover_path)
+        audio_name = "reel-audio" + voiceover_path.suffix
+        bridge_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(voiceover_path, bridge_path.parent / audio_name)
+        try:
+            beats = beat_sync.detect_beats(voiceover_path)
+        except Exception as e:  # pragma: no cover - defensive
+            print(f"  [remotion] beat detection failed ({e}) — reel stays un-synced")
+            beats = []
+
     payload = {
         "hook": hook or "",
         "quote": quote or "",
@@ -109,7 +133,11 @@ def write_bridge_file(
         "mood": mood,
         "duration": round(float(duration), 3),
         "fps": int(fps),
+        "beats": beats,
     }
+    if audio_name:
+        payload["audio"] = audio_name
+
     bridge_path.parent.mkdir(parents=True, exist_ok=True)
     bridge_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
     return bridge_path
