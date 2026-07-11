@@ -249,44 +249,54 @@ git commit -m "feat(remotion): generate_remotion_reel forwards voiceover_path"
 
 ---
 
-### Task 3: Pipeline passes the voiceover to the Remotion render (Python)
+### Task 3: Pipeline passes the quote voiceover to the Remotion render (Python)
 
-Ensure a reel voiceover is produced before the Remotion call and its path is handed to `generate_remotion_reel`. If no voiceover can be produced, the call is made without a path (silent reel — unchanged).
+Produce the **quote-scene** voiceover before the Remotion call and hand its path to `generate_remotion_reel`. If no voiceover can be produced, the call is made without a path (silent reel — unchanged).
+
+**DESIGN DECISION (governs this task):** `prepare_reel_voiceover_edge_tts(...)` returns a **dict of three separate scene tracks** — `hook_voice`, `quote_voice`, `cta_voice` (each a `.mp3` `Path` or `None`) plus `voice`. Per the "quote track, aligned" decision, we use **`quote_voice` only** as the reel's audio + beat source; it is played under the quote scene (Task 6). Beats detected from it are therefore **scene-relative seconds** (0 = quote-scene start).
 
 **Files:**
 - Modify: `pipeline.py` (around the `generate_remotion_reel` call at ~line 458–470)
 
 **Interfaces:**
-- Consumes: `generate_remotion_reel(..., voiceover_path=...)` from Task 2; `prepare_reel_voiceover` / `edge_tts` voiceover helpers already imported at the top of `pipeline.py`.
+- Consumes: `generate_remotion_reel(..., voiceover_path=...)` from Task 2; `prepare_reel_voiceover_edge_tts(hook_text, quote_text, cta_text, mood, output_dir, timestamp) -> dict` and `edge_tts_available()` from `src.audio.edge_tts_engine`. `datetime`, `OUTPUT_DIR`, `hook_text`, `cta_text`, `mood`, `quote_data` are already in scope at this call site.
 
 - [ ] **Step 1: Read the current call site**
 
 Run: `sed -n '455,475p' pipeline.py`
 Confirm the `if use_remotion:` block calls `generate_remotion_reel(hook=..., quote=..., attribution=..., cta=..., mood=..., output_path=...)` with no voiceover.
 
-- [ ] **Step 2: Add a local voiceover-for-reel helper call before the render**
+- [ ] **Step 2: Add the quote-voiceover call before the render**
 
 Immediately **before** the `if use_remotion:` line, insert:
 
 ```python
-    # Produce a short voiceover up front so the Remotion path can beat-sync to it
-    # and bake it into the render. Best-effort: any failure → silent reel.
+    # Produce the quote-scene voiceover up front so the Remotion path can
+    # beat-sync to it and play it under the quote scene. Best-effort: any
+    # failure → silent reel (unchanged behavior).
     reel_voiceover_path = None
     try:
-        from src.audio.edge_tts_engine import prepare_reel_voiceover_edge_tts, edge_tts_available
+        from src.audio.edge_tts_engine import (
+            prepare_reel_voiceover_edge_tts,
+            edge_tts_available,
+        )
         if edge_tts_available():
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             vo = prepare_reel_voiceover_edge_tts(
-                hook=hook_text, quote=quote_data["quote"], cta=cta_text,
+                hook_text=hook_text,
+                quote_text=quote_data["quote"],
+                cta_text=cta_text,
+                mood=mood,
+                output_dir=OUTPUT_DIR,
+                timestamp=ts,
             )
             if isinstance(vo, dict):
-                reel_voiceover_path = vo.get("audio_path") or vo.get("path")
-            elif vo:
-                reel_voiceover_path = vo
+                reel_voiceover_path = vo.get("quote_voice")  # Path | None
     except Exception as e:
         log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
 ```
 
-> **Note for the implementer:** verify the return shape of `prepare_reel_voiceover_edge_tts` by reading `src/audio/edge_tts_engine.py`. The snippet handles both a dict (`audio_path`/`path` key) and a bare path/str. If it returns something else, adapt the extraction so `reel_voiceover_path` ends up as a filesystem path to the `.mp3`/`.wav`, or `None`.
+> **Implementer note:** confirm `datetime` is imported at the top of `pipeline.py` (it is: `from datetime import datetime`). `reel_voiceover_path` ends up as a `Path` to the quote `.mp3`, or `None`. Do not use the hook/cta tracks.
 
 - [ ] **Step 3: Pass the path into the render call**
 
@@ -446,7 +456,9 @@ The visual core: masked word rise (#2) + keyword punch (#5) + quote-mark bloom (
 
 **Interfaces:**
 - Consumes: `pickEmphasisIndex` (Task 4); `autoFontSize(text: string, base: number): number` (now exported from `AnimatedText.tsx`); `FONT_FAMILY`, `Palette` from `../styles/theme`.
-- Produces: `AnimatedQuote: React.FC<{ quote: string; palette: Palette; beats?: number[]; sceneStartFrame: number; startFrame?: number; fontSize?: number; stagger?: number }>`.
+- Produces: `AnimatedQuote: React.FC<{ quote: string; palette: Palette; beats?: number[]; startFrame?: number; fontSize?: number; stagger?: number }>`.
+
+> **Beat coordinate system (per "quote track, aligned" decision):** `beats` are **scene-relative seconds** (0 = quote-scene start), because they were detected from the quote voiceover that plays under this scene. `useCurrentFrame()` inside this component is already scene-relative, so a beat's frame is simply `round(t*fps)` — **no `sceneStartFrame` offset**. There is no `sceneStartFrame` prop.
 
 - [ ] **Step 1: Export `autoFontSize` from `AnimatedText.tsx`**
 
@@ -481,10 +493,8 @@ import { pickEmphasisIndex } from "../lib/emphasis";
 export interface AnimatedQuoteProps {
   quote: string;
   palette: Palette;
-  /** Absolute reel-seconds of detected beats. */
+  /** Scene-relative seconds of detected beats (0 = quote-scene start). */
   beats?: number[];
-  /** Absolute (reel-global) frame at which this scene starts. */
-  sceneStartFrame: number;
   /** Scene-relative frame at which the reveal starts. */
   startFrame?: number;
   fontSize?: number;
@@ -492,16 +502,16 @@ export interface AnimatedQuoteProps {
   stagger?: number;
 }
 
-/** Smallest scene-relative beat frame at or after `notBefore`, else null. */
+/** Smallest scene-relative beat frame at or after `notBefore`, else null.
+ *  `beats` are already scene-relative, so the frame is round(t*fps). */
 function nearestBeatFrame(
   beats: number[],
   fps: number,
-  sceneStartFrame: number,
   notBefore: number
 ): number | null {
   let best: number | null = null;
   for (const t of beats) {
-    const rel = Math.round(t * fps) - sceneStartFrame;
+    const rel = Math.round(t * fps);
     if (rel >= notBefore) best = best === null ? rel : Math.min(best, rel);
   }
   return best;
@@ -511,7 +521,6 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
   quote,
   palette,
   beats = [],
-  sceneStartFrame,
   startFrame = 0,
   fontSize = 146,
   stagger = 0.065,
@@ -526,7 +535,7 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
   // Frame at which the emphasis word has finished revealing.
   const emphasisRevealEnd = startFrame + emphasis * staggerFrames + 24;
   // Punch fires on the nearest beat after that, else ~8 frames after reveal.
-  const beatFrame = nearestBeatFrame(beats, fps, sceneStartFrame, emphasisRevealEnd);
+  const beatFrame = nearestBeatFrame(beats, fps, emphasisRevealEnd);
   const triggerFrame = beatFrame ?? emphasisRevealEnd + 8;
   const punch = interpolate(
     frame,
@@ -657,12 +666,14 @@ git commit -m "feat(remotion): AnimatedQuote — masked rise, keyword punch, quo
 Give `PovReel` the `beats`/`audio` props, play the audio, and route beats into `QuoteScene` → `AnimatedQuote`.
 
 **Files:**
-- Modify: `remotion/src/PovReel.tsx` (props interface, defaults, `<Audio>`, pass beats + scene start to `QuoteScene`)
-- Modify: `remotion/src/components/QuoteScene.tsx` (accept `beats` + `sceneStartFrame`, render `AnimatedQuote`)
+- Modify: `remotion/src/PovReel.tsx` (props interface, defaults, `<Audio>` under a Sequence, pass beats to `QuoteScene`)
+- Modify: `remotion/src/components/QuoteScene.tsx` (accept `beats`, render `AnimatedQuote`)
 
 **Interfaces:**
 - Consumes: `AnimatedQuote` (Task 5).
-- Produces: `PovReelProps` gains `beats?: number[]` and `audio?: string`; `QuoteScene` gains props `beats?: number[]` and `sceneStartFrame: number`.
+- Produces: `PovReelProps` gains `beats?: number[]` and `audio?: string`; `QuoteScene` gains prop `beats?: number[]` (no `sceneStartFrame`).
+
+> **Audio placement (per "quote track, aligned" decision):** the audio is the **quote** voiceover, so it must play under the **quote scene**, not from frame 0. Wrap `<Audio>` in a `<Sequence from={hookF} durationInFrames={quoteF}>`. Because both the audio and `AnimatedQuote` live in a sequence starting at `hookF`, and beats are scene-relative, they align with no offset math.
 
 - [ ] **Step 1: Extend `PovReelProps` and defaults**
 
@@ -712,13 +723,17 @@ export const PovReel: React.FC<PovReelProps> = ({
 
 - [ ] **Step 3: Play the audio and pass beats into the Quote sequence**
 
-Inside the root `<AbsoluteFill …>`, add near the top (after the opening tag, before `PulsingBg`):
+The quote voiceover must play **under the quote scene**, not from frame 0. Add an audio Sequence starting at `hookF` (alongside the existing Quote sequence — put it right after the Quote `<Sequence>`):
 
 ```tsx
-      {audio ? <Audio src={staticFile(audio)} /> : null}
+      {audio ? (
+        <Sequence from={hookF} durationInFrames={quoteF} name="QuoteAudio">
+          <Audio src={staticFile(audio)} />
+        </Sequence>
+      ) : null}
 ```
 
-Change the Quote `<Sequence>` body to pass beats + the scene start frame (`hookF`):
+Change the Quote `<Sequence>` body to pass `beats` (no scene-start prop — beats are scene-relative):
 
 ```tsx
       <Sequence from={hookF} durationInFrames={quoteF} name="Quote">
@@ -727,7 +742,6 @@ Change the Quote `<Sequence>` body to pass beats + the scene start frame (`hookF
           attribution={attribution}
           palette={palette}
           beats={beats}
-          sceneStartFrame={hookF}
         />
       </Sequence>
 ```
@@ -756,8 +770,7 @@ export const QuoteScene: React.FC<{
   attribution: string;
   palette: Palette;
   beats?: number[];
-  sceneStartFrame: number;
-}> = ({ quote, attribution, palette, beats = [], sceneStartFrame }) => {
+}> = ({ quote, attribution, palette, beats = [] }) => {
 ```
 
 Replace the `<AnimatedText … />` block with:
@@ -767,7 +780,6 @@ Replace the `<AnimatedText … />` block with:
           quote={quote}
           palette={palette}
           beats={beats}
-          sceneStartFrame={sceneStartFrame}
           fontSize={146}
           stagger={0.065}
         />

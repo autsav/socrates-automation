@@ -34,6 +34,8 @@ The remaining 16 brainstormed techniques are explicitly **out of scope**.
 | Audio mux | **Remotion-native.** `<Audio>` in the composition; `npx remotion render` bakes it into the mp4. No separate ffmpeg mux step. |
 | Fallback | **Graceful.** No voiceover / no beats → silent reel exactly as today; motion falls back to spring-only timing. |
 
+> **Amendment (2026-07-11, during execution):** `prepare_reel_voiceover_edge_tts` returns **three separate scene tracks** (`hook_voice`/`quote_voice`/`cta_voice`), not one file. Per the "quote track, aligned" decision we use **`quote_voice` only** as the reel's audio + beat source, played under the quote scene via `<Sequence from={hookF}>`. Consequently **beats are scene-relative seconds** (0 = quote-scene start), so `AnimatedQuote` uses `round(t*fps)` directly with **no `sceneStartFrame` offset**. This supersedes §4.1's "absolute reel-seconds" and §4.3's "`<Audio>` at root" wording.
+
 ## 4. Architecture
 
 ### 4.1 `remotion/src/components/AnimatedQuote.tsx` (NEW)
