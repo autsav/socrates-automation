@@ -113,6 +113,11 @@ DEFAULT_PALETTE = MOOD_PALETTES["dark_philosophical"]
 # ── Font Registry ────────────────────────────────────────────────────────────
 # Searches for high-quality fonts in priority order.
 
+# macOS font directories — dev machines have no /usr/share/fonts, so without
+# these every render silently fell back to Pillow's fixed ~10px bitmap default.
+_MAC_FONTS = "/System/Library/Fonts/Supplemental/"
+_MAC_SYS = "/System/Library/Fonts/"
+
 _FONT_CANDIDATES = {
     "regular": [
         ("PlayfairDisplay-Regular.ttf", "/usr/share/fonts/truetype/playfair/"),
@@ -122,6 +127,11 @@ _FONT_CANDIDATES = {
         ("DejaVuSerif.ttf", "/usr/share/fonts/truetype/dejavu/"),
         ("LiberationSerif-Regular.ttf", "/usr/share/fonts/truetype/liberation/"),
         ("FreeSerif.ttf", "/usr/share/fonts/truetype/freefont/"),
+        # macOS fallbacks
+        ("Georgia.ttf", _MAC_FONTS),
+        ("Times New Roman.ttf", _MAC_FONTS),
+        ("Arial.ttf", _MAC_FONTS),
+        ("Helvetica.ttc", _MAC_SYS),
     ],
     "bold": [
         ("PlayfairDisplay-Bold.ttf", "/usr/share/fonts/truetype/playfair/"),
@@ -130,6 +140,12 @@ _FONT_CANDIDATES = {
         ("DejaVuSerif-Bold.ttf", "/usr/share/fonts/truetype/dejavu/"),
         ("LiberationSerif-Bold.ttf", "/usr/share/fonts/truetype/liberation/"),
         ("FreeSerifBold.ttf", "/usr/share/fonts/truetype/freefont/"),
+        # macOS fallbacks (Arial Bold is a heavy, high-legibility fallback)
+        ("Georgia Bold.ttf", _MAC_FONTS),
+        ("Times New Roman Bold.ttf", _MAC_FONTS),
+        ("Arial Bold.ttf", _MAC_FONTS),
+        ("Arial Black.ttf", _MAC_FONTS),
+        ("Helvetica.ttc", _MAC_SYS),
     ],
     "italic": [
         ("PlayfairDisplay-Italic.ttf", "/usr/share/fonts/truetype/playfair/"),
@@ -137,8 +153,22 @@ _FONT_CANDIDATES = {
         ("DejaVuSerif-Italic.ttf", "/usr/share/fonts/truetype/dejavu/"),
         ("LiberationSerif-Italic.ttf", "/usr/share/fonts/truetype/liberation/"),
         ("FreeSerifItalic.ttf", "/usr/share/fonts/truetype/freefont/"),
+        # macOS fallbacks
+        ("Georgia Italic.ttf", _MAC_FONTS),
+        ("Arial Italic.ttf", _MAC_FONTS),
     ],
 }
+
+# Last-resort absolute paths tried across platforms before the (non-scalable)
+# bitmap default. Guarantees text still scales in minimal containers.
+_ABSOLUTE_FONT_FALLBACKS = [
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/Library/Fonts/Arial.ttf",
+]
 
 # Also check a local fonts/ directory
 _LOCAL_FONT_DIR = Path(__file__).parent.parent.parent / "fonts"
@@ -164,8 +194,21 @@ def _find_font(weight: str = "regular", size: int = 64) -> ImageFont.FreeTypeFon
             except Exception:
                 continue
 
-    # Final fallback
-    return ImageFont.load_default()
+    # Try known-good absolute paths before giving up.
+    for abs_path in _ABSOLUTE_FONT_FALLBACKS:
+        if Path(abs_path).exists():
+            try:
+                return ImageFont.truetype(abs_path, size)
+            except Exception:
+                continue
+
+    # Final fallback: Pillow's bundled default. Pass size so it stays SCALABLE
+    # (Pillow >= 10) instead of collapsing to the fixed ~10px bitmap font, which
+    # is what made every overlay render as an unreadable caption.
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 # ── Texture Overlays ─────────────────────────────────────────────────────────

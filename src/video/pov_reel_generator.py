@@ -67,27 +67,45 @@ def ffmpeg_available() -> bool:
 
 # ── Background ────────────────────────────────────────────────────────────
 
+# Per-mood glow color for the radial background. Kept dark enough that huge
+# white text stays high-contrast; the animated ffmpeg filters make it pulse,
+# shift, and brighten so the field never sits still.
+_PULSE_COLORS = {
+    "dark_philosophical": (82, 16, 16),   # deep blood red
+    "dramatic_ancient":   (86, 36, 14),   # ember orange
+    "cinematic_hopeful":  (14, 36, 86),   # electric blue
+    "stark_minimal":      (58, 58, 64),   # cold slate
+    "epic_warrior":       (96, 14, 14),   # war red
+    "mystical_greek":     (48, 16, 88),   # violet
+    "calm_stoic":         (16, 54, 36),   # forest
+}
+
+
 def _build_gradient_background(mood: str = "dark_philosophical", seed: int = 0) -> Image.Image:
-    """Black/dark vertical gradient background, subtly tinted by mood.
-    Near-black at top and bottom, a touch lighter (mood primary) in the middle
-    so text always sits on a very dark, low-contrast field."""
-    design = BrandDesign(mood=mood)
-    primary = design.colors["primary"]
+    """Radial glow background: a saturated mood-colored core fading to near-black
+    at the edges. Text sits on the dark rim's high-contrast field while the
+    animated filter chain makes the core breathe, shift hue, and pulse — the
+    background creates tension, the text delivers release."""
     width, height = OUTPUT_SIZE
+    core = _PULSE_COLORS.get(mood, _PULSE_COLORS["dark_philosophical"])
+    edge = (0, 0, 0)
 
-    top = (0, 0, 0)
-    bottom = (max(primary[0] - 5, 0), max(primary[1] - 5, 0), max(primary[2] - 5, 0))
-
-    gradient = Image.new("RGB", (1, height), color=0)
-    for y in range(height):
-        # Peak brightness around the vertical center, fading to black at edges.
-        ratio = 1 - abs((y / max(height - 1, 1)) - 0.5) * 2
-        r = int(top[0] + (bottom[0] - top[0]) * ratio)
-        g = int(top[1] + (bottom[1] - top[1]) * ratio)
-        b = int(top[2] + (bottom[2] - top[2]) * ratio)
-        gradient.putpixel((0, y), (r, g, b))
-    gradient = gradient.resize((width, height))
-    return gradient
+    # Compute the radial falloff at low resolution, then upscale smoothly —
+    # a full 2M-pixel Python loop would be far too slow.
+    lw, lh = max(width // 6, 1), max(height // 6, 1)
+    small = Image.new("RGB", (lw, lh))
+    px = small.load()
+    cx, cy = (lw - 1) / 2, (lh - 1) / 2
+    max_d = (cx ** 2 + cy ** 2) ** 0.5 or 1.0
+    for y in range(lh):
+        for x in range(lw):
+            d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / max_d
+            t = min(1.0, d ** 1.4)  # broad glow in the center, dark toward the rim
+            r = int(core[0] * (1 - t) + edge[0] * t)
+            g = int(core[1] * (1 - t) + edge[1] * t)
+            b = int(core[2] * (1 - t) + edge[2] * t)
+            px[x, y] = (r, g, b)
+    return small.resize((width, height), Image.LANCZOS)
 
 
 # ── Text overlay rendering ───────────────────────────────────────────────
@@ -123,11 +141,20 @@ def _fit_text(
     scratch = Image.new("RGB", (10, 10))
     draw = ImageDraw.Draw(scratch)
 
+    def _line_height(font) -> int:
+        # Derive from real font metrics (ascent + descent) so big glyphs never
+        # collide; a flat fraction of `size` badly under-spaces large fonts.
+        try:
+            ascent, descent = font.getmetrics()
+            return int((ascent + descent) * 1.12)
+        except Exception:
+            return int(getattr(font, "size", 40) * 1.25)
+
     size = base_size
     while size >= min_size:
         font = design.get_font(size, weight=weight)
         lines = _wrap_text(draw, text, font, max_width)
-        line_height = int(size * 135 / 1000) + int(size * 0.35)
+        line_height = _line_height(font)
         total_height = line_height * len(lines)
         widest = max((draw.textlength(line, font=font) for line in lines), default=0)
         if total_height <= max_height and widest <= max_width:
@@ -136,27 +163,28 @@ def _fit_text(
 
     font = design.get_font(min_size, weight=weight)
     lines = _wrap_text(draw, text, font, max_width)
-    line_height = int(min_size * 1.35)
-    return lines, font, line_height
+    return lines, font, _line_height(font)
 
 
 def render_text_overlay(
     text: str,
     mood: str = "dark_philosophical",
-    base_size: int = 96,
-    min_size: int = 40,
+    base_size: int = 160,
+    min_size: int = 92,
     weight: str = "bold",
-    color: tuple = (250, 250, 248),
+    color: tuple = (255, 255, 255),
     shadow: bool = True,
 ) -> Image.Image:
     """
-    Render large, centered, mobile-friendly white text on a transparent
-    1080x1920 RGBA canvas, sized/wrapped to fit the safe area.
+    Render HUGE, centered, mobile-first white text on a transparent 1080x1920
+    RGBA canvas — the text is the content, so it dominates the frame, filling
+    ~90% of the width and wrapping full-bleed lines. A heavy black stroke plus
+    drop shadow keep it razor-legible over the moving, pulsing background.
     """
     design = BrandDesign(mood=mood)
     width, height = OUTPUT_SIZE
-    max_width = int(width * 0.86)
-    max_height = int(height * 0.55)
+    max_width = int(width * 0.90)
+    max_height = int(height * 0.70)
 
     lines, font, line_height = _fit_text(
         text, base_size=base_size, min_size=min_size,
@@ -166,6 +194,11 @@ def render_text_overlay(
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
+    # Stroke scales with font size so big text gets a proportionally bold outline.
+    size = getattr(font, "size", base_size)
+    stroke_width = max(4, int(size * 0.055))
+    shadow_offset = max(4, int(size * 0.045))
+
     total_height = line_height * len(lines)
     y = (height - total_height) // 2
 
@@ -173,16 +206,22 @@ def render_text_overlay(
         line_width = draw.textlength(line, font=font)
         x = (width - line_width) / 2
         if shadow:
-            draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0, 170))
-        draw.text((x, y), line, font=font, fill=(*color, 255))
+            draw.text(
+                (x + shadow_offset, y + shadow_offset), line, font=font,
+                fill=(0, 0, 0, 180), stroke_width=stroke_width, stroke_fill=(0, 0, 0, 180),
+            )
+        draw.text(
+            (x, y), line, font=font, fill=(*color, 255),
+            stroke_width=stroke_width, stroke_fill=(0, 0, 0, 255),
+        )
         y += line_height
 
     return overlay
 
 
 def _quote_font_size(quote: str) -> int:
-    """Reuse brand_design's dynamic sizing, scaled up for the POV full-bleed format."""
-    return min(96, calculate_font_size(quote, base_size=104, min_size=44))
+    """Reuse brand_design's dynamic sizing, scaled up huge for the POV full-bleed format."""
+    return min(150, calculate_font_size(quote, base_size=172, min_size=100))
 
 
 # ── Audio resolution ─────────────────────────────────────────────────────
@@ -281,9 +320,9 @@ def generate_pov_reel(
         bg_path = tmp_dir / "bg.png"
         bg.save(bg_path)
 
-        hook_overlay = render_text_overlay(hook, mood=mood, base_size=88, min_size=40)
-        quote_overlay = render_text_overlay(quote, mood=mood, base_size=_quote_font_size(quote), min_size=40)
-        cta_overlay = render_text_overlay(cta, mood=mood, base_size=64, min_size=32)
+        hook_overlay = render_text_overlay(hook, mood=mood, base_size=168, min_size=100)
+        quote_overlay = render_text_overlay(quote, mood=mood, base_size=_quote_font_size(quote), min_size=96)
+        cta_overlay = render_text_overlay(cta, mood=mood, base_size=132, min_size=84)
 
         hook_path = tmp_dir / "hook.png"
         quote_path = tmp_dir / "quote.png"
@@ -291,6 +330,11 @@ def generate_pov_reel(
         hook_overlay.save(hook_path)
         quote_overlay.save(quote_path)
         cta_overlay.save(cta_path)
+
+        # White flash frame for the pattern-interrupt flashes at scene transitions.
+        flash_frame = Image.new("RGBA", OUTPUT_SIZE, (255, 255, 255, 210))
+        flash_path = tmp_dir / "flash.png"
+        flash_frame.save(flash_path)
 
         # ── Resolve audio (best-effort, never blocks) ───────────────────────
         audio = _resolve_audio(mood, audio_path, tmp_dir)
@@ -305,14 +349,38 @@ def generate_pov_reel(
         cmd += ["-framerate", str(fps), "-loop", "1", "-t", str(total_duration), "-i", str(quote_path)]
         cmd += ["-framerate", str(fps), "-loop", "1", "-t", str(total_duration), "-i", str(cta_path)]
 
+        next_idx = 4
+        flash_idx = None
+        if animate_background:
+            cmd += ["-framerate", str(fps), "-loop", "1", "-t", str(total_duration), "-i", str(flash_path)]
+            flash_idx = next_idx
+            next_idx += 1
+
         if audio is not None:
             cmd += ["-i", str(audio)]
-            audio_idx = 4
+            audio_idx = next_idx
+            next_idx += 1
 
+        sw, sh = OUTPUT_SIZE
         if animate_background:
+            # ALIVE + UNSTABLE background: slow zoom, moving film grain, a color
+            # pulse (dark ↔ lighter every ~1.5s), a slow hue shift, a breathing
+            # vignette that darkens/releases the edges toward the center text,
+            # and a 2-3px shake for urgency. All zero-cost ffmpeg filters.
+            margin = 12
+            half = margin // 2
             bg_filter = (
-                f"[0:v]zoompan=z='min(zoom+0.0008,1.06)':d=1:"
-                f"s={OUTPUT_SIZE[0]}x{OUTPUT_SIZE[1]}:fps={fps}[bgv]"
+                f"[0:v]zoompan=z='min(zoom+0.0006,1.08)':d=1:s={sw}x{sh}:fps={fps},"
+                f"scale={sw + margin}:{sh + margin},"
+                f"noise=alls=14:allf=t+u,"
+                f"eq=brightness='0.05+0.06*sin(2*PI*t/1.5)':"
+                f"saturation='1.18+0.18*sin(2*PI*t/2)':eval=frame,"
+                f"hue=h='12*sin(2*PI*t/3)',"
+                f"vignette=a='PI/4.5+0.10*sin(2*PI*t/2)':eval=frame,"
+                f"crop={sw}:{sh}:"
+                f"x='{half}+3*sin(2*PI*t*4)+2*sin(2*PI*t*7)':"
+                f"y='{half}+3*cos(2*PI*t*5)+2*sin(2*PI*t*9)',"
+                f"format=yuv420p[bgv]"
             )
         else:
             bg_filter = "[0:v]format=yuv420p[bgv]"
@@ -332,15 +400,31 @@ def generate_pov_reel(
 
         overlay_hook = f"[bgv][htxt]overlay=0:0:enable='between(t,0,{hook_end:.3f})'[v1]"
         overlay_quote = f"[v1][qtxt]overlay=0:0:enable='between(t,{hook_end:.3f},{quote_end:.3f})'[v2]"
-        overlay_cta = (
-            f"[v2][ctxt]overlay=0:0:enable='between(t,{quote_end:.3f},{total_duration:.3f})',"
-            f"format=yuv420p[outv]"
-        )
 
-        filter_complex = ";".join([
-            bg_filter, hook_fade, quote_fade, cta_fade,
-            overlay_hook, overlay_quote, overlay_cta,
-        ])
+        filter_parts = [bg_filter, hook_fade, quote_fade, cta_fade,
+                        overlay_hook, overlay_quote]
+
+        if flash_idx is not None:
+            # Text over background, then a brief hard white flash at each scene
+            # transition (~0.08s) — a pattern interrupt that resets attention.
+            overlay_cta = (
+                f"[v2][ctxt]overlay=0:0:enable='between(t,{quote_end:.3f},{total_duration:.3f})'[v3]"
+            )
+            flash_overlay = (
+                f"[v3][{flash_idx}:v]overlay=0:0:"
+                f"enable='between(t,{max(hook_end - 0.04, 0):.3f},{hook_end + 0.04:.3f})"
+                f"+between(t,{max(quote_end - 0.04, 0):.3f},{quote_end + 0.04:.3f})',"
+                f"format=yuv420p[outv]"
+            )
+            filter_parts += [overlay_cta, flash_overlay]
+        else:
+            overlay_cta = (
+                f"[v2][ctxt]overlay=0:0:enable='between(t,{quote_end:.3f},{total_duration:.3f})',"
+                f"format=yuv420p[outv]"
+            )
+            filter_parts.append(overlay_cta)
+
+        filter_complex = ";".join(filter_parts)
 
         cmd += ["-filter_complex", filter_complex, "-map", "[outv]"]
 
@@ -365,7 +449,7 @@ def generate_pov_reel(
         ]
 
         print(f"  [pov] Generating POV Reel ({total_duration:.1f}s)...")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         if result.returncode != 0:
             error = result.stderr[-600:] if result.stderr else "unknown error"
             raise RuntimeError(f"ffmpeg POV reel generation failed: {error}")
