@@ -456,13 +456,17 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     if use_remotion:
         try:
             from src.video.remotion_reel import generate_remotion_reel
+            # Auto-numbered output: reel_001.mp4, reel_002.mp4, ...
+            counter = 1
+            while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
+                counter += 1
             reel_path = generate_remotion_reel(
-                hook=hook_text,
-                quote=quote_data["quote"],
-                attribution=quote_data.get("attribution", "— Socrates"),
-                cta=cta_text,
-                mood=mood,
-                output_path=OUTPUT_DIR / f"remotion_reel_{timestamp}.mp4",
+                    hook=hook_text,
+                    quote=quote_data["quote"],
+                    attribution="— Socrates",
+                    cta=_pick_cta(quote_data["row_number"]),
+                    mood=mood,
+                    output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
@@ -470,11 +474,14 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
             log.info("  [remotion] unavailable/failed — using ffmpeg POV fallback")
 
     if reel_path is None:
+        counter = 1
+        while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
+            counter += 1
         reel_path = generate_pov_reel(
             quote=quote_data["quote"],
             hook=hook_text,
             cta=cta_text,
-            output_path=OUTPUT_DIR / f"pov_reel_{timestamp}.mp4",
+            output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
             mood=mood,
         )
     if reel_path:
