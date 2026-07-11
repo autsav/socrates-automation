@@ -27,4 +27,15 @@ describe("pickEmphasisIndex", () => {
   it("handles empty input without throwing", () => {
     expect(pickEmphasisIndex([])).toBe(0);
   });
+
+  it("falls back to the longest word when every word is a stopword", () => {
+    // No non-stopword content word exists, so the first loop finds nothing and
+    // the longest-content-word fallback runs. Lengths: the=3, of=2, a=1 -> index 0.
+    expect(pickEmphasisIndex(["the", "of", "a"])).toBe(0);
+  });
+
+  it("returns the last index when all words are punctuation-only", () => {
+    // clean() strips everything -> no content word -> final words.length-1 fallback.
+    expect(pickEmphasisIndex(["...", "!!!"])).toBe(1);
+  });
 });
