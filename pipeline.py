@@ -453,6 +453,30 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     log.info(f"  [pov] Hook: {hook_text[:50]}...")
 
     reel_path = None
+    # Produce the quote-scene voiceover up front so the Remotion path can
+    # beat-sync to it and play it under the quote scene. Best-effort: any
+    # failure → silent reel (unchanged behavior).
+    reel_voiceover_path = None
+    try:
+        from src.audio.edge_tts_engine import (
+            prepare_reel_voiceover_edge_tts,
+            edge_tts_available,
+        )
+        if edge_tts_available():
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            vo = prepare_reel_voiceover_edge_tts(
+                hook_text=hook_text,
+                quote_text=quote_data["quote"],
+                cta_text=cta_text,
+                mood=mood,
+                output_dir=OUTPUT_DIR,
+                timestamp=ts,
+            )
+            if isinstance(vo, dict):
+                reel_voiceover_path = vo.get("quote_voice")  # Path | None
+    except Exception as e:
+        log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
+
     if use_remotion:
         try:
             from src.video.remotion_reel import generate_remotion_reel
@@ -467,6 +491,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     cta=_pick_cta(quote_data["row_number"]),
                     mood=mood,
                     output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
+                    voiceover_path=reel_voiceover_path,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
