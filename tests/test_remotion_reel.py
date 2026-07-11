@@ -202,3 +202,36 @@ def test_write_bridge_file_beat_detection_failure_degrades_to_empty(tmp_path, mo
     assert data["beats"] == []
     # audio is still copied even if beat detection failed
     assert data["audio"] == "reel-audio.wav"
+
+
+def test_generate_forwards_voiceover_path_to_bridge(tmp_path, monkeypatch):
+    """generate_remotion_reel must pass voiceover_path into write_bridge_file."""
+    monkeypatch.setattr(rr, "remotion_available", lambda: True)
+    seen = {}
+
+    def fake_write(*args, **kwargs):
+        seen["voiceover_path"] = kwargs.get("voiceover_path")
+        p = tmp_path / "reel-data.json"
+        p.write_text("{}")
+        return p
+
+    class _Ok:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    out = tmp_path / "reel.mp4"
+
+    def fake_run(*a, **k):
+        out.write_bytes(b"fake-mp4")
+        return _Ok()
+
+    monkeypatch.setattr(rr, "write_bridge_file", fake_write)
+    monkeypatch.setattr(rr.subprocess, "run", fake_run)
+
+    vo = tmp_path / "vo.wav"
+    vo.write_bytes(b"x")
+    rr.generate_remotion_reel(
+        hook="h", quote="q", cta="c", output_path=out, voiceover_path=vo,
+    )
+    assert seen["voiceover_path"] == vo

@@ -153,6 +153,7 @@ def generate_remotion_reel(
     duration: float | None = None,
     fps: int = 30,
     timeout: int = 600,
+    voiceover_path: Path | None = None,
 ) -> Path | None:
     """
     Render a POV Reel via Remotion (React-based, headless-browser rendering).
@@ -185,6 +186,7 @@ def generate_remotion_reel(
         mood=mood,
         duration=duration,
         fps=fps,
+        voiceover_path=voiceover_path,
     )
 
     # 2. Invoke the Remotion CLI. --props takes a path to the JSON bridge file.
