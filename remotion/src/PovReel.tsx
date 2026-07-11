@@ -15,6 +15,7 @@ import { HookScene } from "./components/HookScene";
 import { QuoteScene } from "./components/QuoteScene";
 import { CtaScene } from "./components/CtaScene";
 import { getPalette } from "./styles/theme";
+import { duckVolume, DuckSpan } from "./lib/duckVolume";
 
 export interface PovReelProps {
   hook: string;
@@ -25,7 +26,9 @@ export interface PovReelProps {
   duration: number;
   fps: number;
   beats?: number[];
-  audio?: string;
+  voices?: { hook?: string; quote?: string; cta?: string };
+  music?: string;
+  voiceDurations?: { hook?: number; quote?: number; cta?: number };
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -37,7 +40,9 @@ export const povReelDefaultProps: PovReelProps = {
   duration: 10.5,
   fps: 30,
   beats: [],
-  audio: undefined,
+  voices: {},
+  music: undefined,
+  voiceDurations: {},
 };
 
 /** Split the total duration into hook / quote / cta scene lengths (in frames).
@@ -74,7 +79,9 @@ export const PovReel: React.FC<PovReelProps> = ({
   cta,
   mood,
   beats = [],
-  audio,
+  voices = {},
+  music,
+  voiceDurations = {},
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -83,6 +90,20 @@ export const PovReel: React.FC<PovReelProps> = ({
     fps
   );
   const quoteEnd = hookF + quoteF;
+
+  const spanFor = (
+    start: number,
+    dur: number | undefined,
+    sceneLen: number
+  ): DuckSpan => ({
+    start,
+    end: start + (dur != null ? Math.round(dur * fps) : sceneLen),
+  });
+  const duckSpans: DuckSpan[] = [
+    spanFor(0, voiceDurations.hook, hookF),
+    spanFor(hookF, voiceDurations.quote, quoteF),
+    spanFor(quoteEnd, voiceDurations.cta, durationInFrames - quoteEnd),
+  ];
 
   return (
     <AbsoluteFill style={{ background: palette.bg[0] }}>
@@ -106,10 +127,30 @@ export const PovReel: React.FC<PovReelProps> = ({
         />
       </Sequence>
 
-      {audio ? (
-        <Sequence from={hookF} durationInFrames={quoteF} name="QuoteAudio">
-          <Audio src={staticFile(audio)} />
+      {voices.hook ? (
+        <Sequence from={0} durationInFrames={hookF} name="HookVO">
+          <Audio src={staticFile(voices.hook)} />
         </Sequence>
+      ) : null}
+      {voices.quote ? (
+        <Sequence from={hookF} durationInFrames={quoteF} name="QuoteVO">
+          <Audio src={staticFile(voices.quote)} />
+        </Sequence>
+      ) : null}
+      {voices.cta ? (
+        <Sequence
+          from={quoteEnd}
+          durationInFrames={durationInFrames - quoteEnd}
+          name="CtaVO"
+        >
+          <Audio src={staticFile(voices.cta)} />
+        </Sequence>
+      ) : null}
+      {music ? (
+        <Audio
+          src={staticFile(music)}
+          volume={(f: number) => duckVolume(f, duckSpans)}
+        />
       ) : null}
 
       <Sequence
