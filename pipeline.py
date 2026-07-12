@@ -455,12 +455,10 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     reel_path = None
 
     if use_remotion:
-        # Produce the quote-scene voiceover up front so the Remotion path can
-        # beat-sync to it and play it under the quote scene. Best-effort: any
-        # failure → silent reel (unchanged behavior). Only the Remotion path
-        # consumes this, so it's generated here — the ffmpeg fallback below
-        # must make zero TTS calls.
-        reel_voiceover_path = None
+        # Produce full VO (hook/quote/cta) + a music bed for the narrated
+        # Remotion reel. Best-effort: any failure → that piece is simply absent
+        # (the reel still renders; the ffmpeg fallback below makes zero TTS calls).
+        hook_voice = quote_voice = cta_voice = music_path = None
         try:
             if edge_tts_available():
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -473,9 +471,16 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     timestamp=ts,
                 )
                 if isinstance(vo, dict):
-                    reel_voiceover_path = vo.get("quote_voice")  # Path | None
+                    hook_voice = vo.get("hook_voice")
+                    quote_voice = vo.get("quote_voice")
+                    cta_voice = vo.get("cta_voice")
         except Exception as e:
             log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
+        try:
+            from src.audio.trending_audio import download_music_for_mood
+            music_path = download_music_for_mood(mood)
+        except Exception as e:
+            log.warning(f"  [remotion] music bed unavailable ({e}) — VO-only reel")
 
         try:
             from src.video.remotion_reel import generate_remotion_reel
@@ -490,7 +495,10 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     cta=_pick_cta(quote_data["row_number"]),
                     mood=mood,
                     output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
-                    voiceover_path=reel_voiceover_path,
+                    hook_voice=hook_voice,
+                    quote_voice=quote_voice,
+                    cta_voice=cta_voice,
+                    music_path=music_path,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")

@@ -51,3 +51,10 @@ def test_workflows_scrub_token_before_committing_db():
         i_add = t.find("git add -f data/pipeline.db")
         assert i_scrub != -1, f"{wf} must scrub token_state before committing the DB"
         assert i_add != -1 and i_scrub < i_add, f"{wf}: token scrub must precede git add -f"
+
+
+def test_daily_post_uses_remotion_for_pov():
+    t = _read(".github/workflows/daily_post.yml")
+    assert "python pipeline.py --manual --remotion" in t
+    assert "actions/setup-node" in t
+    assert "npm --prefix remotion ci" in t
