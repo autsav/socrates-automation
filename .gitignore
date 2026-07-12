@@ -30,6 +30,7 @@ audio/*.mp3
 # Data & logs
 data/*
 logs/
+server.log
 *.db
 *.db-shm
 *.db-wal

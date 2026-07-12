@@ -6,6 +6,11 @@ def _tracked(path):
     return bool(out.strip())
 
 
+def _ignored(path):
+    # exit 0 => path is gitignored
+    return subprocess.run(["git", "check-ignore", "-q", path]).returncode == 0
+
+
 def test_junk_is_untracked():
     assert not _tracked("logs/posts.jsonl")
     assert not _tracked("server.log")
@@ -13,6 +18,12 @@ def test_junk_is_untracked():
     # no output jpgs tracked
     out = subprocess.run(["git", "ls-files", "output/"], capture_output=True, text=True).stdout
     assert ".jpg" not in out
+
+
+def test_regenerated_junk_stays_ignored():
+    # These regenerate at runtime; they must be gitignored so they never re-enter the repo.
+    assert _ignored("server.log"), "server.log must be gitignored, not just untracked"
+    assert _ignored("logs/posts.jsonl")
 
 
 def test_mood_beds_stay_tracked():
