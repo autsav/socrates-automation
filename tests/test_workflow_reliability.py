@@ -58,3 +58,7 @@ def test_daily_post_uses_remotion_for_pov():
     assert "python pipeline.py --manual --remotion" in t
     assert "actions/setup-node" in t
     assert "npm --prefix remotion ci" in t
+
+
+def test_edge_tts_in_requirements():
+    assert "edge-tts" in _read("requirements.txt"), "edge-tts must be a dependency so CI can generate voiceover"
