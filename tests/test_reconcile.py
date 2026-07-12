@@ -42,3 +42,10 @@ def test_time_fallback_skips_claimed():
 
 def test_time_fallback_never_raises_on_bad_timestamp():
     assert _match_by_time("garbage", [_media("x", "c", "also-garbage")], claimed=set()) is None
+
+
+def test_time_fallback_naive_created_at_vs_aware_media():
+    # PRODUCTION shape: sqlite created_at is naive; IG media timestamp is tz-aware.
+    created = "2026-07-12 12:00:00"  # naive, sqlite CURRENT_TIMESTAMP format
+    media = [_media("near", "no token", "2026-07-12T13:30:00+0000")]  # aware, 1.5h
+    assert _match_by_time(created, media, claimed=set()) == "near"

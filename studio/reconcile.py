@@ -68,10 +68,16 @@ def _parse_ts(s):
 
 
 def _match_by_time(created_at, media, claimed, window_hours: float = 6.0):
-    """Nearest unclaimed media within window_hours of created_at; else None."""
+    """Nearest unclaimed media within window_hours of created_at; else None.
+
+    Normalizes naive timestamps (sqlite CURRENT_TIMESTAMP is UTC) to aware UTC
+    so a naive created_at compares correctly against tz-aware IG timestamps."""
+    from datetime import timezone
     base = _parse_ts(created_at)
     if base is None:
         return None
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
     best_id, best_delta = None, None
     for m in media:
         mid = m.get("id")
@@ -80,7 +86,8 @@ def _match_by_time(created_at, media, claimed, window_hours: float = 6.0):
         mt = _parse_ts(m.get("timestamp"))
         if mt is None:
             continue
-        # compare naive-safely: use timestamps
+        if mt.tzinfo is None:
+            mt = mt.replace(tzinfo=timezone.utc)
         try:
             delta = abs((mt - base).total_seconds())
         except (TypeError, ValueError):
