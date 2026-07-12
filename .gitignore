@@ -19,10 +19,18 @@ team/output/
 audio/music/
 audio/*.mp3
 !audio/.gitkeep
+!audio/calm_stoic.mp3
+!audio/cinematic_hopeful.mp3
+!audio/dark_philosophical.mp3
+!audio/dramatic_ancient.mp3
+!audio/epic_warrior.mp3
+!audio/mystical_greek.mp3
+!audio/stark_minimal.mp3
 
 # Data & logs
 data/*
 logs/
+server.log
 *.db
 *.db-shm
 *.db-wal

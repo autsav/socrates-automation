@@ -195,7 +195,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Force-add because data/ and logs/ are in .gitignore
-          git add -f data/pipeline.db logs/
+          git add -f data/pipeline.db
+          git add -f logs/notifications.jsonl 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
