@@ -52,6 +52,23 @@ LOG_DIR = PROJECT_ROOT / "logs"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 EXCEL_PATH = PROJECT_ROOT / "quotes.xlsx"
 
+
+def _rel_path(p):
+    """Render a path repo-relative (no absolute local paths in logs/DB).
+
+    In-repo path -> 'output/foo.jpg'; outside-repo -> basename; None -> None.
+    Best-effort: never raises."""
+    if p is None:
+        return None
+    try:
+        return str(Path(p).resolve().relative_to(PROJECT_ROOT))
+    except (ValueError, OSError, TypeError):
+        try:
+            return Path(str(p)).name
+        except Exception:
+            return None
+
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
@@ -562,7 +579,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         except Exception as e:
             log.error(f"Failed to send POV Reel to Telegram: {e}")
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
-        mark_posted(post_row_id, "PENDING_MANUAL", None, str(reel_path) if reel_path else None)
+        mark_posted(post_row_id, "PENDING_MANUAL", None, _rel_path(reel_path))
     elif not dry_run and reel_path:
         log.info("Step: Posting POV Reel to Instagram...")
         post_id = post_reel_to_instagram(
@@ -602,7 +619,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         "quote": quote_data["quote"],
         "caption_preview": quote_data["caption"][:80],
         "image_path": None,
-        "reel_path": str(reel_path) if reel_path else None,
+        "reel_path": _rel_path(reel_path),
         "post_id": post_id,
         "dry_run": dry_run,
         "pov": True,
@@ -955,7 +972,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
         # Mark as ready (not fully posted yet)
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
-        mark_posted(post_row_id, "PENDING_MANUAL", str(final_image_path), str(reel_path) if reel_path else None)
+        mark_posted(post_row_id, "PENDING_MANUAL", _rel_path(final_image_path), _rel_path(reel_path))
 
     elif not dry_run:
         if reel and reel_path and ffmpeg_available():
@@ -1000,7 +1017,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             )
         log.info(f"✅ Posted! ID: {post_id}")
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
-        mark_posted(post_row_id, post_id, str(final_image_path), str(reel_path) if reel_path else None)
+        mark_posted(post_row_id, post_id, _rel_path(final_image_path), _rel_path(reel_path))
 
         # ── Phase 4: Notify user to manually add trending sound ───────────────
         if post_id:
@@ -1035,7 +1052,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         "mood":            mood,
         "quote":           quote_data["quote"],
         "caption_preview": quote_data["caption"][:80],
-        "image_path":      str(final_image_path),
+        "image_path":      _rel_path(final_image_path),
         "post_id":         post_id,
         "dry_run":         dry_run,
     }
