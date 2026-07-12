@@ -96,3 +96,22 @@ def test_select_music_unknown_id_falls_back_to_heuristic(tmp_path, monkeypatch):
     out = md.select_music(client, _ctx(), "KEY", tmp_path)
     assert out is not None
     assert picked.get("used") is True  # heuristic fallback ran
+
+
+def test_select_music_malformed_hit_in_heuristic_fallback_does_not_raise(tmp_path, monkeypatch):
+    """A malformed Pixabay hit (non-numeric 'downloads') must not blow up
+    _pick_from_pool's arithmetic and propagate out of select_music — the
+    docstring promises select_music 'Never raises'."""
+    hits = [{"id": 11, "tags": "cello", "duration": 30, "audio": "http://x/a.mp3",
+             "downloads": "lots", "likes": "many"}]
+    monkeypatch.setattr(md.download_music, "_search_pixabay_music",
+                        lambda q, k, per_page=20: hits)
+    # _pick_from_pool and _load_cache are NOT monkeypatched — the real
+    # implementation runs and raises TypeError on the malformed hit.
+    client = _SeqClient([
+        {"search_query": "cello", "energy": "low", "bpm_range": [50, 60],
+         "instruments": [], "avoid": []},
+        {"track_id": "999", "rationale": "not in list"},  # unknown id -> heuristic path
+    ])
+    out = md.select_music(client, _ctx(), "KEY", tmp_path)
+    assert out is None

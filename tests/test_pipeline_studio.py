@@ -32,6 +32,8 @@ def test_apply_studio_decision_maps_fields():
     assert qd["flux_prompt"] == "FLUX"
     assert qd["row_number"] == 7
     assert decision.visual_direction.get("caption_marker") == "You already know."
+    assert qd["topic_theme"] == "fear"
+    assert qd["angle"] == "confront"
 
 
 def test_apply_studio_decision_raises_on_unknown_top_pick():

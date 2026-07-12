@@ -408,6 +408,8 @@ def _apply_studio_decision(brief, decision, concepts_by_id):
         "flux_prompt": decision.visual_direction.get("flux_prompt", ""),
         "format": brief.format,
         "reel_scenes": concept.reel_scenes,
+        "topic_theme": brief.topic_theme,
+        "angle": brief.angle,
     }
 
 

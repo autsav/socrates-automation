@@ -99,8 +99,12 @@ def select_music(client, ctx, api_key, output_dir):
     except Exception as e:  # noqa: BLE001
         print(f"  [music-director] rank failed ({e}) — heuristic fallback")
     if chosen is None:
-        chosen = download_music._pick_from_pool(hits, ctx.get("mood", ""),
-                                                download_music._load_cache())
+        try:
+            chosen = download_music._pick_from_pool(hits, ctx.get("mood", ""),
+                                                    download_music._load_cache())
+        except Exception as e:  # noqa: BLE001 - never crash a reel
+            print(f"  [music-director] heuristic fallback failed ({e})")
+            chosen = None
     if chosen is None:
         return None
 
