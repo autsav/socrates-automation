@@ -16,5 +16,6 @@ def test_rel_path_outside_repo_is_basename():
 
 
 def test_rel_path_never_raises_on_junk():
-    # non-path-like input must not raise
-    assert pipeline._rel_path(12345) is not None or pipeline._rel_path(12345) is None
+    # non-path-like input must not raise and must yield a string or None
+    result = pipeline._rel_path(12345)
+    assert result is None or isinstance(result, str)

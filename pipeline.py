@@ -595,7 +595,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         )
         log.info(f"✅ Posted! ID: {post_id}")
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
-        mark_posted(post_row_id, post_id, None, str(reel_path))
+        mark_posted(post_row_id, post_id, None, _rel_path(reel_path))
         if post_id:
             try:
                 notifier = Notifier(cfg)
