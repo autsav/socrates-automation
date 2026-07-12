@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "start": "remotion studio",
+    "build": "tsc --noEmit",
     "render": "remotion render PovReel out/reel.mp4",
     "upgrade": "remotion upgrade",
     "test": "vitest run"

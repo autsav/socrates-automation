@@ -23,7 +23,11 @@ import { WordTime } from "./lib/wordAt";
 
 export { sceneFrames } from "./lib/sceneFrames";
 
-export interface PovReelProps {
+// `type` (not `interface`): a closed type alias is assignable to
+// `Record<string, unknown>`, which Remotion's <Composition> requires of its
+// component props. An interface is not (it can be augmented via declaration
+// merging), which is what caused the Root.tsx TS2322 errors.
+export type PovReelProps = {
   hook: string;
   quote: string;
   attribution: string;
