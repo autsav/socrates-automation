@@ -2,16 +2,18 @@ import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { AnimatedText } from "./AnimatedText";
 import { Palette } from "../styles/theme";
+import { WordTime } from "../lib/wordAt";
 
 /**
  * HookScene — the opening pattern-interrupt. Word-by-word spring reveal with a
  * subtle whole-scene zoom-in on entrance and a fade+scale out at the end so it
  * hands off cleanly to the quote.
  */
-export const HookScene: React.FC<{ text: string; palette: Palette }> = ({
-  text,
-  palette,
-}) => {
+export const HookScene: React.FC<{
+  text: string;
+  palette: Palette;
+  wordTimes?: WordTime[];
+}> = ({ text, palette, wordTimes }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -50,6 +52,7 @@ export const HookScene: React.FC<{ text: string; palette: Palette }> = ({
         palette={palette}
         fontSize={168}
         stagger={0.08}
+        wordTimes={wordTimes}
       />
     </div>
   );

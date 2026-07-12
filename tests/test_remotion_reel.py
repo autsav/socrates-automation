@@ -59,7 +59,10 @@ def test_clamp_duration_scales_with_quote_length_when_unset():
 
 # ── JSON bridge file ─────────────────────────────────────────────────────────
 
-def test_write_bridge_file_roundtrip(tmp_path):
+def test_write_bridge_file_roundtrip(tmp_path, monkeypatch):
+    # Isolate this test from a real ffmpeg on PATH — it asserts the exact
+    # (audio-agnostic) payload shape, so SFX synthesis is out of scope here.
+    monkeypatch.setattr(rr, "_synth_sfx", lambda d: None)
     p = tmp_path / "reel-data.json"
     out = rr.write_bridge_file(
         hook="Hook here",
@@ -84,6 +87,7 @@ def test_write_bridge_file_roundtrip(tmp_path):
         "beats": [],
         "voices": {"hook": None, "quote": None, "cta": None},
         "voiceDurations": {"hook": None, "quote": None, "cta": None},
+        "wordTimes": {"hook": [], "quote": [], "cta": []},
     }
 
 
@@ -174,6 +178,15 @@ def test_bridge_no_audio_has_empty_voices_no_music(tmp_path):
     assert data["voiceDurations"] == {"hook": None, "quote": None, "cta": None}
     assert data["beats"] == []
     assert "music" not in data
+
+
+def test_bridge_includes_wordtimes(tmp_path):
+    p = tmp_path / "reel-data.json"
+    hw = [{"w": "Hi", "start": 0.0, "end": 0.3}]
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p, hook_words=hw)
+    data = json.loads(p.read_text())
+    assert data["wordTimes"]["hook"] == hw
+    assert data["wordTimes"]["quote"] == [] and data["wordTimes"]["cta"] == []
 
 
 def test_bridge_three_voices_and_music_copied(tmp_path, monkeypatch):
@@ -289,3 +302,37 @@ def test_loudnorm_skips_without_ffmpeg(tmp_path, monkeypatch):
     monkeypatch.setattr(rr.subprocess, "run", boom)
     rr._loudnorm(src)
     assert src.read_bytes() == b"orig"  # untouched
+
+
+# ── SFX synthesis ────────────────────────────────────────────────────────────
+
+def test_synth_sfx_creates_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr.shutil, "which", lambda n: "/usr/bin/ffmpeg")
+
+    def fake_run(cmd, **k):
+        # cmd's last arg is the output path — create it
+        Path(cmd[-1]).write_bytes(b"WAV")
+
+        class _R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return _R()
+
+    monkeypatch.setattr(rr.subprocess, "run", fake_run)
+    out = rr._synth_sfx(tmp_path)
+    assert out == {"whoosh": "sfx-whoosh.wav", "impact": "sfx-impact.wav"}
+    assert (tmp_path / "sfx-whoosh.wav").exists() and (tmp_path / "sfx-impact.wav").exists()
+
+
+def test_synth_sfx_none_without_ffmpeg(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr.shutil, "which", lambda n: None)
+    assert rr._synth_sfx(tmp_path) is None
+
+
+def test_bridge_includes_sfx(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr, "_synth_sfx", lambda d: {"whoosh": "sfx-whoosh.wav", "impact": "sfx-impact.wav"})
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p)
+    data = json.loads(p.read_text())
+    assert data["sfx"] == {"whoosh": "sfx-whoosh.wav", "impact": "sfx-impact.wav"}

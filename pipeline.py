@@ -459,6 +459,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         # Remotion reel. Best-effort: any failure → that piece is simply absent
         # (the reel still renders; the ffmpeg fallback below makes zero TTS calls).
         hook_voice = quote_voice = cta_voice = music_path = None
+        hook_words = quote_words = cta_words = []
         try:
             if edge_tts_available():
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -474,6 +475,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     hook_voice = vo.get("hook_voice")
                     quote_voice = vo.get("quote_voice")
                     cta_voice = vo.get("cta_voice")
+                    hook_words = vo.get("hook_words") or []
+                    quote_words = vo.get("quote_words") or []
+                    cta_words = vo.get("cta_words") or []
         except Exception as e:
             log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
         try:
@@ -499,6 +503,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     quote_voice=quote_voice,
                     cta_voice=cta_voice,
                     music_path=music_path,
+                    hook_words=hook_words,
+                    quote_words=quote_words,
+                    cta_words=cta_words,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")

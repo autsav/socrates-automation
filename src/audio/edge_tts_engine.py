@@ -34,6 +34,39 @@ def get_voice_for_mood(mood: str) -> str:
     return VOICE_MAP.get(mood, DEFAULT_VOICE)
 
 
+def _srt_ts(s: str) -> float:
+    s = s.strip().replace(",", ".")
+    h, m, rest = s.split(":")
+    return int(h) * 3600 + int(m) * 60 + float(rest)
+
+
+def parse_word_srt(path: Path) -> list[dict]:
+    """Parse an edge-tts word-boundary SRT into [{w,start,end}] (seconds). []
+    if the file is missing or unparseable."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    words: list[dict] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return []
+    i = 0
+    while i < len(lines):
+        if "-->" in lines[i]:
+            try:
+                a, b = lines[i].split("-->")
+                text = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                if text:
+                    words.append({"w": text, "start": _srt_ts(a), "end": _srt_ts(b)})
+                i += 2
+                continue
+            except Exception:
+                pass
+        i += 1
+    return words
+
+
 def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path) -> bool:
     """
     Generate voiceover for a single scene via the edge-tts CLI.
@@ -47,7 +80,8 @@ def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path) 
     try:
         result = subprocess.run(
             ["edge-tts", "--voice", voice, "--text", text,
-             "--write-media", str(output_path)],
+             "--write-media", str(output_path),
+             "--write-subtitles", str(Path(output_path).with_suffix(".srt"))],
             capture_output=True, text=True, timeout=60,
         )
         if result.returncode == 0 and output_path.exists():
@@ -96,6 +130,9 @@ def prepare_reel_voiceover_edge_tts(
         "hook_voice": hook_path if hook_ok else None,
         "quote_voice": quote_path if quote_ok else None,
         "cta_voice": cta_path if cta_ok else None,
+        "hook_words": parse_word_srt(hook_path.with_suffix(".srt")) if hook_ok else [],
+        "quote_words": parse_word_srt(quote_path.with_suffix(".srt")) if quote_ok else [],
+        "cta_words": parse_word_srt(cta_path.with_suffix(".srt")) if cta_ok else [],
         "voice": voice,
     }
 

@@ -2,6 +2,7 @@ import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { AnimatedQuote } from "./AnimatedQuote";
 import { FONT_FAMILY, Palette } from "../styles/theme";
+import { WordTime } from "../lib/wordAt";
 
 /**
  * QuoteScene — the payoff. The quote reveals word-by-word (slightly gentler
@@ -14,7 +15,8 @@ export const QuoteScene: React.FC<{
   attribution: string;
   palette: Palette;
   beats?: number[];
-}> = ({ quote, attribution, palette, beats = [] }) => {
+  wordTimes?: WordTime[];
+}> = ({ quote, attribution, palette, beats = [], wordTimes }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -68,6 +70,7 @@ export const QuoteScene: React.FC<{
           beats={beats}
           fontSize={146}
           stagger={0.065}
+          wordTimes={wordTimes}
         />
       </div>
 
