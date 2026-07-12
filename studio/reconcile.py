@@ -13,6 +13,19 @@ GRAPH_URL = "https://graph.instagram.com/v22.0"
 log = logging.getLogger(__name__)
 
 
+def reconcile_token(row_id: int) -> str:
+    """Stable, unique, edit-surviving caption marker: '#sq' + base36(row_id)."""
+    n = int(row_id)
+    digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+    if n == 0:
+        return "#sq0"
+    s = ""
+    while n > 0:
+        n, r = divmod(n, 36)
+        s = digits[r] + s
+    return "#sq" + s
+
+
 def fetch_recent_media(token, ig_id, *, getter=requests.get):
     resp = getter(f"{GRAPH_URL}/{ig_id}/media",
                   params={"fields": "id,caption,timestamp", "access_token": token},

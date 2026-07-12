@@ -24,6 +24,7 @@ from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram,
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
 from src.core.data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
+from studio.reconcile import reconcile_token
 from src.analytics.ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 from src.analytics.hook_tracker import pick_best_hook
 from src.core.token_manager import get_valid_token_with_fallback
@@ -803,6 +804,12 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
             f"skipping to avoid a double-post"
         )
         return {"skipped": True, "reason": f"slot {slot} already claimed today"}
+
+    # Stamp a stable, edit-surviving reconcile marker on caption + proposal.
+    if studio_decision is not None and post_row_id is not None:
+        _token = reconcile_token(post_row_id)
+        quote_data["caption"] = f"{quote_data['caption']}\n{_token}"
+        studio_decision.visual_direction["caption_marker"] = _token
 
     # ── Step 5: Generate Reel (if reel mode or dry-run) ───────────────────────
     reel_path = None
