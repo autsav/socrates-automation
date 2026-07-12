@@ -34,6 +34,7 @@ export interface PovReelProps {
   voices?: { hook?: string; quote?: string; cta?: string };
   music?: string;
   voiceDurations?: { hook?: number; quote?: number; cta?: number };
+  sfx?: { whoosh?: string; impact?: string };
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -48,6 +49,7 @@ export const povReelDefaultProps: PovReelProps = {
   voices: {},
   music: undefined,
   voiceDurations: {},
+  sfx: {},
 };
 
 /** A brief hard white flash — a pattern interrupt at each scene boundary. */
@@ -77,6 +79,7 @@ export const PovReel: React.FC<PovReelProps> = ({
   voices = {},
   music,
   voiceDurations = {},
+  sfx = {},
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -168,6 +171,23 @@ export const PovReel: React.FC<PovReelProps> = ({
           volume={(f: number) => duckVolume(f, duckSpans)}
         />
       ) : null}
+      {sfx.whoosh ? (
+        <>
+          <Sequence from={hookF} durationInFrames={12} name="WhooshQuote">
+            <Audio src={staticFile(sfx.whoosh)} volume={0.35} />
+          </Sequence>
+          <Sequence from={quoteEnd} durationInFrames={12} name="WhooshCta">
+            <Audio src={staticFile(sfx.whoosh)} volume={0.35} />
+          </Sequence>
+        </>
+      ) : null}
+      {sfx.impact
+        ? beatFrames.map((bf, i) => (
+            <Sequence key={`impact-${i}`} from={bf} durationInFrames={8} name={`Impact${i}`}>
+              <Audio src={staticFile(sfx.impact!)} volume={0.28} />
+            </Sequence>
+          ))
+        : null}
     </AbsoluteFill>
   );
 };

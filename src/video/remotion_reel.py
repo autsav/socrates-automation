@@ -130,6 +130,37 @@ def _loudnorm(path: Path, timeout: int = 120) -> None:
             pass
 
 
+def _synth_sfx(dest_dir: Path) -> dict | None:
+    """Synthesize whoosh + impact SFX with ffmpeg into dest_dir. Best-effort;
+    returns {'whoosh':name,'impact':name} for the ones produced, else None."""
+    if not shutil.which("ffmpeg"):
+        return None
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    result: dict[str, str] = {}
+    whoosh = dest_dir / "sfx-whoosh.wav"
+    impact = dest_dir / "sfx-impact.wav"
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", "anoisesrc=d=0.4:c=pink:a=0.35",
+             "-af", "bandpass=f=1400:width_type=h:w=1800,afade=t=in:d=0.06,afade=t=out:st=0.24:d=0.16",
+             "-ac", "1", str(whoosh)],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and whoosh.exists():
+            result["whoosh"] = whoosh.name
+    except Exception:  # pragma: no cover - defensive
+        pass
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=85:duration=0.22",
+             "-af", "afade=t=out:st=0.03:d=0.19", "-ac", "1", str(impact)],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and impact.exists():
+            result["impact"] = impact.name
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return result or None
+
+
 def write_bridge_file(
     hook: str,
     quote: str,
@@ -200,6 +231,8 @@ def write_bridge_file(
             print(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
             beats = []
 
+    sfx = _synth_sfx(bridge_path.parent)
+
     payload = {
         "hook": hook or "",
         "quote": quote or "",
@@ -214,6 +247,8 @@ def write_bridge_file(
     }
     if music_name:
         payload["music"] = music_name
+    if sfx:
+        payload["sfx"] = sfx
 
     bridge_path.parent.mkdir(parents=True, exist_ok=True)
     bridge_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
