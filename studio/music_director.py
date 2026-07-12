@@ -69,3 +69,49 @@ def rank_tracks(client, ctx, hits) -> MusicPick:
     d = client.call("music_director", _PREFIX, role,
                     "Pick the best track now.", MUSIC_PICK_SCHEMA)
     return MusicPick.from_dict(d)
+
+
+def select_music(client, ctx, api_key, output_dir):
+    """compose query -> Pixabay search -> rank -> download. Returns the track
+    Path, or None to signal the caller to fall back. Never raises."""
+    from pathlib import Path
+
+    if not api_key:
+        return None
+
+    try:
+        direction = compose_query(client, ctx)
+    except Exception as e:  # noqa: BLE001 - never crash a reel
+        print(f"  [music-director] query failed ({e})")
+        return None
+
+    hits = download_music._search_pixabay_music(direction.search_query, api_key, per_page=20)
+    if not hits:
+        print("  [music-director] no Pixabay hits")
+        return None
+
+    chosen = None
+    try:
+        pick = rank_tracks(client, ctx, hits)
+        chosen = next((h for h in hits if str(h.get("id")) == pick.track_id), None)
+        if chosen is not None:
+            print(f"  [music-director] picked {pick.track_id}: {pick.rationale[:60]}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [music-director] rank failed ({e}) — heuristic fallback")
+    if chosen is None:
+        chosen = download_music._pick_from_pool(hits, ctx.get("mood", ""),
+                                                download_music._load_cache())
+    if chosen is None:
+        return None
+
+    url = download_music._pick_audio_url(chosen)
+    if not url:
+        print("  [music-director] chosen track has no download URL")
+        return None
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_path = out_dir / f"music_director_{ctx.get('mood', 'track')}.mp3"
+    if download_music._download_track(url, output_path):
+        return output_path
+    return None

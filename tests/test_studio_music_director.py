@@ -41,3 +41,58 @@ def test_rank_tracks_returns_pick():
     assert isinstance(pick, MusicPick)
     assert pick.track_id == "11"
     assert client.roles == ["music_director"]
+
+
+def test_select_music_none_without_api_key():
+    assert md.select_music(_SeqClient([]), _ctx(), "", "/tmp") is None
+
+
+def test_select_music_none_when_no_hits(monkeypatch):
+    monkeypatch.setattr(md.download_music, "_search_pixabay_music",
+                        lambda q, k, per_page=20: [])
+    client = _SeqClient([{"search_query": "x", "energy": "low",
+                          "bpm_range": [50, 60], "instruments": [], "avoid": []}])
+    assert md.select_music(client, _ctx(), "KEY", "/tmp") is None
+
+
+def test_select_music_downloads_agent_pick(tmp_path, monkeypatch):
+    hits = [{"id": 11, "tags": "cello", "duration": 30, "audio": "http://x/a.mp3"},
+            {"id": 22, "tags": "drums", "duration": 20, "audio": "http://x/b.mp3"}]
+    monkeypatch.setattr(md.download_music, "_search_pixabay_music",
+                        lambda q, k, per_page=20: hits)
+    captured = {}
+
+    def fake_dl(url, output_path):
+        captured["url"] = url
+        Path(output_path).write_bytes(b"ID3fake")
+        return True
+
+    monkeypatch.setattr(md.download_music, "_download_track", fake_dl)
+    client = _SeqClient([
+        {"search_query": "cello", "energy": "low", "bpm_range": [50, 60],
+         "instruments": ["cello"], "avoid": []},
+        {"track_id": "11", "rationale": "grief fits", "runner_up_id": "22"},
+    ])
+    out = md.select_music(client, _ctx(), "KEY", tmp_path)
+    assert out is not None and Path(out).exists()
+    assert captured["url"] == "http://x/a.mp3"  # the id=11 track the agent picked
+
+
+def test_select_music_unknown_id_falls_back_to_heuristic(tmp_path, monkeypatch):
+    hits = [{"id": 11, "tags": "cello", "duration": 30, "audio": "http://x/a.mp3"}]
+    monkeypatch.setattr(md.download_music, "_search_pixabay_music",
+                        lambda q, k, per_page=20: hits)
+    monkeypatch.setattr(md.download_music, "_load_cache", lambda: {})
+    picked = {}
+    monkeypatch.setattr(md.download_music, "_pick_from_pool",
+                        lambda h, mood, cache, pool_size=3: (picked.setdefault("used", True), h[0])[1])
+    monkeypatch.setattr(md.download_music, "_download_track",
+                        lambda url, output_path: (Path(output_path).write_bytes(b"ID3x"), True)[1])
+    client = _SeqClient([
+        {"search_query": "cello", "energy": "low", "bpm_range": [50, 60],
+         "instruments": [], "avoid": []},
+        {"track_id": "999", "rationale": "not in list"},  # unknown id
+    ])
+    out = md.select_music(client, _ctx(), "KEY", tmp_path)
+    assert out is not None
+    assert picked.get("used") is True  # heuristic fallback ran
