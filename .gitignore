@@ -43,3 +43,6 @@ logs/
 
 # Excel temp files
 ~$*.xlsx
+
+# Remotion render-produced SFX artifacts
+remotion/public/sfx-*.wav

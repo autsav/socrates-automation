@@ -6,7 +6,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { FONT_FAMILY, Palette } from "../styles/theme";
-import { wordAt, WordTime } from "../lib/wordAt";
+import { WordTime } from "../lib/wordAt";
 
 /**
  * AnimatedText — HUGE, bold, centered text that reveals word-by-word with
