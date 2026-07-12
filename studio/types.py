@@ -83,6 +83,36 @@ class Decision:
         return cls(**d)
 
 
+@dataclass
+class MusicDirection:
+    search_query: str
+    energy: str
+    bpm_range: list
+    instruments: list
+    avoid: list
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**d)
+
+
+@dataclass
+class MusicPick:
+    track_id: str
+    rationale: str
+    runner_up_id: str | None = None
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**d)
+
+
 def _obj(props, required):
     return {"type": "object", "additionalProperties": False,
             "properties": props, "required": required}
@@ -158,3 +188,17 @@ DECISION_SCHEMA = _obj({
     }, ["mood", "flux_prompt", "typography", "palette"]),
     "rationale": {"type": "string"},
 }, ["scores", "top_pick", "revision", "visual_direction", "rationale"])
+
+MUSIC_DIRECTION_SCHEMA = _obj({
+    "search_query": {"type": "string"},
+    "energy": {"type": "string", "enum": ["low", "medium", "high"]},
+    "bpm_range": {"type": "array", "items": {"type": "integer"}},
+    "instruments": {"type": "array", "items": {"type": "string"}},
+    "avoid": {"type": "array", "items": {"type": "string"}},
+}, ["search_query", "energy", "bpm_range", "instruments", "avoid"])
+
+MUSIC_PICK_SCHEMA = _obj({
+    "track_id": {"type": "string"},
+    "rationale": {"type": "string"},
+    "runner_up_id": {"type": ["string", "null"]},
+}, ["track_id", "rationale"])

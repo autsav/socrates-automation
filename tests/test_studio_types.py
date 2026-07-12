@@ -57,3 +57,21 @@ def test_creative_brief_quote_schema_matches_strategist_prompt_contract():
         assert key in quote_schema["properties"], key
     # Neither shape has every key, so nothing can be unconditionally required.
     assert quote_schema["required"] == []
+
+
+def test_music_direction_roundtrip():
+    from studio.types import MusicDirection, MUSIC_DIRECTION_SCHEMA
+    d = {"search_query": "somber cello adagio", "energy": "low",
+         "bpm_range": [55, 65], "instruments": ["cello"], "avoid": ["drums"]}
+    md = MusicDirection.from_dict(d)
+    assert md.search_query == "somber cello adagio"
+    assert md.to_dict() == d
+    assert MUSIC_DIRECTION_SCHEMA["properties"]["energy"]["enum"] == ["low", "medium", "high"]
+
+
+def test_music_pick_roundtrip_and_optional_runner_up():
+    from studio.types import MusicPick, MUSIC_PICK_SCHEMA
+    mp = MusicPick.from_dict({"track_id": "123", "rationale": "fits grief"})
+    assert mp.track_id == "123"
+    assert mp.runner_up_id is None
+    assert "track_id" in MUSIC_PICK_SCHEMA["required"]
