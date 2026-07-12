@@ -34,6 +34,15 @@ VOICE_MAP = {
 
 DEFAULT_VOICE = "en-US-ChristopherNeural"
 
+# ── Reel narration voice ──────────────────────────────────────────────────────
+# One consistent "wise grandfather / teacher" sage voice for all reel narration:
+# warm and authoritative, slowed and pitched down for a deep, deliberate,
+# Morgan-Freeman-adjacent delivery. Chosen by ear (sample "A2_Andrew_MAX"); see
+# docs/superpowers/specs/2026-07-12-reel-narration-voice-design.md.
+REEL_VOICE = "en-US-AndrewNeural"
+REEL_RATE = "-30%"    # slow, deliberate
+REEL_PITCH = "-14Hz"  # deep bass
+
 
 def get_voice_for_mood(mood: str) -> str:
     """Return the best edge-tts voice for a given mood."""
@@ -67,15 +76,19 @@ def _write_word_srt(path: Path, words: list[dict]) -> None:
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
-async def _edge_tts_synth(text: str, voice: str, media_path: Path) -> list[dict]:
+async def _edge_tts_synth(text: str, voice: str, media_path: Path,
+                          rate: str = "+0%", pitch: str = "+0Hz") -> list[dict]:
     """Synthesize ``text`` to ``media_path`` (MP3) via the edge-tts Python API,
     returning per-word timings [{w,start,end}] from WordBoundary events.
 
-    Offsets/durations arrive in 100-nanosecond ticks; divide by 1e7 for seconds.
+    ``rate``/``pitch`` are edge-tts prosody strings (e.g. "-30%" / "-14Hz") used
+    to slow and deepen the narration. Offsets/durations arrive in 100-nanosecond
+    ticks; divide by 1e7 for seconds.
     """
     import edge_tts  # imported lazily so the module loads even if absent
 
-    comm = edge_tts.Communicate(text, voice, boundary="WordBoundary")
+    comm = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch,
+                                boundary="WordBoundary")
     words: list[dict] = []
     media_path = Path(media_path)
     with open(media_path, "wb") as f:
@@ -118,13 +131,15 @@ def parse_word_srt(path: Path) -> list[dict]:
     return words
 
 
-def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path) -> bool:
+def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path,
+                                      rate: str = "+0%", pitch: str = "+0Hz") -> bool:
     """
     Generate voiceover for a single scene via the edge-tts Python API.
 
     Writes the MP3 to ``output_path`` and a **word-level** SRT alongside it
     (``.srt``) so downstream word-by-word text animation is synced to the
-    narration. Trims text if too long, same limit as the OpenAI backend.
+    narration. ``rate``/``pitch`` slow and deepen the voice (edge-tts prosody
+    strings). Trims text if too long, same limit as the OpenAI backend.
     Returns True on success.
     """
     if len(text) > 300:
@@ -133,7 +148,7 @@ def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path) 
 
     output_path = Path(output_path)
     try:
-        words = asyncio.run(_edge_tts_synth(text, voice, output_path))
+        words = asyncio.run(_edge_tts_synth(text, voice, output_path, rate, pitch))
     except Exception as e:
         print(f"  [edge-tts] Error: {e}")
         try:
@@ -173,16 +188,19 @@ def prepare_reel_voiceover_edge_tts(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    voice = get_voice_for_mood(mood)
-    print(f"  [edge-tts] Using voice '{voice}' for mood '{mood}'")
+    # One consistent "wise grandfather" sage voice for every reel, slowed and
+    # deepened — independent of mood. (mood still tags the log line.)
+    voice = REEL_VOICE
+    print(f"  [edge-tts] Using sage voice '{voice}' ({REEL_RATE}/{REEL_PITCH}) "
+          f"for mood '{mood}'")
 
     hook_path = out_dir / f"voice_hook_{timestamp}.mp3"
     quote_path = out_dir / f"voice_quote_{timestamp}.mp3"
     cta_path = out_dir / f"voice_cta_{timestamp}.mp3"
 
-    hook_ok = generate_scene_voiceover_edge_tts(hook_text, voice, hook_path)
-    quote_ok = generate_scene_voiceover_edge_tts(quote_text, voice, quote_path)
-    cta_ok = generate_scene_voiceover_edge_tts(cta_text, voice, cta_path)
+    hook_ok = generate_scene_voiceover_edge_tts(hook_text, voice, hook_path, REEL_RATE, REEL_PITCH)
+    quote_ok = generate_scene_voiceover_edge_tts(quote_text, voice, quote_path, REEL_RATE, REEL_PITCH)
+    cta_ok = generate_scene_voiceover_edge_tts(cta_text, voice, cta_path, REEL_RATE, REEL_PITCH)
 
     return {
         "hook_voice": hook_path if hook_ok else None,

@@ -17,7 +17,7 @@ SEAM = "src.audio.edge_tts_engine._edge_tts_synth"
 def _fake_synth(words):
     """Build an async stand-in for _edge_tts_synth that writes an mp3 and
     returns the given per-word timings."""
-    async def synth(text, voice, media_path):
+    async def synth(text, voice, media_path, rate="+0%", pitch="+0Hz"):
         Path(media_path).write_bytes(b"fake-mp3-bytes")
         return list(words)
     return synth
@@ -57,7 +57,7 @@ def test_generate_scene_voiceover_edge_tts_success(tmp_path):
 def test_generate_scene_voiceover_edge_tts_failure(tmp_path):
     output_path = tmp_path / "voice.mp3"
 
-    async def boom(text, voice, media_path):
+    async def boom(text, voice, media_path, rate="+0%", pitch="+0Hz"):
         raise RuntimeError("tts error")
 
     with patch(SEAM, side_effect=boom):
@@ -70,7 +70,7 @@ def test_generate_scene_voiceover_edge_tts_failure(tmp_path):
 def test_generate_scene_voiceover_edge_tts_empty_audio_is_failure(tmp_path):
     output_path = tmp_path / "voice.mp3"
 
-    async def empty(text, voice, media_path):
+    async def empty(text, voice, media_path, rate="+0%", pitch="+0Hz"):
         Path(media_path).write_bytes(b"")  # no audio
         return []
 
@@ -86,7 +86,7 @@ def test_generate_scene_voiceover_edge_tts_trims_long_text(tmp_path):
     long_text = "a" * 500
     captured = {}
 
-    async def synth(text, voice, media_path):
+    async def synth(text, voice, media_path, rate="+0%", pitch="+0Hz"):
         captured["text"] = text
         Path(media_path).write_bytes(b"fake")
         return []
@@ -110,7 +110,7 @@ def test_prepare_reel_voiceover_edge_tts_all_success(tmp_path):
             timestamp="20260101",
         )
 
-    assert result["voice"] == "en-US-ChristopherNeural"
+    assert result["voice"] == "en-US-AndrewNeural"  # the sage reel voice
     assert result["hook_voice"] is not None
     assert result["quote_voice"] is not None
     assert result["cta_voice"] is not None
@@ -120,10 +120,30 @@ def test_prepare_reel_voiceover_edge_tts_all_success(tmp_path):
     assert result["quote_words"][0]["w"] == "x"
 
 
+def test_prepare_reel_uses_sage_voice_and_prosody(tmp_path):
+    from src.audio.edge_tts_engine import REEL_VOICE, REEL_RATE, REEL_PITCH
+    seen = []
+
+    async def synth(text, voice, media_path, rate="+0%", pitch="+0Hz"):
+        seen.append((voice, rate, pitch))
+        Path(media_path).write_bytes(b"fake")
+        return []
+
+    with patch(SEAM, side_effect=synth):
+        prepare_reel_voiceover_edge_tts(
+            hook_text="h", quote_text="q", cta_text="c",
+            mood="epic_warrior",  # mood must NOT change the voice anymore
+            output_dir=tmp_path, timestamp="ts",
+        )
+
+    # All three scenes use the fixed sage voice + slow/deep prosody.
+    assert seen == [(REEL_VOICE, REEL_RATE, REEL_PITCH)] * 3
+
+
 def test_prepare_reel_voiceover_edge_tts_partial_failure(tmp_path):
     calls = {"n": 0}
 
-    async def synth(text, voice, media_path):
+    async def synth(text, voice, media_path, rate="+0%", pitch="+0Hz"):
         calls["n"] += 1
         if calls["n"] == 2:  # second scene (quote) fails
             raise RuntimeError("failed")
