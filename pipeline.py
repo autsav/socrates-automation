@@ -25,6 +25,8 @@ from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
 from src.core.data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
 from studio.reconcile import reconcile_token
+from studio.client import StudioClient
+from studio import music_director
 from src.analytics.ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 from src.analytics.hook_tracker import pick_best_hook
 from src.core.token_manager import get_valid_token_with_fallback
@@ -452,6 +454,35 @@ def _legacy_content(cfg):
     return quote_data, mood, controversy, caption_variant
 
 
+def _select_reel_music(cfg, quote_data, hook_text, mood):
+    """Pick the reel's music bed. Uses the Music Director agent when both
+    PIXABAY_API_KEY and ANTHROPIC_API_KEY are set (studio-aware via any theme/
+    angle already on quote_data); otherwise, or on any failure, falls back to the
+    mood-based track. Never raises."""
+    music_path = None
+    if getattr(cfg, "PIXABAY_API_KEY", "") and getattr(cfg, "ANTHROPIC_API_KEY", ""):
+        try:
+            client = StudioClient(cfg.ANTHROPIC_API_KEY)
+            if not client.over_daily_ceiling():
+                ctx = {
+                    "quote": quote_data.get("quote", ""),
+                    "hook": hook_text,
+                    "mood": mood,
+                    "studio": {"theme": quote_data.get("topic_theme", ""),
+                               "angle": quote_data.get("angle", "")},
+                }
+                music_path = music_director.select_music(
+                    client, ctx, cfg.PIXABAY_API_KEY, OUTPUT_DIR)
+        except Exception as e:  # noqa: BLE001 - never crash a reel
+            log.warning(f"  [music-director] unavailable ({e}) — mood fallback")
+    if music_path is None:
+        try:
+            music_path = download_music_for_mood(mood)
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"  [remotion] music bed unavailable ({e}) — VO-only reel")
+    return music_path
+
+
 def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                    dry_run: bool, manual: bool, access_token: str,
                    use_remotion: bool = False) -> dict:
@@ -498,11 +529,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     cta_words = vo.get("cta_words") or []
         except Exception as e:
             log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
-        try:
-            from src.audio.trending_audio import download_music_for_mood
-            music_path = download_music_for_mood(mood)
-        except Exception as e:
-            log.warning(f"  [remotion] music bed unavailable ({e}) — VO-only reel")
+        music_path = _select_reel_music(cfg, quote_data, hook_text, mood)
 
         try:
             from src.video.remotion_reel import generate_remotion_reel
