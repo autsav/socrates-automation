@@ -14,7 +14,8 @@ import { PulsingBg } from "./components/PulsingBg";
 import { HookScene } from "./components/HookScene";
 import { QuoteScene } from "./components/QuoteScene";
 import { CtaScene } from "./components/CtaScene";
-import { getPalette } from "./styles/theme";
+import { ColorGrade } from "./components/ColorGrade";
+import { getPalette, getGrade } from "./styles/theme";
 import { duckVolume, DuckSpan } from "./lib/duckVolume";
 import { sceneFrames } from "./lib/sceneFrames";
 
@@ -101,25 +102,39 @@ export const PovReel: React.FC<PovReelProps> = ({
 
   return (
     <AbsoluteFill style={{ background: palette.bg[0] }}>
-      {/* Continuous, attention-seeking background across the whole reel. */}
-      <PulsingBg palette={palette}>
-        <GradientBg palette={palette} />
-        <ParticleField palette={palette} />
-      </PulsingBg>
+      <ColorGrade grade={getGrade(mood)}>
+        {/* Continuous, attention-seeking background across the whole reel. */}
+        <PulsingBg palette={palette}>
+          <GradientBg palette={palette} />
+          <ParticleField palette={palette} />
+        </PulsingBg>
 
-      {/* Scene text, timed with Sequences. */}
-      <Sequence from={0} durationInFrames={hookF} name="Hook">
-        <HookScene text={hook} palette={palette} />
-      </Sequence>
+        {/* Scene text, timed with Sequences. */}
+        <Sequence from={0} durationInFrames={hookF} name="Hook">
+          <HookScene text={hook} palette={palette} />
+        </Sequence>
 
-      <Sequence from={hookF} durationInFrames={quoteF} name="Quote">
-        <QuoteScene
-          quote={quote}
-          attribution={attribution}
-          palette={palette}
-          beats={beats}
-        />
-      </Sequence>
+        <Sequence from={hookF} durationInFrames={quoteF} name="Quote">
+          <QuoteScene
+            quote={quote}
+            attribution={attribution}
+            palette={palette}
+            beats={beats}
+          />
+        </Sequence>
+
+        <Sequence
+          from={quoteEnd}
+          durationInFrames={durationInFrames - quoteEnd}
+          name="CTA"
+        >
+          <CtaScene text={cta} palette={palette} />
+        </Sequence>
+
+        {/* Pattern-interrupt flashes at the two scene boundaries. */}
+        <WhiteFlash at={hookF} />
+        <WhiteFlash at={quoteEnd} />
+      </ColorGrade>
 
       {voices.hook ? (
         <Sequence from={0} durationInFrames={hookF} name="HookVO">
@@ -146,18 +161,6 @@ export const PovReel: React.FC<PovReelProps> = ({
           volume={(f: number) => duckVolume(f, duckSpans)}
         />
       ) : null}
-
-      <Sequence
-        from={quoteEnd}
-        durationInFrames={durationInFrames - quoteEnd}
-        name="CTA"
-      >
-        <CtaScene text={cta} palette={palette} />
-      </Sequence>
-
-      {/* Pattern-interrupt flashes at the two scene boundaries. */}
-      <WhiteFlash at={hookF} />
-      <WhiteFlash at={quoteEnd} />
     </AbsoluteFill>
   );
 };
