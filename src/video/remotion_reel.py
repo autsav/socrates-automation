@@ -174,6 +174,9 @@ def write_bridge_file(
     quote_voice: Path | None = None,
     cta_voice: Path | None = None,
     music_path: Path | None = None,
+    hook_words: list | None = None,
+    quote_words: list | None = None,
+    cta_words: list | None = None,
 ) -> Path:
     """Write the reel-data.json bridge file the Remotion composition reads.
 
@@ -244,6 +247,11 @@ def write_bridge_file(
         "beats": beats,
         "voices": voices,
         "voiceDurations": voice_durations,
+        "wordTimes": {
+            "hook": hook_words or [],
+            "quote": quote_words or [],
+            "cta": cta_words or [],
+        },
     }
     if music_name:
         payload["music"] = music_name
@@ -269,6 +277,9 @@ def generate_remotion_reel(
     quote_voice: Path | None = None,
     cta_voice: Path | None = None,
     music_path: Path | None = None,
+    hook_words: list | None = None,
+    quote_words: list | None = None,
+    cta_words: list | None = None,
 ) -> Path | None:
     """
     Render a POV Reel via Remotion (React-based, headless-browser rendering).
@@ -305,6 +316,9 @@ def generate_remotion_reel(
         quote_voice=quote_voice,
         cta_voice=cta_voice,
         music_path=music_path,
+        hook_words=hook_words,
+        quote_words=quote_words,
+        cta_words=cta_words,
     )
 
     # 2. Invoke the Remotion CLI. --props takes a path to the JSON bridge file.

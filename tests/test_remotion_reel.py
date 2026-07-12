@@ -87,6 +87,7 @@ def test_write_bridge_file_roundtrip(tmp_path, monkeypatch):
         "beats": [],
         "voices": {"hook": None, "quote": None, "cta": None},
         "voiceDurations": {"hook": None, "quote": None, "cta": None},
+        "wordTimes": {"hook": [], "quote": [], "cta": []},
     }
 
 
@@ -177,6 +178,15 @@ def test_bridge_no_audio_has_empty_voices_no_music(tmp_path):
     assert data["voiceDurations"] == {"hook": None, "quote": None, "cta": None}
     assert data["beats"] == []
     assert "music" not in data
+
+
+def test_bridge_includes_wordtimes(tmp_path):
+    p = tmp_path / "reel-data.json"
+    hw = [{"w": "Hi", "start": 0.0, "end": 0.3}]
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p, hook_words=hw)
+    data = json.loads(p.read_text())
+    assert data["wordTimes"]["hook"] == hw
+    assert data["wordTimes"]["quote"] == [] and data["wordTimes"]["cta"] == []
 
 
 def test_bridge_three_voices_and_music_copied(tmp_path, monkeypatch):
