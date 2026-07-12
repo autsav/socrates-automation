@@ -1,4 +1,3 @@
-import types
 import src.core.instagram_poster as ip
 
 
