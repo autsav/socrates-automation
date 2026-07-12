@@ -6,6 +6,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { FONT_FAMILY, Palette } from "../styles/theme";
+import { wordAt, WordTime } from "../lib/wordAt";
 
 /**
  * AnimatedText — HUGE, bold, centered text that reveals word-by-word with
@@ -27,6 +28,8 @@ export interface AnimatedTextProps {
   weight?: number;
   /** Extra style overrides for the container. */
   maxWidthPct?: number;
+  /** Per-word VO timings (scene-relative seconds); drives karaoke reveal when present. */
+  wordTimes?: WordTime[];
 }
 
 /** Estimate a font size so the longest word and total text fill ~80%+ width
@@ -54,6 +57,7 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
   stagger = 0.08,
   weight = 900,
   maxWidthPct = 90,
+  wordTimes = [],
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -85,7 +89,10 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
       }}
     >
       {words.map((word, i) => {
-        const wordStart = startFrame + i * staggerFrames;
+        const wordStart =
+          wordTimes.length > i
+            ? Math.round(wordTimes[i].start * fps)
+            : startFrame + i * staggerFrames;
         const enter = spring({
           frame: frame - wordStart,
           fps,

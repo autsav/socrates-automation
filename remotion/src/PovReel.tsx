@@ -19,6 +19,7 @@ import { getPalette, getGrade } from "./styles/theme";
 import { duckVolume, DuckSpan } from "./lib/duckVolume";
 import { sceneFrames } from "./lib/sceneFrames";
 import { cameraScale } from "./lib/cameraZoom";
+import { WordTime } from "./lib/wordAt";
 
 export { sceneFrames } from "./lib/sceneFrames";
 
@@ -35,6 +36,7 @@ export interface PovReelProps {
   music?: string;
   voiceDurations?: { hook?: number; quote?: number; cta?: number };
   sfx?: { whoosh?: string; impact?: string };
+  wordTimes?: { hook?: WordTime[]; quote?: WordTime[]; cta?: WordTime[] };
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -50,6 +52,7 @@ export const povReelDefaultProps: PovReelProps = {
   music: undefined,
   voiceDurations: {},
   sfx: {},
+  wordTimes: {},
 };
 
 /** A brief hard white flash — a pattern interrupt at each scene boundary. */
@@ -80,6 +83,7 @@ export const PovReel: React.FC<PovReelProps> = ({
   music,
   voiceDurations = {},
   sfx = {},
+  wordTimes = {},
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -120,7 +124,7 @@ export const PovReel: React.FC<PovReelProps> = ({
 
           {/* Scene text, timed with Sequences. */}
           <Sequence from={0} durationInFrames={hookF} name="Hook">
-            <HookScene text={hook} palette={palette} />
+            <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
           </Sequence>
 
           <Sequence from={hookF} durationInFrames={quoteF} name="Quote">
@@ -129,6 +133,7 @@ export const PovReel: React.FC<PovReelProps> = ({
               attribution={attribution}
               palette={palette}
               beats={beats}
+              wordTimes={wordTimes.quote}
             />
           </Sequence>
 

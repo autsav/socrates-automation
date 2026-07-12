@@ -8,6 +8,7 @@ import {
 import { FONT_FAMILY, Palette } from "../styles/theme";
 import { autoFontSize } from "./AnimatedText";
 import { pickEmphasisIndex } from "../lib/emphasis";
+import { wordAt, WordTime } from "../lib/wordAt";
 
 export interface AnimatedQuoteProps {
   quote: string;
@@ -19,6 +20,8 @@ export interface AnimatedQuoteProps {
   fontSize?: number;
   /** Stagger between words, seconds. */
   stagger?: number;
+  /** Per-word VO timings (scene-relative seconds); drives karaoke reveal/highlight when present. */
+  wordTimes?: WordTime[];
 }
 
 /** Smallest scene-relative beat frame at or after `notBefore`, else null.
@@ -43,6 +46,7 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
   startFrame = 0,
   fontSize = 146,
   stagger = 0.065,
+  wordTimes = [],
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -50,6 +54,7 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
   const size = autoFontSize(quote, fontSize);
   const staggerFrames = stagger * fps;
   const emphasis = pickEmphasisIndex(words);
+  const activeWord = wordAt(frame / fps, wordTimes);
 
   // Frame at which the emphasis word has finished revealing.
   const emphasisRevealEnd = startFrame + emphasis * staggerFrames + 24;
@@ -111,7 +116,10 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
         }}
       >
         {words.map((word, i) => {
-          const wordStart = startFrame + i * staggerFrames;
+          const wordStart =
+            wordTimes.length > i
+              ? Math.round(wordTimes[i].start * fps)
+              : startFrame + i * staggerFrames;
           const enter = spring({
             frame: frame - wordStart,
             fps,
@@ -123,7 +131,7 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
           const opacity = interpolate(enter, [0, 0.5], [0, 1], {
             extrapolateRight: "clamp",
           });
-          const isEmphasis = i === emphasis;
+          const isEmphasis = i === (activeWord >= 0 ? activeWord : emphasis);
           const scale = isEmphasis ? punch : 1;
           const color = isEmphasis ? palette.accent : palette.text;
 
