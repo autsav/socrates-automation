@@ -130,6 +130,42 @@ def _loudnorm(path: Path, timeout: int = 120) -> None:
             pass
 
 
+def _emphasis_beats(words: list | None, max_beats: int = 2, min_gap: float = 1.2) -> list[float]:
+    """Derive impact-SFX beat times (seconds, relative to the quote scene) from
+    per-word timings.
+
+    Acoustic beat detection (``beat_sync.detect_beats``) finds nothing on a short
+    spoken-word clip via the ebur128 fallback, which left ``beats`` empty and the
+    impact SFX (and camera punches) never fired. When that happens we place the
+    impacts on the most *emphasized* words — the longest-spoken ones, which read
+    as stresses — enforcing a minimum gap so two impacts never stack. Word times
+    and beats share the same coordinate space (seconds from the quote scene
+    start), so these align exactly with the narration.
+
+    Returns up to ``max_beats`` timestamps, time-sorted. Empty if no usable words.
+    """
+    candidates: list[tuple[float, float]] = []
+    for w in words or []:
+        try:
+            start = float(w["start"])
+            dur = float(w["end"]) - start
+        except (KeyError, TypeError, ValueError):
+            continue
+        if dur <= 0:
+            continue
+        candidates.append((dur, round(start, 3)))
+
+    # Longest (most emphasized) first, then greedily keep beats that respect the gap.
+    candidates.sort(reverse=True)
+    picked: list[float] = []
+    for _dur, t in candidates:
+        if all(abs(t - p) >= min_gap for p in picked):
+            picked.append(t)
+        if len(picked) >= max_beats:
+            break
+    return sorted(picked)
+
+
 def _synth_sfx(dest_dir: Path) -> dict | None:
     """Synthesize whoosh + impact SFX with ffmpeg into dest_dir. Best-effort;
     returns {'whoosh':name,'impact':name} for the ones produced, else None."""
@@ -233,6 +269,14 @@ def write_bridge_file(
         except Exception as e:  # pragma: no cover - defensive
             print(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
             beats = []
+    # Acoustic detection returns nothing on short spoken clips (ebur128 fallback,
+    # librosa excluded). Derive emphasis beats from the quote word timings so the
+    # impact SFX + camera punches still fire, synced to the narration.
+    if not beats and quote_words:
+        beats = _emphasis_beats(quote_words)
+        if beats:
+            print(f"  [remotion] no acoustic beats — using {len(beats)} "
+                  f"emphasis beat(s) from quote word timing")
 
     sfx = _synth_sfx(bridge_path.parent)
 

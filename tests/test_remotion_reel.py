@@ -189,6 +189,58 @@ def test_bridge_includes_wordtimes(tmp_path):
     assert data["wordTimes"]["quote"] == [] and data["wordTimes"]["cta"] == []
 
 
+def test_emphasis_beats_picks_longest_and_respects_gap():
+    words = [
+        {"w": "a", "start": 0.0, "end": 0.1},    # short
+        {"w": "big", "start": 0.5, "end": 1.3},  # longest -> emphasis
+        {"w": "x", "start": 1.4, "end": 1.5},    # near 'big' -> dropped by gap
+        {"w": "two", "start": 2.0, "end": 2.7},  # 2nd longest, far enough
+    ]
+    beats = rr._emphasis_beats(words, max_beats=2, min_gap=1.2)
+    assert beats == [0.5, 2.0]  # word starts, time-sorted, gap-respected
+
+
+def test_emphasis_beats_empty_and_malformed():
+    assert rr._emphasis_beats([]) == []
+    assert rr._emphasis_beats(None) == []
+    assert rr._emphasis_beats([{"w": "x"}]) == []            # missing start/end
+    assert rr._emphasis_beats([{"w": "x", "start": 1.0, "end": 1.0}]) == []  # zero dur
+
+
+def test_bridge_falls_back_to_emphasis_beats_when_no_acoustic(tmp_path, monkeypatch):
+    # Acoustic detection finds nothing (ebur128 on short speech) ...
+    monkeypatch.setattr(rr.beat_sync, "detect_beats", lambda path, **k: [])
+    monkeypatch.setattr(rr, "_probe_duration", lambda path: 4.0)
+    vo = tmp_path / "quote.wav"
+    vo.write_bytes(b"RIFFfake")
+    qw = [
+        {"w": "First", "start": 0.1, "end": 0.45},
+        {"w": "yourself", "start": 0.8, "end": 1.24},   # emphasis
+        {"w": "do", "start": 2.5, "end": 3.0},          # emphasis, gap ok
+    ]
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file(
+        "h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p,
+        quote_voice=vo, quote_words=qw,
+    )
+    data = json.loads(p.read_text())
+    # ... so beats are derived from the quote word starts (non-empty, synced).
+    assert data["beats"], "expected emphasis-beat fallback"
+    word_starts = {w["start"] for w in qw}
+    assert all(b in word_starts for b in data["beats"])
+    assert len(data["beats"]) <= 2
+
+
+def test_bridge_no_fallback_when_no_word_times(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr.beat_sync, "detect_beats", lambda path, **k: [])
+    vo = tmp_path / "quote.wav"
+    vo.write_bytes(b"RIFFfake")
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30,
+                         bridge_path=p, quote_voice=vo)  # no quote_words
+    assert json.loads(p.read_text())["beats"] == []
+
+
 def test_bridge_three_voices_and_music_copied(tmp_path, monkeypatch):
     monkeypatch.setattr(rr.beat_sync, "detect_beats", lambda path, **k: [0.4, 1.1])
     monkeypatch.setattr(rr, "_probe_duration", lambda path: 2.5)

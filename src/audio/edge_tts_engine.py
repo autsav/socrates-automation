@@ -7,10 +7,16 @@ purely as a zero-cost fallback for src/audio/voiceover.py's OpenAI-based
 generation, so pipeline.py never has to skip voiceover entirely just because
 OPENAI_API_KEY is unset or the OpenAI call failed.
 
-Requires the CLI: pip install edge-tts
+Requires the package: pip install edge-tts
+
+Uses the edge-tts **Python API** (not the CLI): a single ``Communicate`` stream
+per scene writes the MP3 *and* yields per-word ``WordBoundary`` events, which we
+persist as a word-level SRT. This gives true word-by-word timings (the CLI only
+emits sentence-level cues) and drops the requirement that the ``edge-tts`` binary
+be on ``PATH`` — importing the package is enough.
 """
 
-import subprocess
+import asyncio
 from pathlib import Path
 
 # Mood -> edge-tts voice. Same gravitas rationale as voiceover.VOICE_MAP:
@@ -38,6 +44,51 @@ def _srt_ts(s: str) -> float:
     s = s.strip().replace(",", ".")
     h, m, rest = s.split(":")
     return int(h) * 3600 + int(m) * 60 + float(rest)
+
+
+def _fmt_srt_ts(t: float) -> str:
+    """Seconds -> SRT timestamp 'HH:MM:SS,mmm' (inverse of _srt_ts)."""
+    if t < 0:
+        t = 0.0
+    h = int(t // 3600)
+    m = int((t % 3600) // 60)
+    s = t - h * 3600 - m * 60
+    return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
+
+
+def _write_word_srt(path: Path, words: list[dict]) -> None:
+    """Write [{w,start,end}] as a word-level SRT that parse_word_srt round-trips."""
+    lines: list[str] = []
+    for i, w in enumerate(words, 1):
+        lines.append(str(i))
+        lines.append(f"{_fmt_srt_ts(w['start'])} --> {_fmt_srt_ts(w['end'])}")
+        lines.append(str(w["w"]))
+        lines.append("")
+    Path(path).write_text("\n".join(lines), encoding="utf-8")
+
+
+async def _edge_tts_synth(text: str, voice: str, media_path: Path) -> list[dict]:
+    """Synthesize ``text`` to ``media_path`` (MP3) via the edge-tts Python API,
+    returning per-word timings [{w,start,end}] from WordBoundary events.
+
+    Offsets/durations arrive in 100-nanosecond ticks; divide by 1e7 for seconds.
+    """
+    import edge_tts  # imported lazily so the module loads even if absent
+
+    comm = edge_tts.Communicate(text, voice, boundary="WordBoundary")
+    words: list[dict] = []
+    media_path = Path(media_path)
+    with open(media_path, "wb") as f:
+        async for chunk in comm.stream():
+            ctype = chunk["type"]
+            if ctype == "audio":
+                f.write(chunk["data"])
+            elif ctype == "WordBoundary":
+                start = chunk["offset"] / 1e7
+                end = (chunk["offset"] + chunk["duration"]) / 1e7
+                words.append({"w": chunk["text"], "start": round(start, 3),
+                              "end": round(end, 3)})
+    return words
 
 
 def parse_word_srt(path: Path) -> list[dict]:
@@ -69,33 +120,40 @@ def parse_word_srt(path: Path) -> list[dict]:
 
 def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path) -> bool:
     """
-    Generate voiceover for a single scene via the edge-tts CLI.
-    Trims text if too long, same limit as the OpenAI backend. Returns True on
-    success.
+    Generate voiceover for a single scene via the edge-tts Python API.
+
+    Writes the MP3 to ``output_path`` and a **word-level** SRT alongside it
+    (``.srt``) so downstream word-by-word text animation is synced to the
+    narration. Trims text if too long, same limit as the OpenAI backend.
+    Returns True on success.
     """
     if len(text) > 300:
         text = text[:297] + "..."
     text = text.replace("—", "-").replace("“", '"').replace("”", '"')
 
+    output_path = Path(output_path)
     try:
-        result = subprocess.run(
-            ["edge-tts", "--voice", voice, "--text", text,
-             "--write-media", str(output_path),
-             "--write-subtitles", str(Path(output_path).with_suffix(".srt"))],
-            capture_output=True, text=True, timeout=60,
-        )
-        if result.returncode == 0 and output_path.exists():
-            size_kb = output_path.stat().st_size / 1024
-            print(f"  [edge-tts] Saved {output_path.name} ({size_kb:.0f} KB)")
-            return True
-        print(f"  [edge-tts] Failed: {result.stderr[:200]}")
-        return False
-    except FileNotFoundError:
-        print("  [edge-tts] Not installed. Install: pip install edge-tts")
-        return False
+        words = asyncio.run(_edge_tts_synth(text, voice, output_path))
     except Exception as e:
         print(f"  [edge-tts] Error: {e}")
+        try:
+            output_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         return False
+
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        print("  [edge-tts] Failed: no audio produced")
+        try:
+            output_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return False
+
+    _write_word_srt(output_path.with_suffix(".srt"), words)
+    size_kb = output_path.stat().st_size / 1024
+    print(f"  [edge-tts] Saved {output_path.name} ({size_kb:.0f} KB, {len(words)} words)")
+    return True
 
 
 def prepare_reel_voiceover_edge_tts(
@@ -138,10 +196,10 @@ def prepare_reel_voiceover_edge_tts(
 
 
 def edge_tts_available() -> bool:
-    """Check whether the edge-tts CLI is installed (best-effort, no network)."""
+    """Check whether the edge-tts package is importable (no network, no PATH
+    dependency — we use the Python API, not the CLI binary)."""
     try:
-        result = subprocess.run(["edge-tts", "--help"],
-                                capture_output=True, timeout=10)
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+        import edge_tts  # noqa: F401
+        return True
+    except Exception:
         return False
