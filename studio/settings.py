@@ -19,6 +19,7 @@ ROLE_MODELS = {
     "engagement_strategist":  "claude-sonnet-4-6",
     "analytics_analyst":      "claude-haiku-4-5",
     "music_director":         "claude-sonnet-4-6",
+    "trend_scout":            "claude-sonnet-4-6",
 }
 ROLE_EFFORT = {
     "analyst":    "medium",
@@ -34,6 +35,7 @@ ROLE_EFFORT = {
     "engagement_strategist":  "medium",
     "analytics_analyst":      "low",
     "music_director":         "medium",
+    "trend_scout":            "medium",
 }
 N_CONCEPTS = 4
 DAILY_SPEND_CEILING_USD = 2.0

@@ -41,3 +41,5 @@ flask>=3.0.0
 
 # ── Voiceover generation ───────────────────────────────────────────────────────
 edge-tts>=6.1.0
+
+pytrends>=4.9.2  # Google Trends (optional; Trend Scout degrades to GNews if unavailable)
