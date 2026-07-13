@@ -42,3 +42,8 @@ def test_generate_hashtags_no_generic():
 def test_loopify_cta_ends_with_open_connector():
     out = pipeline._loopify("Save this for later.", "Stop wasting your evenings.")
     assert out.rstrip().endswith("—")
+
+
+def test_generate_hashtags_none_mood_does_not_raise():
+    tags = pipeline._generate_hashtags("stuck", None).split()
+    assert 3 <= len(tags) <= 5

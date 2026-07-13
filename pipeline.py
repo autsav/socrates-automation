@@ -305,6 +305,7 @@ _GENERIC_TAGS = {"#fyp", "#viral", "#reels", "#explore", "#foryou", "#trending"}
 
 def _generate_hashtags(audience: str, mood: str, max_tags: int = 5) -> str:
     """Build a 3–5 tag string: base + audience + mood tags, generic tags removed."""
+    mood = mood or ""
     candidates = list(_BASE_HASHTAGS[:2])
     for t in _HASHTAG_POOL.get(audience, []):
         candidates.append(t)
