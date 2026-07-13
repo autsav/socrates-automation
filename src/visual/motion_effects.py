@@ -150,11 +150,16 @@ class MotionEngine:
         return zoompan
 
     @staticmethod
-    def _eased_t_expr(easing: Easing, frames: int) -> str:
+    def _eased_t_expr(easing: Easing, frames: int, var: str = "in") -> str:
         """ffmpeg per-frame expression for eased progress t in [0,1], using
-        the same curves as Easing.apply() but evaluated by ffmpeg itself
-        (via the builtin 'in' frame-index variable) instead of Python."""
-        t = f"(in/{frames})"
+        the same curves as Easing.apply() but evaluated by ffmpeg itself.
+
+        ``var`` is the ffmpeg frame-index variable to divide by: the ``zoompan``
+        filter exposes ``in`` (input frame count), but the ``rotate`` filter has
+        NO ``in`` variable — it uses ``n`` (frame number). Passing ``in`` to
+        ``rotate`` makes ffmpeg fail to parse the angle expression ("Invalid
+        argument", -22), so the tilt/rotate path must use ``n``."""
+        t = f"({var}/{frames})"
         if easing == Easing.EASE_IN_OUT_QUAD:
             return f"({t}*{t}*(3-2*{t}))"
         if easing == Easing.EASE_OUT_EXPO:
@@ -199,8 +204,9 @@ class MotionEngine:
     def _build_tilt_expression(
         self, t_start: float, t_end: float, frames: int, easing: Easing
     ) -> str:
-        """Build rotation expression in radians."""
-        eased_t = self._eased_t_expr(easing, frames)
+        """Build rotation expression in radians. Uses ``n`` (the rotate filter's
+        frame variable) — the ``rotate`` filter has no ``in`` variable."""
+        eased_t = self._eased_t_expr(easing, frames, var="n")
         return f"({math.radians(t_start):.6f}+{math.radians(t_end - t_start):.6f}*{eased_t})"
 
     # ── Pre-computed Eased Keyframes (higher quality) ──────────────────────────
