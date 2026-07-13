@@ -2,8 +2,8 @@
 query from a reel's content and ranks the returned tracks by emotional fit.
 
 Two LLM calls (role ``music_director``): ``compose_query`` then ``rank_tracks``.
-The orchestrator ``select_music`` (Task 3) chains them with the Pixabay plumbing
-in ``src/audio/download_music.py`` and degrades gracefully.
+The orchestrator ``select_music`` (Task 3) chains them with the Jamendo source
+in ``src/audio/jamendo_music.py`` and degrades gracefully.
 """
 import json
 

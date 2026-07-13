@@ -7,7 +7,7 @@ import pipeline
 
 
 class _Cfg:
-    PIXABAY_API_KEY = ""
+    JAMENDO_CLIENT_ID = ""
     ANTHROPIC_API_KEY = "A"
 
 
@@ -34,7 +34,7 @@ def test_falls_back_to_mood_music_without_pixabay_key(monkeypatch):
 
 def test_uses_music_director_when_keys_present(monkeypatch):
     class _Cfg2:
-        PIXABAY_API_KEY = "P"
+        JAMENDO_CLIENT_ID = "P"
         ANTHROPIC_API_KEY = "A"
 
     monkeypatch.setattr(pipeline, "StudioClient",

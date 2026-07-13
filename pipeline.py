@@ -458,11 +458,11 @@ def _legacy_content(cfg):
 
 def _select_reel_music(cfg, quote_data, hook_text, mood):
     """Pick the reel's music bed. Uses the Music Director agent when both
-    PIXABAY_API_KEY and ANTHROPIC_API_KEY are set (studio-aware via any theme/
+    JAMENDO_CLIENT_ID and ANTHROPIC_API_KEY are set (studio-aware via any theme/
     angle already on quote_data); otherwise, or on any failure, falls back to the
     mood-based track. Never raises."""
     music_path = None
-    if getattr(cfg, "PIXABAY_API_KEY", "") and getattr(cfg, "ANTHROPIC_API_KEY", ""):
+    if getattr(cfg, "JAMENDO_CLIENT_ID", "") and getattr(cfg, "ANTHROPIC_API_KEY", ""):
         try:
             client = StudioClient(cfg.ANTHROPIC_API_KEY)
             if not client.over_daily_ceiling():
@@ -474,7 +474,7 @@ def _select_reel_music(cfg, quote_data, hook_text, mood):
                                "angle": quote_data.get("angle", "")},
                 }
                 music_path = music_director.select_music(
-                    client, ctx, cfg.PIXABAY_API_KEY, OUTPUT_DIR)
+                    client, ctx, cfg.JAMENDO_CLIENT_ID, OUTPUT_DIR)
         except Exception as e:  # noqa: BLE001 - never crash a reel
             log.warning(f"  [music-director] unavailable ({e}) — mood fallback")
     if music_path is None:
