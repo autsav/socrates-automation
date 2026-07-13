@@ -3,9 +3,50 @@
 Google Trends (via optional pytrends) and GNews headlines. Every function
 degrades to [] on any error so a reel never fails for lack of a trend.
 """
+import re
+
 import requests
 
 GNEWS_API = "https://gnews.io/api/v4/top-headlines"
+
+# Deterministic safety backstop (defense-in-depth on top of the agent's prompt
+# rules): topics/hooks containing any of these whole words are treated as unsafe
+# for a stoic-philosophy brand and dropped / forced to the evergreen hook.
+# Whole-word matching (\b) avoids false positives like war->warrior/warm/reward.
+_UNSAFE_TERMS = (
+    # death / violence
+    "killed", "killing", "kills", "dead", "death", "deaths", "murder", "murdered",
+    "shooting", "shooter", "shot", "stabbing", "stabbed", "massacre", "suicide",
+    "homicide", "gunman", "assassinated",
+    # war / conflict
+    "war", "warfare", "invasion", "invaded", "airstrike", "airstrikes", "missile",
+    "missiles", "bombing", "bombed", "troops", "hostage", "hostages", "genocide",
+    "terror", "terrorist", "terrorism", "militants", "gaza", "ukraine", "israel", "hamas",
+    # hard politics
+    "election", "elections", "president", "presidential", "senate", "congress",
+    "parliament", "republican", "democrat", "democrats", "trump", "biden", "putin",
+    "impeach", "coup",
+    # disaster
+    "earthquake", "hurricane", "wildfire", "wildfires", "flood", "floods", "tornado",
+    "disaster", "evacuation", "evacuated", "crash", "crashed", "derailment", "deadly",
+    # crime / legal
+    "arrested", "arrest", "assault", "rape", "raped", "abuse", "lawsuit", "indicted",
+    "charged", "verdict", "guilty", "fraud", "scandal",
+    # medical / tragedy
+    "cancer", "outbreak", "pandemic", "overdose", "dies", "died", "victim", "victims",
+    "tragedy", "funeral", "mourning", "epidemic",
+)
+
+_UNSAFE_RE = re.compile(r"\b(" + "|".join(re.escape(t) for t in _UNSAFE_TERMS) + r")\b",
+                        re.IGNORECASE)
+
+
+def is_unsafe(text) -> bool:
+    """True if `text` contains an unsafe whole word (see _UNSAFE_TERMS). Safe on
+    empty/None input."""
+    if not text:
+        return False
+    return _UNSAFE_RE.search(str(text)) is not None
 
 
 def _pytrends_daily(limit):
@@ -46,12 +87,12 @@ def fetch_trends(cfg, limit=20):
     out, seen = [], set()
     for topic in google_trends(15):
         k = (topic or "").strip().lower()
-        if k and k not in seen:
+        if k and k not in seen and not is_unsafe(topic):
             seen.add(k)
             out.append({"topic": topic, "source": "google_trends"})
     for title in gnews_headlines(getattr(cfg, "GNEWS_API_KEY", ""), 10):
         k = (title or "").strip().lower()
-        if k and k not in seen:
+        if k and k not in seen and not is_unsafe(title):
             seen.add(k)
             out.append({"topic": title, "source": "gnews"})
     return out[:limit]

@@ -574,9 +574,16 @@ def _apply_trend_scout(cfg, quote_data):
                 "audience": quote_data.get("audience", "")}
         th = _trend_pick(cfg, candidates, qctx)
         if th and th.used and th.hook:
-            quote_data["hook"] = th.hook
-            quote_data["bridge"] = th.bridge
-            log.info(f"  [trend-scout] {th.source}:{th.topic[:40]!r} -> trending hook set")
+            # Deterministic safety backstop: even if the agent slips through an
+            # unsafe topic/hook, drop it and stay on the evergreen hook.
+            from src.content.trend_sources import is_unsafe
+            if is_unsafe(th.hook) or is_unsafe(th.topic) or is_unsafe(th.bridge):
+                log.warning(f"  [trend-scout] rejected unsafe hook ({th.topic[:40]!r}) "
+                            f"— evergreen fallback")
+            else:
+                quote_data["hook"] = th.hook
+                quote_data["bridge"] = th.bridge
+                log.info(f"  [trend-scout] {th.source}:{th.topic[:40]!r} -> trending hook set")
         else:
             log.info("  [trend-scout] no safe bridge -> evergreen hook")
     except Exception as e:  # noqa: BLE001 - never crash a reel
