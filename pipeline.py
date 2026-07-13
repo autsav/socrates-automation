@@ -543,6 +543,47 @@ def _injected_content(path: str, cfg) -> tuple[dict, str]:
     return quote_data, mood
 
 
+def _trend_fetch(cfg):
+    from src.content import trend_sources
+    return trend_sources.fetch_trends(cfg)
+
+
+def _trend_pick(cfg, candidates, quote_ctx):
+    from studio.client import StudioClient
+    from studio import trend_scout
+    client = StudioClient(cfg.ANTHROPIC_API_KEY)
+    if client.over_daily_ceiling():
+        return None
+    return trend_scout.pick_hook(client, candidates, quote_ctx)
+
+
+def _apply_trend_scout(cfg, quote_data):
+    """Source a trending hook+bridge and set quote_data['hook']/['bridge'] when
+    GNEWS_API_KEY + ANTHROPIC_API_KEY are present. Skips injected content (already
+    has a bridge). Never raises; unchanged on any failure or used=false."""
+    if quote_data.get("bridge"):
+        return quote_data
+    if not (getattr(cfg, "GNEWS_API_KEY", "") and getattr(cfg, "ANTHROPIC_API_KEY", "")):
+        return quote_data
+    try:
+        candidates = _trend_fetch(cfg)
+        if not candidates:
+            log.info("  [trend-scout] no trends available — evergreen hook")
+            return quote_data
+        qctx = {"quote": quote_data.get("quote", ""), "theme": quote_data.get("mood", ""),
+                "audience": quote_data.get("audience", "")}
+        th = _trend_pick(cfg, candidates, qctx)
+        if th and th.used and th.hook:
+            quote_data["hook"] = th.hook
+            quote_data["bridge"] = th.bridge
+            log.info(f"  [trend-scout] {th.source}:{th.topic[:40]!r} -> trending hook set")
+        else:
+            log.info("  [trend-scout] no safe bridge -> evergreen hook")
+    except Exception as e:  # noqa: BLE001 - never crash a reel
+        log.warning(f"  [trend-scout] unavailable ({e}) - evergreen")
+    return quote_data
+
+
 def _select_reel_music(cfg, quote_data, hook_text, mood):
     """Pick the reel's music bed. Uses the Music Director agent when both
     JAMENDO_CLIENT_ID and ANTHROPIC_API_KEY are set (studio-aware via any theme/
@@ -806,10 +847,15 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     caption_variant = -1
     if content:
         log.info(f"Step 1: Injected content from {content}")
-        quote_data, mood = _injected_content(content, cfg)
-        studio_decision = None
-        controversy = ""
-        caption_variant = -1
+        try:
+            quote_data, mood = _injected_content(content, cfg)
+        except Exception as e:  # noqa: BLE001
+            log.error(f"--content unreadable ({e}) — falling back to legacy")
+            content = None
+        else:
+            studio_decision = None
+            controversy = ""
+            caption_variant = -1
     elif studio:
         log.info("Step 1: AI Creative Studio...")
         try:
@@ -832,6 +878,8 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     if not content and studio_decision is None:
         log.info("Step 1: Reading quote + legacy templated content...")
         quote_data, mood, controversy, caption_variant = _legacy_content(cfg)
+
+    quote_data = _apply_trend_scout(cfg, quote_data)
 
     # ── Phase 1: Inject viral engagement into caption ───────────────────────────
     bait = CommentBait(audience=quote_data["audience"], mood=mood)
