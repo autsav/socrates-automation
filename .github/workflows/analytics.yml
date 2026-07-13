@@ -89,6 +89,22 @@ jobs:
             python -m src.analytics.metrics
           fi
 
+      - name: Self-improving loop — apply approvals, then propose
+        if: github.event_name != 'pull_request'
+        env:
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Act on any approve/reject taps from the previous cycle, then propose
+          # fresh prompt improvements. Both are best-effort — never fail the job.
+          python optimize.py --apply-decisions || echo "apply-decisions skipped/failed (non-blocking)"
+          python optimize.py --run || echo "optimizer run skipped/failed (non-blocking)"
+
+      - name: Optimizer dry-run (PR safety check)
+        if: github.event_name == 'pull_request'
+        run: python optimize.py --dry-run || echo "optimizer dry-run failed (non-blocking)"
+
       - name: Commit SQLite database back to repo
         if: github.event_name != 'pull_request'
         run: |

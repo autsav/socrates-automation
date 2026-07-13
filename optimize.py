@@ -15,10 +15,15 @@ from src.optimizer import loop, registry, experiments, assets
 from src.optimizer.proposers import prompt_critic
 
 
-def _default_notify(msg):
+def _default_surface(proposal, msg):
+    """Send the proposal to Telegram with inline approve/reject buttons keyed by
+    the challenger version id, and record it pending so --apply-decisions can act."""
     from config import Config
     from src.core.notifier import Notifier
-    Notifier(Config()).send(msg)
+    from src.core import approval
+    vid = proposal["challenger_version_id"]
+    approval.record_pending(vid)
+    Notifier(Config()).send_with_buttons(msg, approval.approve_reject_buttons(vid))
 
 
 def _default_client():
@@ -72,7 +77,10 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
             msg = loop.format_proposal_message(p)
             print(msg)
             if args.run:
-                (notify or _default_notify)(msg)
+                if notify is not None:
+                    notify(msg)              # test seam
+                else:
+                    _default_surface(p, msg)  # real Telegram w/ approve/reject buttons
         print(f"\n{len(proposals)} proposal(s).")
         return 0
 
