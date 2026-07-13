@@ -348,6 +348,9 @@ def generate_remotion_reel(
     hook_words: list | None = None,
     quote_words: list | None = None,
     cta_words: list | None = None,
+    bridge: str = "",
+    bridge_voice: Path | None = None,
+    bridge_words: list | None = None,
 ) -> Path | None:
     """
     Render a POV Reel via Remotion (React-based, headless-browser rendering).
@@ -372,7 +375,7 @@ def generate_remotion_reel(
     duration = _clamp_duration(quote, duration)
 
     # 1. Write the JSON bridge — the ONLY channel between Python and Remotion.
-    bridge = write_bridge_file(
+    bridge_file = write_bridge_file(
         hook=hook,
         quote=quote,
         attribution=attribution,
@@ -387,6 +390,9 @@ def generate_remotion_reel(
         hook_words=hook_words,
         quote_words=quote_words,
         cta_words=cta_words,
+        bridge=bridge,
+        bridge_voice=bridge_voice,
+        bridge_words=bridge_words,
     )
 
     # 2. Invoke the Remotion CLI. --props takes a path to the JSON bridge file.
@@ -397,7 +403,7 @@ def generate_remotion_reel(
         ENTRY_POINT,
         COMPOSITION_ID,
         str(output_path),
-        f"--props={bridge}",
+        f"--props={bridge_file}",
         "--log=error",
     ]
 

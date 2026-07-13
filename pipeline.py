@@ -44,7 +44,11 @@ from src.wallpapers.composer import WallpaperComposer
 # ── Phase 3 Audio Engineering ──────────────────────────────────────────────────
 from src.audio.trending_audio import TrendingAudioEngine, download_music_for_mood
 from src.audio.voiceover_engine import VoiceoverEngine, generate_enhanced_voiceover
-from src.audio.edge_tts_engine import prepare_reel_voiceover_edge_tts, edge_tts_available
+from src.audio.edge_tts_engine import (
+    prepare_reel_voiceover_edge_tts, edge_tts_available,
+    generate_scene_voiceover_edge_tts, parse_word_srt,
+    REEL_VOICE, REEL_RATE, REEL_PITCH,
+)
 
 # ── Viral Growth: POV text Reels (zero-cost — ffmpeg + Pillow only) ───────────
 from src.video.pov_reel_generator import generate_pov_reel
@@ -614,7 +618,33 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     cta_words = vo.get("cta_words") or []
         except Exception as e:
             log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
+
+        # Optional Bridge scene VO (Hook -> Bridge -> Quote -> CTA). Best-effort:
+        # any failure leaves bridge_voice/bridge_words empty — the Bridge scene
+        # still renders (text-only, no narration), it just plays silent.
+        bridge_text = quote_data.get("bridge", "")
+        bridge_voice = None
+        bridge_words = []
+        if bridge_text:
+            try:
+                if edge_tts_available():
+                    ts_bridge = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    bridge_path = OUTPUT_DIR / f"voice_bridge_{ts_bridge}.mp3"
+                    bridge_ok = generate_scene_voiceover_edge_tts(
+                        bridge_text, REEL_VOICE, bridge_path, REEL_RATE, REEL_PITCH)
+                    if bridge_ok:
+                        bridge_voice = bridge_path
+                        bridge_words = parse_word_srt(bridge_path.with_suffix(".srt"))
+            except Exception as e:
+                log.warning(f"  [remotion] bridge voiceover unavailable ({e}) — bridge silent")
+
         music_path = _select_reel_music(cfg, quote_data, hook_text, mood)
+
+        # Finalize hook/CTA with the viral-formula helpers just before render —
+        # idempotent for already-finalized (injected) content, and guarantees
+        # every renderer sees a formula-compliant hook/CTA regardless of source.
+        hook_text = _enforce_hook_len(quote_data.get("hook") or hook_text)
+        cta_text = _loopify(cta_text, hook_text)
 
         try:
             from src.video.remotion_reel import generate_remotion_reel
@@ -626,7 +656,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     hook=hook_text,
                     quote=quote_data["quote"],
                     attribution="— Socrates",
-                    cta=_pick_cta(quote_data["row_number"]),
+                    cta=cta_text,
                     mood=mood,
                     output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
                     hook_voice=hook_voice,
@@ -636,6 +666,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     hook_words=hook_words,
                     quote_words=quote_words,
                     cta_words=cta_words,
+                    bridge=bridge_text,
+                    bridge_voice=bridge_voice,
+                    bridge_words=bridge_words,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
