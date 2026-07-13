@@ -23,6 +23,7 @@ class Config:
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
     PIXABAY_API_KEY: str = ""        # Optional — royalty-free music downloads
+    JAMENDO_CLIENT_ID: str = ""      # Optional — Jamendo royalty-free music
 
     # ── Voiceover (optional) ────────────────────────────────────────────────
     OPENAI_API_KEY: str = ""         # OpenAI TTS — text-to-speech narration
@@ -43,6 +44,7 @@ class Config:
         self.CLOUDINARY_API_KEY    = self._get("CLOUDINARY_API_KEY")
         self.CLOUDINARY_API_SECRET = self._get("CLOUDINARY_API_SECRET")
         self.PIXABAY_API_KEY         = self._get_opt("PIXABAY_API_KEY")
+        self.JAMENDO_CLIENT_ID       = self._get_opt("JAMENDO_CLIENT_ID")
         self.OPENAI_API_KEY          = self._get_opt("OPENAI_API_KEY")
         self.TELEGRAM_BOT_TOKEN      = self._get_opt("TELEGRAM_BOT_TOKEN")
         self.TELEGRAM_CHAT_ID        = self._get_opt("TELEGRAM_CHAT_ID")
