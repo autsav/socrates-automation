@@ -1,9 +1,29 @@
 {
-  "hook": "One thing. Just one.",
-  "quote": "People are not disturbed by things, but by the view they take of them.",
+  "hook": "Test hook line here.",
+  "quote": "The unexamined life is not worth living.",
   "attribution": "— Socrates",
-  "cta": "Send this to someone who needs to hear it today.",
+  "cta": "Save this.",
   "mood": "dark_philosophical",
-  "duration": 8.778,
-  "fps": 30
+  "duration": 8.0,
+  "fps": 30,
+  "beats": [],
+  "voices": {
+    "hook": null,
+    "quote": null,
+    "cta": null
+  },
+  "voiceDurations": {
+    "hook": null,
+    "quote": null,
+    "cta": null
+  },
+  "wordTimes": {
+    "hook": [],
+    "quote": [],
+    "cta": []
+  },
+  "sfx": {
+    "whoosh": "sfx-whoosh.wav",
+    "impact": "sfx-impact.wav"
+  }
 }
