@@ -11,8 +11,8 @@ class _Cfg:
     ANTHROPIC_API_KEY = "A"
 
 
-def test_falls_back_to_mood_music_without_pixabay_key(monkeypatch):
-    # No Pixabay key -> music director must NOT be invoked; mood path used.
+def test_falls_back_to_mood_music_without_jamendo_key(monkeypatch):
+    # No Jamendo key -> music director must NOT be invoked; mood path used.
     called = {"director": False, "mood": False}
 
     def fake_director(*a, **k):

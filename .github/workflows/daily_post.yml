@@ -94,16 +94,6 @@ jobs:
           key: music-${{ steps.week.outputs.week }}
           restore-keys: music-
 
-      - name: Download royalty-free music tracks
-        env:
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        run: |
-          if [ -n "$PIXABAY_API_KEY" ]; then
-            python -m src.audio.download_music
-          else
-            echo "⚠️ PIXABAY_API_KEY not set — using generated audio fallback"
-          fi
-
       - name: Verify tracked SQLite database present
         run: |
           if [ ! -f "data/pipeline.db" ]; then
@@ -144,7 +134,7 @@ jobs:
           CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
-          PIXABAY_API_KEY:        ${{ secrets.PIXABAY_API_KEY }}
+          JAMENDO_CLIENT_ID:      ${{ secrets.JAMENDO_CLIENT_ID }}
           OPENAI_API_KEY:         ${{ secrets.OPENAI_API_KEY }}
           TELEGRAM_BOT_TOKEN:     ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:       ${{ secrets.TELEGRAM_CHAT_ID }}
