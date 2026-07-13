@@ -501,6 +501,44 @@ def _legacy_content(cfg):
     return quote_data, mood, controversy, caption_variant
 
 
+def _injected_content(path: str, cfg) -> tuple[dict, str]:
+    """Load a hand-crafted/external reel content JSON, filling any missing field
+    from the existing generators. Bypasses excel + studio. Returns (quote_data, mood)."""
+    import json as _json
+    data = _json.loads(Path(path).read_text())
+    audience = (data.get("audience") or "stuck").strip().lower()
+    row_number = data.get("row_number")  # may be None -> excel not marked
+    rn_seed = row_number if isinstance(row_number, int) else 0
+    mood = data.get("mood") or "dark_philosophical"
+
+    hook = _enforce_hook_len(data.get("hook") or _generate_psychology_hook(audience, rn_seed))
+    cta = data.get("cta") or _pick_cta(rn_seed)
+    cta = _loopify(cta, hook)
+
+    hashtags = data.get("hashtags")
+    if isinstance(hashtags, list) and hashtags:
+        tag_str = " ".join(hashtags[:5])
+    else:
+        tag_str = _generate_hashtags(audience, mood)
+
+    caption = data.get("caption") or data.get("quote", "")
+    caption = f"{caption}\n\n{tag_str}"
+
+    quote_data = {
+        "quote": data.get("quote", ""),
+        "audience": audience,
+        "caption": caption,
+        "mood": mood,
+        "hook": hook,
+        "bridge": data.get("bridge", ""),
+        "cta": cta,
+        "attribution": data.get("attribution", "— Socrates"),
+        "row_number": row_number,
+        "source": data.get("source", "injected"),
+    }
+    return quote_data, mood
+
+
 def _select_reel_music(cfg, quote_data, hook_text, mood):
     """Pick the reel's music bed. Uses the Music Director agent when both
     JAMENDO_CLIENT_ID and ANTHROPIC_API_KEY are set (studio-aware via any theme/
@@ -706,7 +744,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
                   carousel: bool = False, pov: bool = False, remotion: bool = False,
-                  seed: int | None = None):
+                  seed: int | None = None, content: str | None = None):
     # --remotion is a POV text-reel rendered with the Remotion project (falls
     # back to the ffmpeg POV generator if Node/Remotion isn't available).
     if remotion:
@@ -728,10 +766,18 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         log.info(f"⏭ Slot {slot} already posted today — skipping")
         return {"skipped": True, "reason": f"slot {slot} already posted today"}
 
-    # ── Content stage: AI Creative Studio (with legacy fallback) ──────────────
+    # ── Content stage: injected JSON > AI Creative Studio > legacy fallback ────
     studio_decision = None
     flux_override = ""
-    if studio:
+    controversy = ""
+    caption_variant = -1
+    if content:
+        log.info(f"Step 1: Injected content from {content}")
+        quote_data, mood = _injected_content(content, cfg)
+        studio_decision = None
+        controversy = ""
+        caption_variant = -1
+    elif studio:
         log.info("Step 1: AI Creative Studio...")
         try:
             bundle = _studio_stage(cfg, slot)
@@ -750,7 +796,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         else:
             log.info("  [studio] fell back to legacy templated path")
 
-    if studio_decision is None:
+    if not content and studio_decision is None:
         log.info("Step 1: Reading quote + legacy templated content...")
         quote_data, mood, controversy, caption_variant = _legacy_content(cfg)
 
@@ -1154,6 +1200,9 @@ if __name__ == "__main__":
     parser.add_argument("--remotion", action="store_true", help="Generate a POV text Reel with Remotion (professional physics-driven text animations). Implies --pov; falls back to the ffmpeg POV generator if Node/Remotion isn't installed.")
     parser.add_argument("--batch", action="store_true", help="Generate a week's worth of POV Reels (30) in one run and exit — does not post to Instagram.")
     parser.add_argument("--seed", type=int, default=None, help="Force a FLUX image seed for reproducible backgrounds.")
+    parser.add_argument("--content", type=str, default=None,
+                        help="Path to a JSON file of hand-crafted reel content "
+                             "(hook/bridge/quote/cta/caption/hashtags/mood); bypasses excel+studio.")
     args = parser.parse_args()
 
     if args.batch:
@@ -1162,7 +1211,8 @@ if __name__ == "__main__":
     elif args.manual:
         # --manual implies --reel (generate video) but skips API posting
         run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio,
-                     pov=args.pov, remotion=args.remotion, seed=args.seed)
+                     pov=args.pov, remotion=args.remotion, seed=args.seed, content=args.content)
     else:
         run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio,
-                     carousel=args.carousel, pov=args.pov, remotion=args.remotion, seed=args.seed)
+                     carousel=args.carousel, pov=args.pov, remotion=args.remotion, seed=args.seed,
+                     content=args.content)
