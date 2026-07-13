@@ -113,6 +113,23 @@ class MusicPick:
         return cls(**d)
 
 
+@dataclass
+class TrendHook:
+    used: bool
+    topic: str = ""
+    source: str = ""
+    hook: str = ""
+    bridge: str = ""
+    rationale: str = ""
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**d)
+
+
 def _obj(props, required):
     return {"type": "object", "additionalProperties": False,
             "properties": props, "required": required}
@@ -202,3 +219,12 @@ MUSIC_PICK_SCHEMA = _obj({
     "rationale": {"type": "string"},
     "runner_up_id": {"type": ["string", "null"]},
 }, ["track_id", "rationale"])
+
+TREND_HOOK_SCHEMA = _obj({
+    "used": {"type": "boolean"},
+    "topic": {"type": "string"},
+    "source": {"type": "string"},
+    "hook": {"type": "string"},
+    "bridge": {"type": "string"},
+    "rationale": {"type": "string"},
+}, ["used"])
