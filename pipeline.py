@@ -264,6 +264,8 @@ _CTA_VARIANTS = [
     "Send this to your group chat. One of them needs it.",     # share → DM
     "Screenshot the line that hurts most.",                    # save
     "Share to your Story if this is exactly what you needed.", # share → Story
+    "Comment 'STOIC' and I'll DM you the full reflection.",     # DM trigger
+    "Comment 'RESET' and I'll DM you the 3-line Stoic reset.",  # DM trigger
 ]
 
 _AUDIENCE_EMOJIS = {
@@ -298,6 +300,33 @@ _HASHTAG_POOL = {
 
 _BASE_HASHTAGS = ["#Stoicism", "#PhilosophyQuotes", "#MindsetShift", "#AncientWisdom", "#DailyStoic"]
 
+_GENERIC_TAGS = {"#fyp", "#viral", "#reels", "#explore", "#foryou", "#trending"}
+
+
+def _generate_hashtags(audience: str, mood: str, max_tags: int = 5) -> str:
+    """Build a 3–5 tag string: base + audience + mood tags, generic tags removed."""
+    candidates = list(_BASE_HASHTAGS[:2])
+    for t in _HASHTAG_POOL.get(audience, []):
+        candidates.append(t)
+    candidates.append(f"#{mood.replace('_', '').title()}")
+    # Dedupe (case-insensitive), drop generic, preserve order.
+    seen, tags = set(), []
+    for t in candidates:
+        k = t.lower()
+        if k in _GENERIC_TAGS or k in seen:
+            continue
+        seen.add(k)
+        tags.append(t)
+    tags = tags[:max(3, min(max_tags, 5))]
+    # Pad to 3 from the base pool if somehow short.
+    for t in _BASE_HASHTAGS:
+        if len(tags) >= 3:
+            break
+        if t.lower() not in seen:
+            tags.append(t)
+            seen.add(t.lower())
+    return " ".join(tags[:5])
+
 
 def _pick_cta(row_number: int) -> str:
     """Deterministically rotate CTA variants based on row number."""
@@ -311,19 +340,34 @@ def _add_emojis(audience: str, mood: str) -> str:
     return f"{aud_emoji} {mood_emoji}"
 
 
-def _generate_hashtags(audience: str, mood: str, max_tags: int = 8) -> str:
-    """Build a hashtag string mixing base + audience-specific tags."""
-    tags = _BASE_HASHTAGS[:3]
-    audience_tags = _HASHTAG_POOL.get(audience, [])
-    # Pick 2 audience tags deterministically using mood hash for variety
-    if audience_tags:
-        idx = hash(mood) % len(audience_tags)
-        tags.append(audience_tags[idx])
-        tags.append(audience_tags[(idx + 1) % len(audience_tags)])
-    # Add 2 mood-related tags
-    mood_tags = [f"#{mood.replace('_', '').title()}", "#StoicWisdom"]
-    tags.extend(mood_tags)
-    return " ".join(tags[:max_tags])
+def _enforce_hook_len(hook: str, max_words: int = 12) -> str:
+    """Formula rule: hooks are 5–12 words. Trim an over-long hook to its first
+    sentence/clause within the word budget (never raises)."""
+    if not hook:
+        return hook
+    words = hook.split()
+    if len(words) <= max_words:
+        return hook
+    # Prefer cutting at the first sentence end within budget.
+    trimmed = " ".join(words[:max_words])
+    for stop in (".", "?", "!"):
+        i = trimmed.find(stop)
+        if i != -1:
+            return trimmed[: i + 1]
+    return trimmed.rstrip(",;:") + "…"
+
+
+def _loopify(cta: str, hook: str) -> str:
+    """Seamless-loop device: end the CTA with an open connector so it flows back
+    into the hook. Idempotent."""
+    c = (cta or "").rstrip()
+    if not c:
+        return c
+    if c.endswith(("—", "…")):
+        return c
+    return c.rstrip(".!?") + " —"
+
+
 
 
 def _viral_first_line(audience: str, row_number: int) -> str:
