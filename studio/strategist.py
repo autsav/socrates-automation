@@ -2,12 +2,13 @@
 import json
 
 from studio.types import CreativeBrief, CREATIVE_BRIEF_SCHEMA
+from src.optimizer import prompt_store
 
-_PREFIX = (
+_PREFIX_DEFAULT = (
     "You are the creative team for a stoic-philosophy Instagram account whose "
     "goal is scroll-stopping growth. Shared performance context for today:\n{perf}"
 )
-_ROLE = (
+_ROLE_DEFAULT = (
     "You are the Content Strategist. Slot today: {slot} "
     "(0=morning, 1=afternoon, 2=evening). "
     "Recently posted (avoid repetition): {recent}. "
@@ -19,19 +20,30 @@ _ROLE = (
     "as JSON only."
 )
 
+# Backward-compat aliases for any importer expecting the old names.
+_PREFIX = _PREFIX_DEFAULT
+_ROLE = _ROLE_DEFAULT
 
-def shared_prefix(perf):
-    return _PREFIX.format(perf=json.dumps(perf.to_dict(), indent=2))
+
+def shared_prefix(perf, db_path=prompt_store.registry.DB_PATH):
+    prefix = prompt_store.get("prompt.strategist.prefix", _PREFIX_DEFAULT, db_path)
+    return prefix.format(perf=json.dumps(perf.to_dict(), indent=2))
 
 
-def build_prompt(perf, slot, recent_posts, pool):
-    role = _ROLE.format(
+def build_role(slot, recent, pool, db_path=prompt_store.registry.DB_PATH):
+    role = prompt_store.get("prompt.strategist.role", _ROLE_DEFAULT, db_path)
+    return role.format(slot=slot, recent=recent, pool=pool)
+
+
+def build_prompt(perf, slot, recent_posts, pool, db_path=prompt_store.registry.DB_PATH):
+    role = build_role(
         slot=slot,
         recent=json.dumps([p.get("quote", "")[:50] for p in recent_posts]),
         pool=json.dumps([{"row_number": p["row_number"], "quote": p["quote"],
                           "audience": p.get("audience", "")} for p in pool], indent=2),
+        db_path=db_path,
     )
-    return shared_prefix(perf), role
+    return shared_prefix(perf, db_path), role
 
 
 def parse_response(d):
