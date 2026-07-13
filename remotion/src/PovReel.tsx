@@ -12,6 +12,7 @@ import { GradientBg } from "./components/GradientBg";
 import { ParticleField } from "./components/ParticleField";
 import { PulsingBg } from "./components/PulsingBg";
 import { HookScene } from "./components/HookScene";
+import { BridgeScene } from "./components/BridgeScene";
 import { QuoteScene } from "./components/QuoteScene";
 import { CtaScene } from "./components/CtaScene";
 import { ColorGrade } from "./components/ColorGrade";
@@ -36,11 +37,15 @@ export type PovReelProps = {
   duration: number;
   fps: number;
   beats?: number[];
-  voices?: { hook?: string; quote?: string; cta?: string };
+  /** OPTIONAL Bridge scene — the pivot from the trending Hook into the timeless
+   *  Quote. Rendered only when non-empty (Hook -> Bridge -> Quote -> CTA);
+   *  empty (the default) renders the original 3-scene Hook -> Quote -> CTA arc. */
+  bridge?: string;
+  voices?: { hook?: string; bridge?: string; quote?: string; cta?: string };
   music?: string;
-  voiceDurations?: { hook?: number; quote?: number; cta?: number };
+  voiceDurations?: { hook?: number; bridge?: number; quote?: number; cta?: number };
   sfx?: { whoosh?: string; impact?: string };
-  wordTimes?: { hook?: WordTime[]; quote?: WordTime[]; cta?: WordTime[] };
+  wordTimes?: { hook?: WordTime[]; bridge?: WordTime[]; quote?: WordTime[]; cta?: WordTime[] };
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -52,6 +57,7 @@ export const povReelDefaultProps: PovReelProps = {
   duration: 10.5,
   fps: 30,
   beats: [],
+  bridge: "",
   voices: {},
   music: undefined,
   voiceDurations: {},
@@ -83,6 +89,7 @@ export const PovReel: React.FC<PovReelProps> = ({
   cta,
   mood,
   beats = [],
+  bridge = "",
   voices = {},
   music,
   voiceDurations = {},
@@ -91,15 +98,20 @@ export const PovReel: React.FC<PovReelProps> = ({
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
-  const { hook: hookF, quote: quoteF } = sceneFrames(
+  const { hook: hookF, bridge: bridgeF, quote: quoteF } = sceneFrames(
     durationInFrames / fps,
     fps,
-    voiceDurations
+    voiceDurations,
+    !!bridge
   );
-  const quoteEnd = hookF + quoteF;
+  const quoteStart = hookF + bridgeF;
+  const quoteEnd = quoteStart + quoteF;
 
   const frame = useCurrentFrame();
-  const beatFrames = beats.map((t) => Math.round(t * fps) + hookF);
+  // Beats are word/beat timings relative to the Quote scene's own start, so the
+  // offset must track wherever Quote actually begins (hookF, or hookF+bridgeF
+  // once a Bridge is inserted) — not a fixed hookF.
+  const beatFrames = beats.map((t) => Math.round(t * fps) + quoteStart);
   const scale = cameraScale(frame, durationInFrames, beatFrames);
 
   const spanFor = (
@@ -112,7 +124,8 @@ export const PovReel: React.FC<PovReelProps> = ({
   });
   const duckSpans: DuckSpan[] = [
     spanFor(0, voiceDurations.hook, hookF),
-    spanFor(hookF, voiceDurations.quote, quoteF),
+    ...(bridge ? [spanFor(hookF, voiceDurations.bridge, bridgeF)] : []),
+    spanFor(quoteStart, voiceDurations.quote, quoteF),
     spanFor(quoteEnd, voiceDurations.cta, durationInFrames - quoteEnd),
   ];
 
@@ -131,7 +144,13 @@ export const PovReel: React.FC<PovReelProps> = ({
             <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
           </Sequence>
 
-          <Sequence from={hookF} durationInFrames={quoteF} name="Quote">
+          {bridge ? (
+            <Sequence from={hookF} durationInFrames={bridgeF} name="Bridge">
+              <BridgeScene text={bridge} palette={palette} wordTimes={wordTimes.bridge} />
+            </Sequence>
+          ) : null}
+
+          <Sequence from={quoteStart} durationInFrames={quoteF} name="Quote">
             <QuoteScene
               quote={quote}
               attribution={attribution}
@@ -149,8 +168,12 @@ export const PovReel: React.FC<PovReelProps> = ({
             <CtaScene text={cta} palette={palette} />
           </Sequence>
 
-          {/* Pattern-interrupt flashes at the two scene boundaries. */}
+          {/* Pattern-interrupt flashes at each scene boundary: hook->bridge (or
+              hook->quote when there's no bridge), bridge->quote (only when a
+              Bridge is present — otherwise quoteStart === hookF and this would
+              double up the flash above), and quote->cta. */}
           <WhiteFlash at={hookF} />
+          {bridge ? <WhiteFlash at={quoteStart} /> : null}
           <WhiteFlash at={quoteEnd} />
         </AbsoluteFill>
       </ColorGrade>
@@ -160,8 +183,13 @@ export const PovReel: React.FC<PovReelProps> = ({
           <Audio src={staticFile(voices.hook)} />
         </Sequence>
       ) : null}
+      {bridge && voices.bridge ? (
+        <Sequence from={hookF} durationInFrames={bridgeF} name="BridgeVO">
+          <Audio src={staticFile(voices.bridge)} />
+        </Sequence>
+      ) : null}
       {voices.quote ? (
-        <Sequence from={hookF} durationInFrames={quoteF} name="QuoteVO">
+        <Sequence from={quoteStart} durationInFrames={quoteF} name="QuoteVO">
           <Audio src={staticFile(voices.quote)} />
         </Sequence>
       ) : null}

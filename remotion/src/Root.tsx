@@ -22,11 +22,18 @@ export const RemotionRoot: React.FC = () => {
       fps={povReelDefaultProps.fps}
       durationInFrames={sceneFrames(
         povReelDefaultProps.duration,
-        povReelDefaultProps.fps
+        povReelDefaultProps.fps,
+        povReelDefaultProps.voiceDurations,
+        !!povReelDefaultProps.bridge
       ).total}
       calculateMetadata={({ props }: { props: PovReelProps }) => {
         const fps = props.fps || VIDEO.fps;
-        const { total } = sceneFrames(props.duration || 10.5, fps, props.voiceDurations);
+        const { total } = sceneFrames(
+          props.duration || 10.5,
+          fps,
+          props.voiceDurations,
+          !!props.bridge
+        );
         return { durationInFrames: total, fps };
       }}
     />

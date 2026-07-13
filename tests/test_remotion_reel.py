@@ -388,3 +388,22 @@ def test_bridge_includes_sfx(tmp_path, monkeypatch):
     rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p)
     data = json.loads(p.read_text())
     assert data["sfx"] == {"whoosh": "sfx-whoosh.wav", "impact": "sfx-impact.wav"}
+
+
+# ── Optional Bridge scene ────────────────────────────────────────────────────
+
+def test_bridge_file_includes_bridge_when_present(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr, "_synth_sfx", lambda d: None)
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p,
+                         bridge="But Socrates knew this.")
+    data = json.loads(p.read_text())
+    assert data["bridge"] == "But Socrates knew this."
+
+
+def test_bridge_file_omits_bridge_when_absent(tmp_path, monkeypatch):
+    monkeypatch.setattr(rr, "_synth_sfx", lambda d: None)
+    p = tmp_path / "reel-data.json"
+    rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p)
+    data = json.loads(p.read_text())
+    assert data.get("bridge", "") == ""

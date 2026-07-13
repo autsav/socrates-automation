@@ -213,6 +213,9 @@ def write_bridge_file(
     hook_words: list | None = None,
     quote_words: list | None = None,
     cta_words: list | None = None,
+    bridge: str = "",
+    bridge_voice: Path | None = None,
+    bridge_words: list | None = None,
 ) -> Path:
     """Write the reel-data.json bridge file the Remotion composition reads.
 
@@ -226,6 +229,14 @@ def write_bridge_file(
     ``beats``. With no audio, ``voices``/``voiceDurations`` are all-``None``,
     ``beats`` is ``[]``, and ``music`` is omitted, giving the original
     silent-reel behavior.
+
+    An OPTIONAL 4th scene — the Bridge, rendered between Hook and Quote —
+    is enabled by passing non-empty ``bridge`` text (with ``bridge_voice``/
+    ``bridge_words`` for VO + word-timed animation). When ``bridge`` is falsy
+    the payload is byte-for-byte identical to the pre-Bridge shape: no
+    top-level ``bridge`` key, and no ``"bridge"`` entries in ``voices``/
+    ``voiceDurations``/``wordTimes`` — so existing (bridge-less) reels are
+    completely unaffected.
 
     Returns the path written. Exposed separately so tests can exercise it
     without invoking Node.
@@ -249,7 +260,14 @@ def write_bridge_file(
 
     voices: dict[str, str | None] = {"hook": None, "quote": None, "cta": None}
     voice_durations: dict[str, float | None] = {"hook": None, "quote": None, "cta": None}
-    for key, p in (("hook", hook_voice), ("quote", quote_voice), ("cta", cta_voice)):
+    voice_items = [("hook", hook_voice), ("quote", quote_voice), ("cta", cta_voice)]
+    if bridge_voice:
+        # Only add the "bridge" key when a bridge voice is actually supplied —
+        # keeps the no-bridge payload shape byte-for-byte unchanged.
+        voices["bridge"] = None
+        voice_durations["bridge"] = None
+        voice_items.append(("bridge", bridge_voice))
+    for key, p in voice_items:
         if p and Path(p).exists():
             p = Path(p)
             nm = _copy_audio(p, f"vo-{key}{p.suffix}")
@@ -280,6 +298,14 @@ def write_bridge_file(
 
     sfx = _synth_sfx(bridge_path.parent)
 
+    word_times: dict[str, list] = {
+        "hook": hook_words or [],
+        "quote": quote_words or [],
+        "cta": cta_words or [],
+    }
+    if bridge_words:
+        word_times["bridge"] = bridge_words
+
     payload = {
         "hook": hook or "",
         "quote": quote or "",
@@ -291,12 +317,10 @@ def write_bridge_file(
         "beats": beats,
         "voices": voices,
         "voiceDurations": voice_durations,
-        "wordTimes": {
-            "hook": hook_words or [],
-            "quote": quote_words or [],
-            "cta": cta_words or [],
-        },
+        "wordTimes": word_times,
     }
+    if bridge:
+        payload["bridge"] = bridge
     if music_name:
         payload["music"] = music_name
     if sfx:
