@@ -28,7 +28,7 @@ def search_tracks(direction, client_id, limit=20):
         "client_id": client_id,
         "format": "json",
         "limit": limit,
-        "fuzzytags": "+".join(query.split()),
+        "fuzzytags": " ".join(query.split()),
         "vocalinstrumental": "instrumental",
         "speed": _ENERGY_TO_SPEED.get(getattr(direction, "energy", ""), "medium"),
         "include": "musicinfo",
@@ -84,14 +84,17 @@ def _validate_audio_file(path):
 
 def download_track(url, output_path):
     """Download `url` to `output_path` and validate it. Returns True on success."""
-    output_path = Path(output_path)
     try:
+        output_path = Path(output_path)
         dl = requests.get(url, timeout=45, stream=True)
         dl.raise_for_status()
         output_path.write_bytes(dl.content)
         size_kb = output_path.stat().st_size / 1024
         print(f"  [jamendo] Saved {output_path.name} ({size_kb:.0f} KB)")
-        return _validate_audio_file(output_path)
+        ok = _validate_audio_file(output_path)
+        if not ok:
+            output_path.unlink(missing_ok=True)
+        return ok
     except Exception as e:  # noqa: BLE001
         print(f"  [jamendo] download error: {e}")
         return False

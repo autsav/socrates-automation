@@ -41,9 +41,22 @@ def test_search_tracks_sends_instrumental_and_filters_disallowed(monkeypatch):
 
     assert captured["params"]["vocalinstrumental"] == "instrumental"
     assert captured["params"]["speed"] == "low"
-    assert captured["params"]["fuzzytags"] == "dark+ambient"
+    assert captured["params"]["fuzzytags"] == "dark ambient"
     assert captured["params"]["client_id"] == "KEY"
     assert [h["id"] for h in hits] == [1]  # disallowed hit filtered out
+
+
+def test_search_tracks_fuzzytags_wire_encoding_uses_plus_not_percent2b():
+    import requests as _rq
+    # Reproduce exactly what search_tracks passes to requests.get(...).
+    params = {
+        "client_id": "KEY", "format": "json", "limit": 20,
+        "fuzzytags": " ".join("dark ambient".split()),
+        "vocalinstrumental": "instrumental", "speed": "low", "include": "musicinfo",
+    }
+    prepared = _rq.Request("GET", jm.JAMENDO_TRACKS_API, params=params).prepare()
+    assert "fuzzytags=dark+ambient" in prepared.url
+    assert "%2B" not in prepared.url
 
 
 def test_search_tracks_http_error_returns_empty(monkeypatch):
