@@ -587,7 +587,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     """
     hook_text = quote_data.get("hook") or _generate_psychology_hook(
         quote_data["audience"], quote_data["row_number"])
-    cta_text = _pick_cta(quote_data["row_number"])
+    cta_text = quote_data.get("cta") or _pick_cta(quote_data.get("row_number") or 0)
     log.info(f"  [pov] Hook: {hook_text[:50]}...")
 
     reel_path = None
