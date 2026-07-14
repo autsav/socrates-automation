@@ -4,8 +4,9 @@ import json
 from studio import copywriter
 from studio.strategist import shared_prefix
 from studio.types import Decision, DECISION_SCHEMA
+from src.optimizer import prompt_store
 
-_ROLE = (
+_ROLE_DEFAULT = (
     "You are the Creative Director — the quality gate. Brief:\n{brief}\n"
     "Concepts:\n{concepts}\n"
     "Score each concept 0-10 against the brief and what the data says lands. Pick "
@@ -15,10 +16,12 @@ _ROLE = (
     "values; a full flux_prompt for the background; typography and palette hints). "
     "Write a short rationale for the human reviewer. JSON only."
 )
+_ROLE = _ROLE_DEFAULT  # backward-compat alias
 
 
 def build_prompt(perf, brief, concepts):
-    role = _ROLE.format(
+    tmpl = prompt_store.get("prompt.director.role", _ROLE_DEFAULT)
+    role = tmpl.format(
         brief=json.dumps(brief.to_dict(), indent=2),
         concepts=json.dumps([c.to_dict() for c in concepts], indent=2))
     return shared_prefix(perf), role

@@ -4,6 +4,7 @@ payoff. Hard safety rules; returns used=false when nothing bridges safely."""
 import json
 
 from studio.types import TrendHook, TREND_HOOK_SCHEMA
+from src.optimizer import prompt_store
 
 _PREFIX = (
     "You are a social-media trend strategist for a stoic-philosophy Instagram "
@@ -11,7 +12,7 @@ _PREFIX = (
     "to a timeless Socratic quote — the trend is bait, the philosophy is the payoff."
 )
 
-_ROLE = (
+_ROLE_DEFAULT = (
     "Chosen quote / theme:\n{quote_ctx}\n"
     "Candidate trending topics (Google Trends + news headlines):\n{candidates}\n"
     "Pick the ONE topic that bridges most naturally to this quote's theme AND is "
@@ -28,10 +29,12 @@ _ROLE = (
     "But/Therefore momentum). Set topic + source to the chosen candidate. "
     "Output a TrendHook as JSON only."
 )
+_ROLE = _ROLE_DEFAULT  # backward-compat alias (assets.py reads _ROLE)
 
 
 def pick_hook(client, candidates, quote_ctx) -> TrendHook:
-    role = _ROLE.format(
+    tmpl = prompt_store.get("prompt.trend_scout.role", _ROLE_DEFAULT)
+    role = tmpl.format(
         quote_ctx=json.dumps(quote_ctx, indent=2),
         candidates=json.dumps([c["topic"] for c in candidates], indent=2),
     )

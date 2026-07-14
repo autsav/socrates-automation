@@ -12,6 +12,7 @@ from studio.types import (
     MusicPick, MUSIC_PICK_SCHEMA,
 )
 from src.audio import jamendo_music
+from src.optimizer import prompt_store
 
 _PREFIX = (
     "You are a music supervisor with 10 years scoring short-form video for a "
@@ -20,20 +21,24 @@ _PREFIX = (
     "a slow, deep narration — never fighting the voice."
 )
 
-_QUERY_ROLE = (
+_QUERY_ROLE_DEFAULT = (
     "Reel content:\n{ctx}\n"
     "Compose ONE music search query (2-5 words, instrumental) plus the "
     "target energy, bpm range, instruments to feature, and things to avoid. Match "
     "the quote's emotion, not just the mood label. Output a MusicDirection as JSON only."
 )
 
-_RANK_ROLE = (
+_RANK_ROLE_DEFAULT = (
     "Reel content:\n{ctx}\n"
     "Candidate tracks (choose the single best emotional fit):\n{tracks}\n"
     "Pick track_id (it MUST be one of the listed ids). Give a one-line rationale and "
     "an optional runner_up_id. Prefer 15-40s instrumental beds that won't fight a slow "
     "deep voice. Output a MusicPick as JSON only."
 )
+
+# Backward-compat aliases.
+_QUERY_ROLE = _QUERY_ROLE_DEFAULT
+_RANK_ROLE = _RANK_ROLE_DEFAULT
 
 
 def _ctx_json(ctx):
@@ -48,7 +53,8 @@ def _ctx_json(ctx):
 
 
 def compose_query(client, ctx) -> MusicDirection:
-    role = _QUERY_ROLE.format(ctx=_ctx_json(ctx))
+    tmpl = prompt_store.get("prompt.music_director.query", _QUERY_ROLE_DEFAULT)
+    role = tmpl.format(ctx=_ctx_json(ctx))
     d = client.call("music_director", _PREFIX, role,
                     "Compose the music direction now.", MUSIC_DIRECTION_SCHEMA)
     return MusicDirection.from_dict(d)
@@ -64,8 +70,9 @@ def _tracks_for_prompt(hits):
 
 
 def rank_tracks(client, ctx, hits) -> MusicPick:
-    role = _RANK_ROLE.format(ctx=_ctx_json(ctx),
-                             tracks=json.dumps(_tracks_for_prompt(hits), indent=2))
+    tmpl = prompt_store.get("prompt.music_director.rank", _RANK_ROLE_DEFAULT)
+    role = tmpl.format(ctx=_ctx_json(ctx),
+                       tracks=json.dumps(_tracks_for_prompt(hits), indent=2))
     d = client.call("music_director", _PREFIX, role,
                     "Pick the best track now.", MUSIC_PICK_SCHEMA)
     return MusicPick.from_dict(d)
