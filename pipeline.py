@@ -847,13 +847,20 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     return record
 
 
+def _reels_use_remotion(reel: bool, carousel: bool, remotion: bool, pov: bool) -> bool:
+    """Every reel renders via the Remotion path (_run_pov_reel: Remotion+FLUX+
+    edge-tts). The ffmpeg generate_reel + OpenAI-TTS reel path is retired.
+    Non-reel (image) and carousel posts are unaffected."""
+    return pov or remotion or (reel and not carousel)
+
+
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
                   carousel: bool = False, pov: bool = False, remotion: bool = False,
                   seed: int | None = None, content: str | None = None):
-    # --remotion is a POV text-reel rendered with the Remotion project (falls
-    # back to the ffmpeg POV generator if Node/Remotion isn't available).
-    if remotion:
-        pov = True
+    # All reels take the Remotion+FLUX path; --remotion still forces it too.
+    # Falls back to the ffmpeg POV generator (edge-tts, never OpenAI) only if
+    # Node/Remotion is unavailable.
+    pov = _reels_use_remotion(reel, carousel, remotion, pov)
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 

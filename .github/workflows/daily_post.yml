@@ -152,10 +152,10 @@ jobs:
             python pipeline.py --manual --remotion
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "🎬 MANUAL TRIGGER — AI Creative Studio → Telegram proposal for manual upload (test)"
-            python pipeline.py --studio --manual
+            python pipeline.py --studio --manual --remotion
           else
             echo "📲 SCHEDULED — AI Creative Studio proposal → Telegram for MANUAL upload with trending music (auto-falls back to legacy templates if the studio fails)"
-            python pipeline.py --studio --manual
+            python pipeline.py --studio --manual --remotion
           fi
 
       - name: Send post notification (Telegram/Slack)
