@@ -11,6 +11,7 @@ import {
 import { GradientBg } from "./components/GradientBg";
 import { ParticleField } from "./components/ParticleField";
 import { PulsingBg } from "./components/PulsingBg";
+import { BackgroundPhoto } from "./components/BackgroundPhoto";
 import { HookScene } from "./components/HookScene";
 import { BridgeScene } from "./components/BridgeScene";
 import { QuoteScene } from "./components/QuoteScene";
@@ -46,6 +47,9 @@ export type PovReelProps = {
   voiceDurations?: { hook?: number; bridge?: number; quote?: number; cta?: number };
   sfx?: { whoosh?: string; impact?: string };
   wordTimes?: { hook?: WordTime[]; bridge?: WordTime[]; quote?: WordTime[]; cta?: WordTime[] };
+  /** OPTIONAL fal.ai FLUX photo background (staticFile name). When set, it
+   *  replaces the gradient base; the particle field renders over it. */
+  background?: string;
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -63,6 +67,7 @@ export const povReelDefaultProps: PovReelProps = {
   voiceDurations: {},
   sfx: {},
   wordTimes: {},
+  background: undefined,
 };
 
 /** A brief hard white flash — a pattern interrupt at each scene boundary. */
@@ -95,6 +100,7 @@ export const PovReel: React.FC<PovReelProps> = ({
   voiceDurations = {},
   sfx = {},
   wordTimes = {},
+  background,
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -133,11 +139,19 @@ export const PovReel: React.FC<PovReelProps> = ({
     <AbsoluteFill style={{ background: palette.bg[0] }}>
       <ColorGrade grade={getGrade(mood)}>
         <AbsoluteFill style={{ transform: `scale(${scale})` }}>
-          {/* Continuous, attention-seeking background across the whole reel. */}
-          <PulsingBg palette={palette}>
-            <GradientBg palette={palette} />
-            <ParticleField palette={palette} />
-          </PulsingBg>
+          {/* Continuous background across the whole reel. A FLUX photo replaces
+              the gradient base when supplied; particles ride over either. */}
+          {background ? (
+            <>
+              <BackgroundPhoto src={background} />
+              <ParticleField palette={palette} />
+            </>
+          ) : (
+            <PulsingBg palette={palette}>
+              <GradientBg palette={palette} />
+              <ParticleField palette={palette} />
+            </PulsingBg>
+          )}
 
           {/* Scene text, timed with Sequences. */}
           <Sequence from={0} durationInFrames={hookF} name="Hook">

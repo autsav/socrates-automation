@@ -103,6 +103,7 @@ class PromptArchitect:
         style: Literal["photorealistic", "painterly", "digital_art", "cinematic", "mixed"] = "mixed",
         season: str = "",
         seed: int = 0,
+        trend_topic: str = "",
     ) -> str:
         """
         Build a full cinematic prompt from a quote and mood.
@@ -123,6 +124,10 @@ class PromptArchitect:
             core = base_prompt
         else:
             core = self._derive_visual_metaphor(quote, mood)
+
+        # Weave a trending-topic subject in when supplied (mood still drives style).
+        if trend_topic:
+            core = f"a cinematic scene evoking {trend_topic}, {core}"
 
         # Build enhancement layers
         enhancements = []
