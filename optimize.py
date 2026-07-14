@@ -52,6 +52,8 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
     ap.add_argument("--apply-decisions", action="store_true")
     ap.add_argument("--surface-pending", action="store_true",
                     help="Send every open challenger (e.g. hand-seeded) to Telegram for approval.")
+    ap.add_argument("--evaluate", action="store_true",
+                    help="Score open experiments against real engagement; surface A/B winners.")
     args = ap.parse_args(argv)
 
     if args.status:
@@ -103,11 +105,26 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
         print(f"\n{len(decisions)} decision(s).")
         return 0
 
+    if args.evaluate:
+        wins = loop.evaluate_experiments(db_path=db_path)
+        for p in wins:
+            msg = loop.format_proposal_message(p)
+            print(msg)
+            if notify is not None:
+                notify(msg)
+            else:
+                _default_surface(p, msg)
+        print(f"\n{len(wins)} A/B winner(s) surfaced.")
+        return 0
+
     if args.run or args.dry_run:
         if client is None and args.run:
             client = _default_client()
-        proposals = loop.run_once(client, _perf_context(db_path), db_path=db_path,
-                                  propose_fn=propose_fn)
+        # Evaluate finished A/B experiments first (data-backed wins → proposals),
+        # then ask the critic for new challengers on idle assets.
+        proposals = loop.evaluate_experiments(db_path=db_path)
+        proposals += loop.run_once(client, _perf_context(db_path), db_path=db_path,
+                                   propose_fn=propose_fn)
         for p in proposals:
             msg = loop.format_proposal_message(p)
             print(msg)

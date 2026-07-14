@@ -139,6 +139,15 @@ def promote(version_id, db_path=DB_PATH):
         con.close()
 
 
+def retire_version(version_id, db_path=DB_PATH):
+    con = _connect(db_path)
+    try:
+        con.execute("UPDATE opt_versions SET status='retired' WHERE id=?", (version_id,))
+        con.commit()
+    finally:
+        con.close()
+
+
 def get_version(version_id, db_path=DB_PATH):
     con = _connect(db_path)
     try:

@@ -95,6 +95,12 @@ def init_db() -> None:
         if "seed" not in post_columns:
             cursor.execute("ALTER TABLE posts ADD COLUMN seed INTEGER DEFAULT NULL")
 
+        # Migration: optimizer A/B attribution — which prompt version(s) produced
+        # this post, as a JSON map {optimizer_key: version_id}. Lets the optimizer
+        # bucket engagement by champion vs challenger arm (critique B1).
+        if "opt_versions_json" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN opt_versions_json TEXT DEFAULT NULL")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -157,6 +163,23 @@ def init_db() -> None:
                 )
 
         conn.commit()
+    finally:
+        conn.close()
+
+
+def record_post_versions(row_id: int, versions: dict) -> None:
+    """Store which optimizer prompt version(s) produced a post, as a JSON map
+    {key: version_id}, for A/B attribution. Best-effort; never raises."""
+    import json as _json
+    if not versions:
+        return
+    conn = _get_connection()
+    try:
+        conn.execute("UPDATE posts SET opt_versions_json = ? WHERE id = ?",
+                     (_json.dumps(versions), row_id))
+        conn.commit()
+    except Exception:
+        pass
     finally:
         conn.close()
 
