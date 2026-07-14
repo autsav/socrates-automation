@@ -17,6 +17,28 @@ def test_enforce_hook_len_leaves_short_hook():
     assert pipeline._enforce_hook_len(h) == h
 
 
+def test_enforce_bridge_len_trims_over_budget():
+    # The 44-word/25s bridge that ballooned reel_013 to 45s.
+    long = ("We're racing to find the perfect AI tool for every task, chasing "
+            "control through more options… but 2,400 years ago Socrates already "
+            "knew: real freedom isn't found in more power over the outside world "
+            "— it comes from wanting only what you can actually control yourself.")
+    out = pipeline._enforce_bridge_len(long)
+    assert len(out.split()) <= 20
+    # Prefers cutting at the natural ellipsis pivot into the Quote scene.
+    assert out.rstrip().endswith("…")
+
+
+def test_enforce_bridge_len_leaves_short_bridge():
+    b = "But Socrates saw it 2,400 years ago…"
+    assert pipeline._enforce_bridge_len(b) == b
+
+
+def test_enforce_bridge_len_empty_is_safe():
+    assert pipeline._enforce_bridge_len("") == ""
+    assert pipeline._enforce_bridge_len(None) is None
+
+
 def test_cta_variants_have_no_follow_or_like():
     joined = " ".join(pipeline._CTA_VARIANTS).lower()
     assert "follow for more" not in joined

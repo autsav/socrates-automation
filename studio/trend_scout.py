@@ -24,9 +24,10 @@ _ROLE_DEFAULT = (
     "discipline, relationships, ambition). If NO candidate bridges cleanly and "
     "safely, set used=false.\n"
     "When used=true, also write: hook (5-12 words, formula-compliant, negative "
-    "framing where apt, referencing the trend as bait) and bridge (the '…but 2,400 "
-    "years ago Socrates already knew…' pivot connecting trend -> quote, using "
-    "But/Therefore momentum). Set topic + source to the chosen candidate. "
+    "framing where apt, referencing the trend as bait) and bridge (ONE short "
+    "sentence, MAX 18 words — the '…but 2,400 years ago Socrates already knew…' "
+    "pivot connecting trend -> quote, using But/Therefore momentum; it hands off "
+    "to the quote, it does NOT state the payoff). Set topic + source to the chosen candidate. "
     "Output a TrendHook as JSON only."
 )
 _ROLE = _ROLE_DEFAULT  # backward-compat alias (assets.py reads _ROLE)

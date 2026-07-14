@@ -52,5 +52,7 @@ server.log
 # Excel temp files
 ~$*.xlsx
 
-# Remotion render-produced SFX artifacts
+# Remotion render-produced artifacts (SFX, per-scene VO, music bed)
 remotion/public/sfx-*.wav
+remotion/public/vo-*.mp3
+remotion/public/music.mp3

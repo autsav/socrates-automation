@@ -362,6 +362,31 @@ def _enforce_hook_len(hook: str, max_words: int = 12) -> str:
     return trimmed.rstrip(",;:") + "…"
 
 
+def _enforce_bridge_len(bridge: str, max_words: int = 20) -> str:
+    """Formula rule: the Bridge scene is a *pivot into* the Quote, not the payoff
+    — keep it to one short sentence (~20 words / ~10s of sage VO). An un-capped
+    bridge (e.g. a 44-word trend-scout pivot) balloons the reel past 40s and
+    front-loads the resolution the Quote scene is meant to deliver.
+
+    Trims an over-long bridge to the first natural stop within the word budget,
+    preferring the ellipsis pivot ('…options… but') that hands off to the Quote.
+    Never raises; short/empty bridges pass through untouched."""
+    if not bridge:
+        return bridge
+    words = bridge.split()
+    if len(words) <= max_words:
+        return bridge
+    trimmed = " ".join(words[:max_words])
+    # Prefer the earliest natural stop: ellipsis pivot or sentence end.
+    cuts = [trimmed.find(s) for s in ("…", "...", ".", "?", "!")]
+    cuts = [c for c in cuts if c != -1]
+    if cuts:
+        i = min(cuts)
+        end = i + (3 if trimmed[i:i + 3] == "..." else 1)
+        return trimmed[:end]
+    return trimmed.rstrip(",;:—- ") + "…"
+
+
 def _loopify(cta: str, hook: str) -> str:
     """Seamless-loop device: end the CTA with an open connector so it flows back
     into the hook. Idempotent."""
@@ -690,7 +715,10 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         # Optional Bridge scene VO (Hook -> Bridge -> Quote -> CTA). Best-effort:
         # any failure leaves bridge_voice/bridge_words empty — the Bridge scene
         # still renders (text-only, no narration), it just plays silent.
-        bridge_text = quote_data.get("bridge", "")
+        # Cap the bridge here — the single chokepoint every source (trend-scout,
+        # --content injection, generators) flows through — so no bridge can
+        # balloon the reel past ~25s regardless of where it came from.
+        bridge_text = _enforce_bridge_len(quote_data.get("bridge", ""))
         bridge_voice = None
         bridge_words = []
         if bridge_text:
