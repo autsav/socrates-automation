@@ -583,6 +583,7 @@ def _apply_trend_scout(cfg, quote_data):
             else:
                 quote_data["hook"] = th.hook
                 quote_data["bridge"] = th.bridge
+                quote_data["trend_topic"] = th.topic   # feeds the FLUX photo subject
                 log.info(f"  [trend-scout] {th.source}:{th.topic[:40]!r} -> trending hook set")
         else:
             log.info("  [trend-scout] no safe bridge -> evergreen hook")
@@ -618,6 +619,25 @@ def _select_reel_music(cfg, quote_data, hook_text, mood):
         except Exception as e:  # noqa: BLE001
             log.warning(f"  [remotion] music bed unavailable ({e}) — VO-only reel")
     return music_path
+
+
+def _reel_background(cfg, quote_data, mood):
+    """Best-effort fal.ai FLUX background for a Remotion reel. Builds a smart
+    prompt from the quote + trending topic + mood, generates the image, and
+    returns its Path — or None on any failure (reel falls back to particles)."""
+    try:
+        prompt = PromptArchitect().build(
+            quote=quote_data.get("quote", ""), mood=mood,
+            trend_topic=quote_data.get("trend_topic", ""))
+        from src.visual.image_generator import generate_background
+        path, _seed = generate_background(
+            mood=mood, api_key=cfg.FAL_API_KEY, output_dir=str(OUTPUT_DIR),
+            quote=quote_data.get("quote", ""), prompt_override=prompt)
+        log.info(f"  [reel] FLUX background generated: {_rel_path(path)}")
+        return path
+    except Exception as e:  # noqa: BLE001 - never crash a reel
+        log.warning(f"  [reel] FLUX background unavailable ({e}) — particle bg")
+        return None
 
 
 def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
@@ -700,6 +720,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
             counter = 1
             while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
                 counter += 1
+            bg_path = _reel_background(cfg, quote_data, mood)
             reel_path = generate_remotion_reel(
                     hook=hook_text,
                     quote=quote_data["quote"],
@@ -717,6 +738,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     bridge=bridge_text,
                     bridge_voice=bridge_voice,
                     bridge_words=bridge_words,
+                    background=bg_path,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
