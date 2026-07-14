@@ -44,6 +44,45 @@ def test_committed_db_has_no_token():
     assert n == 0, "committed pipeline.db must not contain a token (secret leak)"
 
 
+def test_committed_db_has_no_token_shaped_values_anywhere():
+    # C2: don't only trust the token_state row-count — scan every TEXT column in
+    # every table for a Meta-token-shaped literal, so a token cached elsewhere
+    # (a JSON blob, a stray column) still trips the guard.
+    conn = sqlite3.connect(str(ROOT / "data" / "pipeline.db"))
+    try:
+        tables = [r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")]
+        hits = []
+        for t in tables:
+            cols = [c[1] for c in conn.execute(f"PRAGMA table_info({t})")]
+            for row in conn.execute(f"SELECT * FROM {t}"):
+                for val in row:
+                    if isinstance(val, str) and (
+                        val.startswith(("EAA", "EAAG")) or (len(val) > 100 and "|" in val)
+                    ):
+                        hits.append((t, val[:12] + "…"))
+    finally:
+        conn.close()
+    assert not hits, f"token-shaped value(s) found in committed DB: {hits}"
+
+
+def test_scrub_committed_tokens_clears_meta(tmp_path, monkeypatch):
+    from src.core import data_store
+    db = tmp_path / "t.db"
+    monkeypatch.setattr(data_store, "DB_PATH", db)
+    data_store.init_db()
+    conn = sqlite3.connect(str(db))
+    conn.execute("INSERT OR REPLACE INTO token_state (service, token, expires_at) "
+                 "VALUES ('meta','EAAsecret','2030-01-01 00:00:00')")
+    conn.commit()
+    conn.close()
+    data_store.scrub_committed_tokens(db)
+    conn = sqlite3.connect(str(db))
+    n = conn.execute("SELECT count(*) FROM token_state WHERE service='meta'").fetchone()[0]
+    conn.close()
+    assert n == 0
+
+
 def test_workflows_scrub_token_before_committing_db():
     for wf in (".github/workflows/analytics.yml", ".github/workflows/daily_post.yml"):
         t = _read(wf)

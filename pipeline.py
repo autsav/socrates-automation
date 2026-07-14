@@ -773,7 +773,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         except Exception as e:
             log.error(f"Failed to send POV Reel to Telegram: {e}")
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
-        mark_posted(post_row_id, "PENDING_MANUAL", None, _rel_path(reel_path))
+        # post_id is UNIQUE — a bare "PENDING_MANUAL" collides on the 2nd manual
+        # post ever. Suffix with the row id so each pending-manual row is unique.
+        mark_posted(post_row_id, f"PENDING_MANUAL_{post_row_id}", None, _rel_path(reel_path))
     elif not dry_run and reel_path:
         log.info("Step: Posting POV Reel to Instagram...")
         post_id = post_reel_to_instagram(
@@ -1185,9 +1187,10 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         except Exception as e:
             log.error(f"Failed to send Reel to Telegram: {e}")
 
-        # Mark as ready (not fully posted yet)
+        # Mark as ready (not fully posted yet). post_id is UNIQUE — a bare
+        # "PENDING_MANUAL" collides on the 2nd manual post; suffix with the row id.
         mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
-        mark_posted(post_row_id, "PENDING_MANUAL", _rel_path(final_image_path), _rel_path(reel_path))
+        mark_posted(post_row_id, f"PENDING_MANUAL_{post_row_id}", _rel_path(final_image_path), _rel_path(reel_path))
 
     elif not dry_run:
         if reel and reel_path and ffmpeg_available():

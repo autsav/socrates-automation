@@ -79,3 +79,17 @@ def test_has_posted_today_false_different_slot(db):
     row_id = save_post("Test", "stuck", "calm_stoic", 0, 1, dry_run=False)
     mark_posted(row_id, "ig_123", "/img.jpg")
     assert has_posted_today(2) is False
+
+
+def test_two_pending_manual_rows_do_not_collide_on_unique_post_id(db):
+    # A2 regression: post_id is UNIQUE. Two manual posts previously both wrote
+    # the literal "PENDING_MANUAL" → IntegrityError on the 2nd. The per-row
+    # sentinel used by pipeline.py must let both coexist.
+    r1 = save_post("Q1", "stuck", "calm_stoic", 0, 0, dry_run=False)
+    r2 = save_post("Q2", "lost", "calm_stoic", 1, 1, dry_run=False)
+    mark_posted(r1, f"PENDING_MANUAL_{r1}", None, "/output/a.mp4")
+    mark_posted(r2, f"PENDING_MANUAL_{r2}", None, "/output/b.mp4")   # must not raise
+    conn = sqlite3.connect(str(db))
+    ids = {row[0] for row in conn.execute("SELECT post_id FROM posts")}
+    conn.close()
+    assert f"PENDING_MANUAL_{r1}" in ids and f"PENDING_MANUAL_{r2}" in ids

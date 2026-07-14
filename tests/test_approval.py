@@ -59,6 +59,68 @@ def test_poll_once_returns_empty_when_telegram_not_configured(monkeypatch, tmp_p
     assert approval.poll_once(_Unconfigured()) == []
 
 
+# ── A1 regression: optimizer callbacks are namespaced and never cross into reels ──
+
+def test_optimizer_buttons_are_namespaced():
+    buttons = approval.optimizer_buttons(7)
+    assert buttons == [[
+        {"text": "✅ Approve", "callback_data": "approve_opt-7"},
+        {"text": "❌ Reject", "callback_data": "reject_opt-7"},
+    ]]
+
+
+def test_reel_poll_records_optimizer_callback_but_never_returns_it_as_post_row_id(monkeypatch, tmp_path):
+    # THE critical A1 bug: an optimizer approval must NOT be handed to the reel
+    # consumer as a post_row_id (which would promote/reject the wrong thing).
+    _isolate(monkeypatch, tmp_path)
+    approval.record_pending_optimizer(7)
+
+    fake_backend = Mock()
+    fake_backend.get_updates.return_value = [
+        {"update_id": 200, "callback_query": {"id": "cbqA", "data": "approve_opt-7"}},
+    ]
+    monkeypatch.setattr("src.core.notifier.TelegramBackend", lambda *a, **k: fake_backend)
+
+    decided = approval.poll_once(_FakeCfg())   # a "reel" workflow poll
+
+    assert decided == []                        # reel consumer sees nothing
+    # but the decision is recorded in the shared store for the optimizer to read
+    opt = approval.get_optimizer_decisions()
+    assert opt == [{"version_id": 7, "status": "approved"}]
+    fake_backend.answer_callback_query.assert_called_once_with("cbqA", text="Approved ✅")
+
+
+def test_optimizer_decision_apply_flow_marks_applied(monkeypatch, tmp_path):
+    _isolate(monkeypatch, tmp_path)
+    approval.record_pending_optimizer(4)
+
+    fake_backend = Mock()
+    fake_backend.get_updates.return_value = [
+        {"update_id": 5, "callback_query": {"id": "cbqB", "data": "reject_opt-4"}},
+    ]
+    monkeypatch.setattr("src.core.notifier.TelegramBackend", lambda *a, **k: fake_backend)
+    approval.poll_once(_FakeCfg())
+
+    assert approval.get_optimizer_decisions() == [{"version_id": 4, "status": "rejected"}]
+    approval.mark_optimizer_applied(4)
+    assert approval.get_optimizer_decisions() == []   # not re-applied on next run
+
+
+def test_reel_and_optimizer_ids_do_not_collide(monkeypatch, tmp_path):
+    # Reel post_row_id=5 and optimizer version_id=5 coexist without cross-talk.
+    _isolate(monkeypatch, tmp_path)
+    fake_backend = Mock()
+    fake_backend.get_updates.return_value = [
+        {"update_id": 1, "callback_query": {"id": "c1", "data": "approve_5"}},
+        {"update_id": 2, "callback_query": {"id": "c2", "data": "reject_opt-5"}},
+    ]
+    monkeypatch.setattr("src.core.notifier.TelegramBackend", lambda *a, **k: fake_backend)
+
+    decided = approval.poll_once(_FakeCfg())
+    assert decided == [{"post_row_id": 5, "status": "approved"}]         # reel only
+    assert approval.get_optimizer_decisions() == [{"version_id": 5, "status": "rejected"}]  # opt only
+
+
 def test_poll_once_records_approve_decision_and_answers_callback(monkeypatch, tmp_path):
     _isolate(monkeypatch, tmp_path)
     approval.record_pending(9)

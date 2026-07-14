@@ -17,13 +17,15 @@ from src.optimizer.proposers import prompt_critic
 
 def _default_surface(proposal, msg):
     """Send the proposal to Telegram with inline approve/reject buttons keyed by
-    the challenger version id, and record it pending so --apply-decisions can act."""
+    the challenger version id, and record it pending so --apply-decisions can act.
+    Uses optimizer-namespaced (opt-<vid>) callbacks so a tap can never be mistaken
+    for a reel post approval."""
     from config import Config
     from src.core.notifier import Notifier
     from src.core import approval
     vid = proposal["challenger_version_id"]
-    approval.record_pending(vid)
-    Notifier(Config()).send_with_buttons(msg, approval.approve_reject_buttons(vid))
+    approval.record_pending_optimizer(vid)
+    Notifier(Config()).send_with_buttons(msg, approval.optimizer_buttons(vid))
 
 
 def _default_client():
@@ -59,11 +61,13 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
     if args.apply_decisions:
         from config import Config
         from src.core import approval
-        decisions = approval.poll_once(Config())
+        approval.poll_once(Config())  # refresh the shared decision store
+        decisions = approval.get_optimizer_decisions()  # only opt-namespaced, unapplied
         for d in decisions:
-            vid = d.get("post_row_id")
-            approved = d.get("status") == "approved"
+            vid = d["version_id"]
+            approved = d["status"] == "approved"
             result = loop.apply_decision(vid, approved, db_path)
+            approval.mark_optimizer_applied(vid)
             print(f"challenger v#{vid}: {result}")
         print(f"\n{len(decisions)} decision(s).")
         return 0

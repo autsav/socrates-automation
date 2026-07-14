@@ -4,12 +4,42 @@ WAL mode enabled for concurrent reader/writer safety.
 All public functions use try/finally to prevent connection leaks.
 """
 
+import atexit
 import os
 import sqlite3
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "pipeline.db"
+
+
+def scrub_committed_tokens(db_path=None) -> None:
+    """Remove the Meta access token from the (git-tracked) DB so it can never be
+    committed. The token is always re-seeded from the META_ACCESS_TOKEN env secret
+    by init_db(), so this loses nothing operationally. Best-effort — never raises.
+    Canonical scrubber for both CI (pre-commit) and the atexit guard below."""
+    path = db_path or DB_PATH
+    try:
+        conn = sqlite3.connect(str(path))
+        conn.execute("DELETE FROM token_state WHERE service = 'meta'")
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def _scrub_meta_token_on_exit() -> None:
+    """Defense-in-depth: after any real process exits, wipe the token from the
+    on-disk DB so a stray `git add data/pipeline.db` can't leak it. Skipped under
+    pytest (must not touch test DBs / churn the tracked one) and when
+    KEEP_META_TOKEN is set (e.g. a workflow that persists a refreshed token)."""
+    if "pytest" in sys.modules or os.getenv("KEEP_META_TOKEN"):
+        return
+    scrub_committed_tokens()
+
+
+atexit.register(_scrub_meta_token_on_exit)
 
 
 def _get_connection() -> sqlite3.Connection:

@@ -24,7 +24,14 @@ from pathlib import Path
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 APPROVALS_PATH = DATA_DIR / "approvals.json"
 
-_CALLBACK_RE = re.compile(r"^(approve|reject)_(\d+)$")
+# Callback ids are namespaced so different id-spaces never collide:
+#   reel posts   -> "approve_<post_row_id>"        (bare digits, legacy)
+#   optimizer    -> "approve_opt-<version_id>"     (opt- prefix)
+# The regex captures the full id token; poll_once records every decision into
+# the shared store keyed by that token, so whichever workflow polls first does
+# NOT strand the other's callbacks (Telegram acks updates globally per bot).
+_CALLBACK_RE = re.compile(r"^(approve|reject)_(.+)$")
+_OPT_PREFIX = "opt-"
 
 
 def _load() -> dict:
@@ -45,6 +52,57 @@ def approve_reject_buttons(post_row_id: int) -> list:
         {"text": "✅ Approve", "callback_data": f"approve_{post_row_id}"},
         {"text": "❌ Reject", "callback_data": f"reject_{post_row_id}"},
     ]]
+
+
+def optimizer_buttons(version_id: int) -> list:
+    """Inline keyboard for an optimizer prompt-promotion proposal. Namespaced
+    (`opt-<vid>`) so it can never be mistaken for a reel `post_row_id`."""
+    return [[
+        {"text": "✅ Approve", "callback_data": f"approve_{_OPT_PREFIX}{version_id}"},
+        {"text": "❌ Reject", "callback_data": f"reject_{_OPT_PREFIX}{version_id}"},
+    ]]
+
+
+def record_pending_optimizer(version_id: int) -> None:
+    """Mark an optimizer challenger as awaiting a human decision (idempotent)."""
+    state = _load()
+    state.setdefault("decisions", {})
+    key = f"{_OPT_PREFIX}{version_id}"
+    if key not in state["decisions"]:
+        state["decisions"][key] = {"status": "pending", "decided_at": None}
+    _save(state)
+
+
+def get_optimizer_decisions() -> list[dict]:
+    """Return decided-but-not-yet-applied optimizer decisions from the shared
+    store: [{"version_id": int, "status": "approved"|"rejected"}]. Reads the
+    persisted store rather than a fresh poll, so a decision recorded by the
+    reel workflow's poll is still seen here."""
+    state = _load()
+    out = []
+    for key, entry in state.get("decisions", {}).items():
+        if not key.startswith(_OPT_PREFIX):
+            continue
+        if entry.get("status") not in ("approved", "rejected"):
+            continue
+        if entry.get("applied"):
+            continue
+        try:
+            vid = int(key[len(_OPT_PREFIX):])
+        except ValueError:
+            continue
+        out.append({"version_id": vid, "status": entry["status"]})
+    return out
+
+
+def mark_optimizer_applied(version_id: int) -> None:
+    """Flag an optimizer decision as applied so it is not re-applied on the next run."""
+    state = _load()
+    key = f"{_OPT_PREFIX}{version_id}"
+    entry = state.get("decisions", {}).get(key)
+    if entry:
+        entry["applied"] = True
+        _save(state)
 
 
 def record_pending(post_row_id: int) -> None:
@@ -97,11 +155,19 @@ def poll_once(cfg, *, timeout: int = 0) -> list[dict]:
         status = "approved" if action == "approve" else "rejected"
 
         state.setdefault("decisions", {})
-        state["decisions"][row_id] = {
+        # Preserve any prior "applied" flag when re-recording the same callback.
+        prev = state["decisions"].get(row_id, {})
+        entry = {
             "status": status,
             "decided_at": datetime.now(timezone.utc).isoformat(),
         }
-        decided.append({"post_row_id": int(row_id), "status": status})
+        if prev.get("applied"):
+            entry["applied"] = True
+        state["decisions"][row_id] = entry
+        # Only bare-digit ids are reel post_row_ids — return those for the reel
+        # consumer. Namespaced (opt-) decisions are read via get_optimizer_decisions().
+        if row_id.isdigit():
+            decided.append({"post_row_id": int(row_id), "status": status})
 
         backend.answer_callback_query(
             callback.get("id", ""),
