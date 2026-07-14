@@ -139,6 +139,18 @@ def promote(version_id, db_path=DB_PATH):
         con.close()
 
 
+def get_version(version_id, db_path=DB_PATH):
+    con = _connect(db_path)
+    try:
+        r = con.execute(
+            "SELECT id,key,version_num,value_json,source,rationale,predicted_delta,status "
+            "FROM opt_versions WHERE id=?", (version_id,)
+        ).fetchone()
+        return _row_to_version(r)
+    finally:
+        con.close()
+
+
 def list_assets(db_path=DB_PATH):
     con = _connect(db_path)
     try:

@@ -25,7 +25,7 @@ def _default_surface(proposal, msg):
     from src.core import approval
     vid = proposal["challenger_version_id"]
     approval.record_pending_optimizer(vid)
-    Notifier(Config()).send_with_buttons(msg, approval.optimizer_buttons(vid))
+    Notifier(Config()).send_message_with_buttons(msg, approval.optimizer_buttons(vid))
 
 
 def _default_client():
@@ -50,12 +50,43 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--apply-decisions", action="store_true")
+    ap.add_argument("--surface-pending", action="store_true",
+                    help="Send every open challenger (e.g. hand-seeded) to Telegram for approval.")
     args = ap.parse_args(argv)
 
     if args.status:
         for a in assets.iter_managed(db_path):
             exp = experiments.get_open_experiment(a["key"], db_path)
             print(f"{a['key']}: champion set; open_experiment={'yes' if exp else 'no'}")
+        return 0
+
+    if args.surface_pending:
+        from src.core import approval
+        count = 0
+        for a in assets.iter_managed(db_path):
+            exp = experiments.get_open_experiment(a["key"], db_path)
+            if not exp:
+                continue
+            v = registry.get_version(exp["challenger_version_id"], db_path)
+            if not v:
+                continue
+            # Skip ones already awaiting a decision (don't double-send).
+            if approval.get_optimizer_decision_status(v["id"]) == "pending":
+                continue
+            proposal = {
+                "key": a["key"], "challenger_version_id": v["id"],
+                "rationale": v.get("rationale", ""),
+                "predicted_delta": v.get("predicted_delta", 0.0),
+                "candidate": v["value"],
+            }
+            msg = loop.format_proposal_message(proposal)
+            print(f"→ surfacing {a['key']} (v#{v['id']})")
+            if notify is not None:
+                notify(msg)
+            else:
+                _default_surface(proposal, msg)
+            count += 1
+        print(f"\nSurfaced {count} pending challenger(s) to Telegram.")
         return 0
 
     if args.apply_decisions:

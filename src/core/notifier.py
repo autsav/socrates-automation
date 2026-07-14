@@ -313,6 +313,17 @@ class Notifier:
 
         return "\n".join(lines)
 
+    def send_message_with_buttons(self, message: str, buttons: list) -> bool:
+        """Send a text message with an inline keyboard to any backend that supports
+        it (Telegram). Used by the optimizer to surface prompt proposals with
+        Approve/Reject buttons. Returns True if at least one backend sent it."""
+        sent = False
+        for backend in self.backends:
+            if hasattr(backend, "send_with_buttons"):
+                mid = backend.send_with_buttons(message, buttons)
+                sent = sent or (mid is not None)
+        return sent
+
     def notify_post_published(
         self,
         post_id: str,

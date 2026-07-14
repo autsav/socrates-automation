@@ -95,6 +95,13 @@ def get_optimizer_decisions() -> list[dict]:
     return out
 
 
+def get_optimizer_decision_status(version_id: int) -> str | None:
+    """"pending" | "approved" | "rejected" | None (never surfaced) for a challenger."""
+    state = _load()
+    entry = state.get("decisions", {}).get(f"{_OPT_PREFIX}{version_id}")
+    return entry["status"] if entry else None
+
+
 def mark_optimizer_applied(version_id: int) -> None:
     """Flag an optimizer decision as applied so it is not re-applied on the next run."""
     state = _load()
