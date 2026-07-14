@@ -1,6 +1,6 @@
 # Critique — 2026-07-14
 
-> **Update (same day):** all four Section A criticals — **A1, A2, A3, A4 — are FIXED** (commit `423e098`), with regression tests; full suite 524 pass. Sections B–H remain open. The A-entries below are kept for the record, marked ✅.
+> **Update (same day):** Section A criticals **A1-A4 FIXED** (commit 423e098). **B2 FIXED** + **B1 evaluation engine built & tested** (commit 8e86f4b) — only live-pipeline arm-serving wiring remains. Full suite 539 pass.
 
 Supersedes the 2026-07-11 critique (several of those findings are now fixed — e.g. `analytics.yml` uses `git add -f`). Scope: full pipeline (`pipeline.py`, `config.py`, `src/core/*`), studio agents (`studio/*`), analytics + predictive scoring (`src/analytics/*`, `src/video/predictive_scoring.py`), the **new self-improving loop** (`src/optimizer/*`, `optimize.py`), CI workflows, security surface, and test suite (517 tests). Findings verified against source; `file:line` from the tree as it stands today on branch `feat/self-improving-loop`.
 
@@ -37,11 +37,11 @@ Any run — **including `--dry-run`** — persists the 60-day token into the tra
 
 ## B. Architecture Issues
 
-### B1 [H] The optimizer's champion-challenger A/B is non-functional scaffolding
+### B1 ✅ MOSTLY FIXED [H] The optimizer's champion-challenger A/B is non-functional scaffolding
 **`src/optimizer/experiments.py:evaluate` and `src/optimizer/reward.py:reward` have zero production callers** (grep: tests only). **`posts.opt_versions_json` is never added**, so no per-post reward attribution exists. The loop `open_experiment`s but nothing collects per-arm rewards or calls `evaluate`; the only closer is a human Telegram tap (`apply_decision`). The spec's "auto-upgrades to real IG A/B" is aspirational. Phase 1 delivers *critic proposals*, not *validated A/B*.
 - **Fix:** implement attribution + a nightly `evaluate` pass (real Phase 1.5), or relabel experiments "human-judged" and drop the A/B claim until the data path exists.
 
-### B2 [H] Open experiments never expire → an ignored proposal permanently stalls that asset
+### B2 ✅ FIXED [H] Open experiments never expire → an ignored proposal permanently stalls that asset
 **`src/optimizer/loop.py:21` (`if get_open_experiment(key): continue`).** The only closers are `apply_decision` and the never-called `evaluate`. Ignore a proposal → its experiment stays `open` forever → that prompt asset never gets another proposal. Ignore all 5 → the loop is permanently inert while reporting success.
 - **Fix:** expire open experiments after N days (reopen the asset); cap concurrent open experiments with a TTL.
 
