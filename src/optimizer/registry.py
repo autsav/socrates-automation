@@ -46,6 +46,16 @@ def init_optimizer_db(db_path=DB_PATH):
                 closed_at TEXT,
                 result_json TEXT
             );
+            CREATE TABLE IF NOT EXISTS ab_results (
+                dimension TEXT NOT NULL,
+                variant_a TEXT NOT NULL,
+                variant_b TEXT NOT NULL,
+                wins_a INTEGER DEFAULT 0,
+                wins_b INTEGER DEFAULT 0,
+                trials INTEGER DEFAULT 0,
+                last_updated TEXT,
+                PRIMARY KEY (dimension, variant_a, variant_b)
+            );
             """
         )
         con.commit()
