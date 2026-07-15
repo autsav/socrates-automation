@@ -15,14 +15,15 @@ DB_PATH = Path(__file__).parent.parent.parent / "data" / "pipeline.db"
 
 
 def scrub_committed_tokens(db_path=None) -> None:
-    """Remove the Meta access token from the (git-tracked) DB so it can never be
-    committed. The token is always re-seeded from the META_ACCESS_TOKEN env secret
-    by init_db(), so this loses nothing operationally. Best-effort — never raises.
+    """Remove ALL tokens from the (git-tracked) DB so secrets can never be
+    committed. The Meta token is always re-seeded from the META_ACCESS_TOKEN env
+    secret by init_db(), and other service tokens are fetched on-demand, so this
+    loses nothing operationally. Best-effort — never raises.
     Canonical scrubber for both CI (pre-commit) and the atexit guard below."""
     path = db_path or DB_PATH
     try:
         conn = sqlite3.connect(str(path))
-        conn.execute("DELETE FROM token_state WHERE service = 'meta'")
+        conn.execute("DELETE FROM token_state")
         conn.commit()
         conn.close()
     except Exception:
