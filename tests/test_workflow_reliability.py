@@ -66,7 +66,7 @@ def test_committed_db_has_no_token_shaped_values_anywhere():
     assert not hits, f"token-shaped value(s) found in committed DB: {hits}"
 
 
-def test_scrub_committed_tokens_clears_meta(tmp_path, monkeypatch):
+def test_scrub_committed_tokens_clears_all_services(tmp_path, monkeypatch):
     from src.core import data_store
     db = tmp_path / "t.db"
     monkeypatch.setattr(data_store, "DB_PATH", db)
@@ -74,13 +74,15 @@ def test_scrub_committed_tokens_clears_meta(tmp_path, monkeypatch):
     conn = sqlite3.connect(str(db))
     conn.execute("INSERT OR REPLACE INTO token_state (service, token, expires_at) "
                  "VALUES ('meta','EAAsecret','2030-01-01 00:00:00')")
+    conn.execute("INSERT OR REPLACE INTO token_state (service, token, expires_at) "
+                 "VALUES ('fal','fal_secret_token','2030-01-01 00:00:00')")
     conn.commit()
     conn.close()
     data_store.scrub_committed_tokens(db)
     conn = sqlite3.connect(str(db))
-    n = conn.execute("SELECT count(*) FROM token_state WHERE service='meta'").fetchone()[0]
+    n = conn.execute("SELECT count(*) FROM token_state").fetchone()[0]
     conn.close()
-    assert n == 0
+    assert n == 0, f"scrub_committed_tokens must clear ALL services, {n} rows remain"
 
 
 def test_workflows_scrub_token_before_committing_db():
