@@ -80,7 +80,16 @@ def test_non_json_raises():
 
 
 def test_ceiling():
+    # E1 fix: the ceiling is enforced INSIDE call() — once over, every call
+    # (any role) raises StudioError instead of spending more money.
+    import pytest
+    from studio.client import StudioError
     c = StudioClient("key", sdk=_FakeSDK(_Resp('{}')))
-    settings.DAILY_SPEND_CEILING_USD = 0.0
-    c.call("copywriter", "P", "R", "U", {"type": "object"})
-    assert c.over_daily_ceiling() is True
+    prev = settings.DAILY_SPEND_CEILING_USD
+    try:
+        settings.DAILY_SPEND_CEILING_USD = 0.0
+        assert c.over_daily_ceiling() is True
+        with pytest.raises(StudioError):
+            c.call("copywriter", "P", "R", "U", {"type": "object"})
+    finally:
+        settings.DAILY_SPEND_CEILING_USD = prev
