@@ -401,6 +401,10 @@ class Notifier:
             "3. Tap 'Add Music' and search the trending sound",
             "4. Paste the caption above",
             "5. Post!",
+            "",
+            "🤖 AFTER POSTING: Run the engagement bot to auto-reply to comments:",
+            "   python -m src.engagement.trigger_bot <YOUR_POST_ID>",
+            "   (Find the post_id in Instagram → your post → ... → Copy Link)",
         ])
         message = "\n".join(lines)
 
