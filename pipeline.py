@@ -1053,6 +1053,44 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
     quote_data = _apply_trend_scout(cfg, quote_data)
 
+    # ── Controversy Engine: make the content provocative ────────────────────────
+    # Transform safe quotes into bold modern interpretations (roast/verdict/debate)
+    # Only runs when studio or AI content is available (needs Claude API)
+    if not content and not dry_run and cfg.ANTHROPIC_API_KEY:
+        try:
+            from src.content.controversy_engine import generate_controversy, pick_mode, DEFAULT_TARGETS
+            import random as _rng
+            slot_num = _current_slot()
+            trend_topic = quote_data.get("trend_topic", "")
+            mode = pick_mode(slot_num, trend_available=bool(trend_topic))
+            target = _rng.choice(DEFAULT_TARGETS) if not trend_topic else trend_topic
+
+            # Build a lightweight client for the controversy call
+            from studio.client import StudioClient
+            controversy_client = StudioClient(cfg.ANTHROPIC_API_KEY)
+
+            result = generate_controversy(
+                client=controversy_client,
+                quote=quote_data["quote"],
+                mode=mode,
+                target=target,
+                trend=trend_topic,
+            )
+            if result:
+                # Override hook and caption with provocative versions
+                if result.get("hook"):
+                    quote_data["hook"] = _enforce_hook_len(result["hook"])
+                if result.get("caption"):
+                    quote_data["caption"] = result["caption"]
+                if result.get("cta"):
+                    quote_data["cta"] = result["cta"]
+                if result.get("hashtags"):
+                    quote_data["hashtags"] = result["hashtags"]
+                quote_data["format"] = mode  # roast/verdict/debate
+                log.info(f"  [controversy] {mode} mode: hook={result.get('hook','')[:50]!r}")
+        except Exception as e:
+            log.warning(f"  [controversy] engine unavailable ({e}) — using standard hooks")
+
     # ── Phase 1: Inject viral engagement into caption ───────────────────────────
     # Use CTA tracker to pick the best CTA type based on historical performance
     try:

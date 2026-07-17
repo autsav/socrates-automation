@@ -380,6 +380,17 @@ def compose_post(
     if not bg_path.exists():
         raise FileNotFoundError(f"Background image not found: {bg_path}")
 
+    # ── Brand identity: format-specific accent color ──────────────────────────
+    try:
+        from src.visual.brand_identity import PALETTE, FONTS, get_format_style
+        brand_bg = PALETTE["background"]
+        brand_text = PALETTE["text_primary"]
+        brand_accent = PALETTE["accent"]
+    except Exception:
+        brand_bg = (10, 8, 6)
+        brand_text = (245, 240, 225)
+        brand_accent = (212, 162, 76)
+
     # ── Load + resize background ──────────────────────────────────────────────
     bg = Image.open(bg_path).convert("RGBA")
     bg = bg.resize(OUTPUT_SIZE, Image.LANCZOS)
