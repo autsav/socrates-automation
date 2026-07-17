@@ -4,13 +4,23 @@ Automated daily philosophy Reels/carousels for Instagram.
 
 ## Publishing model (important)
 
-The scheduled cron (`.github/workflows/daily_post.yml`) **auto-posts directly to Instagram** via the Graph API for all scheduled slots:
+The scheduled cron (`.github/workflows/daily_post.yml`) generates content and sends it to Telegram for manual posting. This is intentional -- you need trending audio for reach, which the Graph API cannot attach.
 
-- **Reel slots** (03:00, 12:00, 21:00) run `python pipeline.py --remotion` — generates the Reel via Remotion + edge-tts and **posts directly to Instagram** via the Graph API.
-- **Regular slots** (08:00, 15:00, 18:00) run `python pipeline.py --studio --remotion` — uses the AI Creative Studio to generate content and **posts directly to Instagram**.
-- **Carousel slots** (Wed/Thu) run `python pipeline.py --carousel` and **auto-publish** via the Graph API.
+- **Reel slots** (08:00, 18:00) run `python pipeline.py --studio --manual --remotion` — AI Creative Studio generates content, sends to Telegram.
+- **POV Reel slot** (15:00) runs `python pipeline.py --manual --remotion` — zero-cost text Reel.
+- **Carousel slots** (Wed/Thu) run `python pipeline.py --carousel` — auto-publishes via Graph API.
 
-The `--manual` flag is still available for local testing — it generates the asset and sends it to Telegram instead of posting, so you can manually upload with trending audio (the #1 Reels reach lever, which the Graph API cannot attach).
+3 posts/day + 2 carousels (Wed/Thu) = quality over quantity.
+
+## Content strategy (2026)
+
+The pipeline uses a **confrontational, modern** content style:
+
+- **Hooks**: Provocative, scroll-stopping, reference modern life (scrolling, 9-to-5, comfort zones)
+- **Controversy Engine**: 3 modes — ROAST (Socrates roasts modern habits), VERDICT (What would Socrates say about [trend]?), DEBATE (bold claims that split the audience)
+- **Visuals**: Photographic realism (not AI art) to avoid Instagram's AI content suppression
+- **CTAs**: Confrontational engagement triggers that spark debate
+- **Hashtags**: Data-driven, non-generic, no banned tags (#fyp, #viral, etc.)
 
 ## Tests
 

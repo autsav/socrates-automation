@@ -9,11 +9,14 @@ from src.optimizer import prompt_store
 _DRAFT_ROLE_DEFAULT = (
     "You are the Copywriter. Brief:\n{brief}\n"
     "Write {n} distinct concepts, each a different angle on this brief. "
-    "Each concept: a <=60-char scroll-stopping hook (Reel scene 1 / image "
-    "headline), a full caption (curiosity-gap first line, payoff, share/save CTA), "
-    "a one-line cta, reel_scenes (on-screen text per scene; [] if not a reel), and "
-    "5-8 hashtags. Do NOT change the quote text. Output {{\"concepts\": [...]}} as "
-    "JSON only."
+    "Each concept: a <=12-char scroll-stopping hook (Reel scene 1 / image "
+    "headline) that is CONFRONTATIONAL and PROVOCATIVE — not safe or generic. "
+    "Make the reader feel called out. Reference modern life (scrolling, 9-to-5, "
+    "burnout, comfort zones, procrastination). "
+    "A full caption (controversial first line that sparks debate, then the payoff, "
+    "then an agree/disagree CTA), a one-line cta, reel_scenes (on-screen text per "
+    "scene; [] if not a reel), and 3-5 non-generic hashtags. Do NOT change the "
+    "quote text. Output {{\"concepts\": [...]}} as JSON only."
 )
 _REVISE_ROLE_DEFAULT = (
     "You are the Copywriter. Brief:\n{brief}\nConcept to revise:\n{concept}\n"

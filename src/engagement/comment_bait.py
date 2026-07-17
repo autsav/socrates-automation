@@ -191,54 +191,54 @@ class CommentBait:
 
     CTA_TEMPLATES = {
         "save_bait": [
-            "Save this for the moment you need it.",
-            "Bookmark this. You'll need it later.",
-            "Save this before the algorithm hides it.",
-            "Screenshot this and read it when you're struggling.",
-            "Put this in your saved folder. Future you is grateful.",
+            "Save this for when you're about to waste another day.",
+            "Bookmark this. You'll need it when comfort starts feeling like a cage.",
+            "Save this before the algorithm buries it. You know it will.",
+            "Screenshot this. Read it when you're making excuses again.",
+            "Put this in your saved folder. Future you will either thank you or regret ignoring it.",
         ],
         "share_bait": [
-            "Send this to someone who needs to hear it.",
-            "Tag someone who's fighting a silent battle.",
-            "Share this with the person you thought of while reading.",
-            "Someone you know needs this right now. Send it.",
-            "This post found you for a reason. Share it with who needs it.",
+            "Send this to the friend who keeps saying 'I'll start Monday.'",
+            "Tag someone who needs to hear this — even if they'll ignore it.",
+            "Share this with the person you thought of while reading. They'll either thank you or block you.",
+            "Someone you know is wasting their potential right now. Send them this.",
+            "This post found you for a reason. Share it with who needs it — or don't, and keep scrolling.",
         ],
         "comment_bait": [
-            "Drop a 🔥 if this resonated.",
-            "Comment the first word that came to mind.",
-            "Agree or disagree? Say it below.",
-            "What's your take? The comments need your voice.",
-            "Reply with one sentence that describes where you are right now.",
+            "Comment the excuse you've been using this week. Let's see if it survives Socrates.",
+            "Type 'GUILTY' if this hit too close to home.",
+            "What's the one thing you're avoiding? Say it. Out loud. In the comments.",
+            "Agree or disagree — but don't just scroll past. The comments need your voice.",
+            "Reply with the word that describes your comfort zone. One word.",
         ],
         "follow_bait": [
-            "Follow for daily wisdom that punches you in the gut (in a good way).",
-            "This is the kind of content you need in your feed daily. Follow.",
-            "If this hit different, you know what to do.",
+            "Follow for daily philosophy that punches you in the gut — and means it.",
+            "If this made you uncomfortable, you're in the right place. Follow.",
+            "I post things that should make you stop scrolling. Follow if you want more of that.",
         ],
         "agree_disagree": [
-            "Agree or disagree? There's no wrong answer — just yours.",
-            "Some will hate this. Some will feel seen. Which are you?",
-            "Controversial take: this is exactly what most people need to hear. Agree?",
-            "This won't resonate with everyone. But if it hit you, you know why.",
+            "Agree or disagree: comfort is just a prettier word for stuck.",
+            "Some will hate this. Some will feel called out. Which one are you?",
+            "Controversial take: most people don't want to change. They want to complain. Agree?",
+            "This won't sit right with everyone. But if it sits right with you, you know why.",
         ],
         "fill_blank": [
-            "Fill in the blank: The hardest part about changing is ________.",
-            "Complete this: I feel most alive when ________.",
-            "One word that describes your current chapter: ________",
-            "The thing I'm avoiding is ________. There. I said it.",
+            "Fill in the blank: The thing I'm avoiding is ________. There. Now it's real.",
+            "Complete this: I keep saying I'll start when ________. You won't.",
+            "One word that describes your current excuse: ________",
+            "The habit I'm pretending isn't a problem is ________. Say it.",
         ],
     }
 
     # ── Emotional Resonance Boosters ───────────────────────────────────────────
 
     RESONANCE_BOOSTERS = [
-        "If this hit you, you're not alone.",
-        "This is for the ones who feel it but don't say it.",
-        "Not everyone will get this. But you will.",
-        "The right people always find this at the right time.",
-        "If your chest tightened reading this, it means something.",
-        "This isn't for everyone. It's for you.",
+        "If this made you uncomfortable, good. That means it's true.",
+        "Not everyone will get this. But the ones who do are the ones who'll change.",
+        "If your chest tightened reading this, that's not anxiety. That's awareness.",
+        "This isn't a quote. It's a mirror. And you might not like what you see.",
+        "The fact that you stopped scrolling means part of you already knows.",
+        "You can ignore this. You've ignored harder truths.",
     ]
 
     def __init__(self, audience: str = "stuck", mood: str = "dark_philosophical"):

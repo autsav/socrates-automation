@@ -48,16 +48,14 @@ class PromptArchitect:
         "cinematic three-point lighting, key light warm, fill cool",
     ]
 
-    # Texture and material quality boosters
+    # Texture and material quality boosters (photographic, not digital art)
     TEXTURE_BOOSTERS = [
-        "hyper-detailed marble texture, every crack and weathering visible",
-        "oil painting impasto texture visible in brushstrokes",
-        "film grain, Kodak Portra 800 color science",
-        "digital matte painting, concept art quality",
-        "photorealistic with subtle lens distortion",
-        "weathered bronze patina, oxidation patterns",
-        "ancient papyrus texture, ink bleeding slightly",
-        "wet stone surface with reflective water droplets",
+        "photorealistic marble texture, natural weathering, real stone",
+        "35mm film grain, Kodak Portra 800 color science, natural color",
+        "photorealistic, subtle lens distortion, shallow depth of field",
+        "real weathered bronze patina, oxidation patterns, natural metal",
+        "real stone surface, natural water reflections, not rendered",
+        "natural lighting, no studio lights, real-world atmosphere",
     ]
 
     # Atmosphere and mood enhancers
@@ -73,15 +71,16 @@ class PromptArchitect:
     ]
 
     # Style references (rotated for variety)
+    # Prioritize photographic realism over digital art to avoid AI-art suppression
     STYLE_REFS = [
-        "in the style of Greg Rutkowski epic fantasy concept art",
-        "cinematic color grading, teal and orange palette",
-        "Renaissance oil painting by Caravaggio",
-        "modern architectural photography, Phase One IQ4",
-        "Unreal Engine 5 render, ray-traced lighting",
-        "National Geographic travel photography composition",
-        "Studio Ghibli background painting aesthetic",
-        "classical romanticism by Caspar David Friedrich",
+        "cinematic film still, anamorphic lens, shot on Arri Alexa, natural color grading",
+        "documentary photography, natural lighting, 35mm film grain, no retouching",
+        "modern architectural photography, Phase One IQ4, realistic materials",
+        "National Geographic travel photography, real-world composition",
+        "cinematic color grading, muted teal and amber, Roger Deakins style",
+        "black and white fine art photography, high contrast, Ansel Adams zone system",
+        "golden hour landscape photography, natural sun flare, atmospheric perspective",
+        "minimalist real-world photography, concrete and stone textures, natural light",
     ]
 
     # Seasonal variations (can be overridden)

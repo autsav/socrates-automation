@@ -19,53 +19,83 @@ DB_PATH = Path(__file__).parent.parent.parent / "data" / "pipeline.db"
 HOOK_TEMPLATES = {
     "pattern_interrupt_1": {
         "category": "pattern_interrupt",
-        "template": "You already know what you need to do.",
-        "est_hold": 0.72,
+        "template": "You already know what you need to do. So why haven't you?",
+        "est_hold": 0.78,
     },
     "pattern_interrupt_2": {
         "category": "pattern_interrupt",
-        "template": "Stop waiting to feel ready.",
-        "est_hold": 0.68,
+        "template": "Stop. You're about to scroll past something you needed today.",
+        "est_hold": 0.80,
     },
     "question_1": {
         "category": "question",
-        "template": "What if waiting IS the mistake?",
-        "est_hold": 0.70,
+        "template": "What if the life you're avoiding IS the one worth living?",
+        "est_hold": 0.76,
     },
     "question_2": {
         "category": "question",
-        "template": "What if you're not stuck — just afraid?",
-        "est_hold": 0.74,
+        "template": "What if you're not stuck — just too comfortable to move?",
+        "est_hold": 0.79,
     },
     "confrontation_1": {
         "category": "confrontation",
-        "template": "You've delayed this long enough.",
-        "est_hold": 0.65,
+        "template": "You're not busy. You're just avoiding what matters.",
+        "est_hold": 0.82,
     },
     "confrontation_2": {
         "category": "confrontation",
-        "template": "The algorithm is not on your side.",
-        "est_hold": 0.69,
+        "template": "Socrates would call your daily routine a slow death.",
+        "est_hold": 0.85,
+    },
+    "confrontation_3": {
+        "category": "confrontation",
+        "template": "The algorithm knows you're wasting your life. So do you.",
+        "est_hold": 0.84,
+    },
+    "confrontation_4": {
+        "category": "confrontation",
+        "template": "You don't need motivation. You need a reality check.",
+        "est_hold": 0.83,
     },
     "story_1": {
         "category": "story",
-        "template": "Meet Alex. Alex scrolls 4 hours a day. Today Alex found Socrates.",
-        "est_hold": 0.62,
+        "template": "2,400 years ago, a man was sentenced to death for asking questions you're too scared to ask.",
+        "est_hold": 0.75,
     },
     "statistic_1": {
         "category": "statistic",
-        "template": "90% of people skip this. Don't be one of them.",
-        "est_hold": 0.71,
+        "template": "90% of people will scroll past this. The 10% who stay are the ones who change.",
+        "est_hold": 0.77,
     },
     "personalization_1": {
         "category": "personalization",
-        "template": "Hey {audience} — this is specifically for you.",
-        "est_hold": 0.75,
+        "template": "You opened this for a reason. Let's find out which one.",
+        "est_hold": 0.81,
+    },
+    "roast_1": {
+        "category": "roast",
+        "template": "Socrates roasted people for free 2,400 years ago. You pay for therapy.",
+        "est_hold": 0.83,
+    },
+    "roast_2": {
+        "category": "roast",
+        "template": "Your screen time report would make Socrates weep.",
+        "est_hold": 0.86,
+    },
+    "verdict_1": {
+        "category": "verdict",
+        "template": "Socrates would have thoughts on what you're doing right now.",
+        "est_hold": 0.80,
+    },
+    "debate_1": {
+        "category": "debate",
+        "template": "Hot take: comfort is the new prison. And you built the walls.",
+        "est_hold": 0.84,
     },
     "quote_first_1": {
         "category": "quote_first",
-        "template": "\"{quote_truncated}\"",
-        "est_hold": 0.58,
+        "template": '"{quote_truncated}" — and you thought YOUR life was hard.',
+        "est_hold": 0.72,
     },
 }
 
