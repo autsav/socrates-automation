@@ -83,7 +83,7 @@ def gnews_headlines(api_key, limit=10):
 
 
 def fetch_trends(cfg, limit=20):
-    """Merge Google Trends + GNews into a deduped [{topic, source}] list."""
+    """Merge Google Trends + GNews + Reddit into a deduped [{topic, source}] list."""
     out, seen = [], set()
     for topic in google_trends(15):
         k = (topic or "").strip().lower()
@@ -95,4 +95,14 @@ def fetch_trends(cfg, limit=20):
         if k and k not in seen and not is_unsafe(title):
             seen.add(k)
             out.append({"topic": title, "source": "gnews"})
+    # Reddit trends — philosophy/stoicism communities
+    try:
+        from src.content.reddit_trends import reddit_trending_for_socrates
+        for item in reddit_trending_for_socrates(10):
+            k = (item["topic"] or "").strip().lower()
+            if k and k not in seen and not is_unsafe(item["topic"]):
+                seen.add(k)
+                out.append(item)
+    except Exception:
+        pass  # Reddit unavailable — never break the pipeline
     return out[:limit]

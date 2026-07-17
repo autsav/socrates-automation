@@ -308,8 +308,22 @@ _GENERIC_TAGS = {"#fyp", "#viral", "#reels", "#explore", "#foryou", "#trending"}
 
 
 def _generate_hashtags(audience: str, mood: str, max_tags: int = 5) -> str:
-    """Build a 3–5 tag string: base + audience + mood tags, generic tags removed."""
+    """Build a 3–5 tag string using performance data when available.
+
+    Tries the hashtag tracker first (data-driven), falls back to
+    the static pool + mood tag. Generic/spam tags are always filtered.
+    """
     mood = mood or ""
+    # Try data-driven hashtag recommendations first
+    try:
+        from src.analytics.hashtag_tracker import recommend_hashtags, BANNED_HASHTAGS
+        recommended = recommend_hashtags(audience=audience, n=max_tags)
+        if recommended and len(recommended) >= 3:
+            return " ".join(recommended[:max_tags])
+    except Exception:
+        pass
+
+    # Fallback: static pool
     candidates = list(_BASE_HASHTAGS[:2])
     for t in _HASHTAG_POOL.get(audience, []):
         candidates.append(t)
@@ -982,13 +996,25 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     quote_data = _apply_trend_scout(cfg, quote_data)
 
     # ── Phase 1: Inject viral engagement into caption ───────────────────────────
-    bait = CommentBait(audience=quote_data["audience"], mood=mood)
-    engagement_block = bait.generate_full_engagement_block(
-        quote=quote_data["quote"],
-        include_question=True,
-        include_cta=True,
-        include_booster=False,
-    )
+    # Use CTA tracker to pick the best CTA type based on historical performance
+    try:
+        from src.analytics.cta_tracker import recommend_cta_type
+        best_cta = recommend_cta_type(quote_data["audience"])
+        bait = CommentBait(audience=quote_data["audience"], mood=mood)
+        engagement_block = bait.generate_full_engagement_block(
+            quote=quote_data["quote"],
+            include_question=True,
+            include_cta=True,
+            include_booster=False,
+        )
+    except Exception:
+        bait = CommentBait(audience=quote_data["audience"], mood=mood)
+        engagement_block = bait.generate_full_engagement_block(
+            quote=quote_data["quote"],
+            include_question=True,
+            include_cta=True,
+            include_booster=False,
+        )
     quote_data["caption"] = f"{quote_data['caption']}\n\n{engagement_block}"
     log.info(f"  [viral] Engagement block injected ({len(engagement_block)} chars)")
 
