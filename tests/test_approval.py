@@ -31,6 +31,49 @@ def test_record_pending_then_get_decision_is_pending(monkeypatch, tmp_path):
     assert approval.get_decision(5) == "pending"
 
 
+def test_annotate_pending_payload_attaches_reel_context(monkeypatch, tmp_path):
+    _isolate(monkeypatch, tmp_path)
+    approval.record_pending(11)
+    approval.annotate_pending_payload(
+        11,
+        reel_path="/tmp/reel_x.mp4",
+        caption="Stoic line about discipline.",
+        mood="stark_minimal",
+    )
+    state = approval._load()
+    entry = state["decisions"]["11"]
+    assert entry["status"] == "pending"
+    assert entry["reel_path"] == "/tmp/reel_x.mp4"
+    assert entry["caption"] == "Stoic line about discipline."
+    assert entry["mood"] == "stark_minimal"
+
+
+def test_annotate_pending_payload_is_idempotent_and_partial(monkeypatch, tmp_path):
+    _isolate(monkeypatch, tmp_path)
+    approval.record_pending(11)
+    approval.annotate_pending_payload(11, reel_path="/tmp/reel_x.mp4")
+    # Second call only sets caption+mood; reel_path from earlier must survive.
+    approval.annotate_pending_payload(11, caption="caption only", mood="dark_philosophical")
+    entry = approval._load()["decisions"]["11"]
+    assert entry["reel_path"] == "/tmp/reel_x.mp4"
+    assert entry["caption"] == "caption only"
+    assert entry["mood"] == "dark_philosophical"
+
+
+def test_annotate_pending_payload_does_not_clobber_existing_decision(monkeypatch, tmp_path):
+    _isolate(monkeypatch, tmp_path)
+    # Simulate: bot sent message → human already tapped ✅ before we annotated.
+    approval.record_pending(11)
+    state = approval._load()
+    state["decisions"]["11"]["status"] = "approved"
+    approval._save(state)
+    approval.annotate_pending_payload(11, reel_path="/tmp/reel_x.mp4")
+    # status untouched, payload added.
+    entry = approval._load()["decisions"]["11"]
+    assert entry["status"] == "approved"
+    assert entry["reel_path"] == "/tmp/reel_x.mp4"
+
+
 def test_record_pending_is_idempotent_does_not_clobber_existing_decision(monkeypatch, tmp_path):
     _isolate(monkeypatch, tmp_path)
     approval.record_pending(5)

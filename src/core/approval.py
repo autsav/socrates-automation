@@ -123,6 +123,38 @@ def record_pending(post_row_id: int) -> None:
     _save(state)
 
 
+def annotate_pending_payload(
+    post_row_id: int,
+    *,
+    reel_path: str | None = None,
+    caption: str | None = None,
+    mood: str | None = None,
+) -> None:
+    """Attach reel-publish context to a pending decision so the
+    approval_daemon's auto-poster can find it without re-rendering anything.
+
+    Must be called AFTER record_pending() (creates the entry if missing) and
+    BEFORE the Telegram message is sent (so a click recorded before this
+    annotation still waits for it on the next loop iteration).
+
+    Idempotent: existing fields are preserved; only the keys you pass are
+    written. Missing keys left untouched so a partial call doesn't wipe data.
+    """
+    state = _load()
+    state.setdefault("decisions", {})
+    key = str(post_row_id)
+    entry = state["decisions"].setdefault(
+        key, {"status": "pending", "decided_at": None}
+    )
+    if reel_path is not None:
+        entry["reel_path"] = reel_path
+    if caption is not None:
+        entry["caption"] = caption
+    if mood is not None:
+        entry["mood"] = mood
+    _save(state)
+
+
 def get_decision(post_row_id: int) -> str | None:
     """"approved" | "rejected" | "pending" | None (never asked)."""
     state = _load()

@@ -426,7 +426,11 @@ class Notifier:
                 continue
             try:
                 if post_row_id is not None and hasattr(backend, "send_video_with_buttons"):
-                    from src.core.approval import approve_reject_buttons, record_pending
+                    from src.core.approval import (
+                        approve_reject_buttons,
+                        record_pending,
+                        annotate_pending_payload,
+                    )
                     ok = backend.send_video_with_buttons(
                         reel_path,
                         caption="🎬 Your Reel is ready! Approve to confirm you'll post it, "
@@ -435,6 +439,14 @@ class Notifier:
                     )
                     if ok:
                         record_pending(post_row_id)
+                        # Persist reel+caption+mood so approval_daemon's
+                        # auto-poster can find them when the human taps ✅.
+                        annotate_pending_payload(
+                            post_row_id,
+                            reel_path=str(reel_path),
+                            caption=caption,
+                            mood=mood,
+                        )
                 elif hasattr(backend, "send_video"):
                     ok = backend.send_video(reel_path, caption="🎬 Your Reel is ready! Download this video and upload to Instagram Reels.")
                 else:
