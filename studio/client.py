@@ -26,6 +26,8 @@ class StudioClient:
         self._sdk = sdk
 
     def call(self, role, shared_prefix, role_system, user_content, schema):
+        if self.over_daily_ceiling():
+            raise StudioError(f"{role} call blocked: daily spend ceiling reached")
         model = settings.ROLE_MODELS[role]
         effort = settings.ROLE_EFFORT[role]
         is_haiku = "haiku" in model
@@ -81,7 +83,14 @@ class StudioClient:
     # ── spend tracking ────────────────────────────────────────────────────
     def _record_usage(self, model, usage):
         cin, cout = _PRICING.get(model, (5.0, 25.0))
-        cost = (getattr(usage, "input_tokens", 0) * cin
+        # Include cache token fields so ceiling math matches the invoice.
+        # Cache reads are billed at full input rate; cache writes at 1.25x.
+        input_tokens = getattr(usage, "input_tokens", 0)
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        cost = (input_tokens * cin
+                + cache_read * cin
+                + cache_write * cin * 1.25
                 + getattr(usage, "output_tokens", 0) * cout) / 1_000_000
         log = self._load_spend()
         today = date.today().isoformat()

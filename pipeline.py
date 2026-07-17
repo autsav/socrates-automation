@@ -23,7 +23,7 @@ from src.visual.carousel_composer import compose_carousel
 from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram, post_carousel_to_instagram
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from src.core.data_store import init_db, save_post, mark_posted, get_ab_results, has_posted_today, save_proposal
+from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal
 from studio.reconcile import reconcile_token
 from studio.client import StudioClient
 from studio import music_director
@@ -828,32 +828,37 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         mark_posted(post_row_id, f"PENDING_MANUAL_{post_row_id}", None, _rel_path(reel_path))
     elif not dry_run and reel_path:
         log.info("Step: Posting POV Reel to Instagram...")
-        post_id = post_reel_to_instagram(
-            video_path=reel_path,
-            caption=quote_data["caption"],
-            ig_account_id=cfg.IG_ACCOUNT_ID,
-            access_token=access_token,
-            cloudinary_config={
-                "cloud_name": cfg.CLOUDINARY_CLOUD_NAME,
-                "api_key": cfg.CLOUDINARY_API_KEY,
-                "api_secret": cfg.CLOUDINARY_API_SECRET,
-            },
-        )
-        log.info(f"✅ Posted! ID: {post_id}")
-        mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
-        mark_posted(post_row_id, post_id, None, _rel_path(reel_path))
-        if post_id:
-            try:
-                notifier = Notifier(cfg)
-                trending = get_trending_suggestion(mood)
-                notifier.notify_post_published(
-                    post_id=post_id,
-                    caption_preview=quote_data["caption"][:120],
-                    mood=mood,
-                    trending_suggestion=trending,
-                )
-            except Exception as e:
-                log.warning(f"Notification failed (non-blocking): {e}")
+        try:
+            post_id = post_reel_to_instagram(
+                video_path=reel_path,
+                caption=quote_data["caption"],
+                ig_account_id=cfg.IG_ACCOUNT_ID,
+                access_token=access_token,
+                cloudinary_config={
+                    "cloud_name": cfg.CLOUDINARY_CLOUD_NAME,
+                    "api_key": cfg.CLOUDINARY_API_KEY,
+                    "api_secret": cfg.CLOUDINARY_API_SECRET,
+                },
+            )
+            log.info(f"✅ Posted! ID: {post_id}")
+            mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
+            mark_posted(post_row_id, post_id, None, _rel_path(reel_path))
+            if post_id:
+                try:
+                    notifier = Notifier(cfg)
+                    trending = get_trending_suggestion(mood)
+                    notifier.notify_post_published(
+                        post_id=post_id,
+                        caption_preview=quote_data["caption"][:120],
+                        mood=mood,
+                        trending_suggestion=trending,
+                    )
+                except Exception as e:
+                    log.warning(f"Notification failed (non-blocking): {e}")
+        except Exception as e:
+            log.error(f"Publish failed: {e} — releasing slot {slot} for retry")
+            release_post(post_row_id)
+            raise
     else:
         log.info("⏭ dry_run=True — skip Instagram post")
 
@@ -884,7 +889,7 @@ def _reels_use_remotion(reel: bool, carousel: bool, remotion: bool, pov: bool) -
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
                   carousel: bool = False, pov: bool = False, remotion: bool = False,
-                  seed: int | None = None, content: str | None = None):
+                  seed: int | None = None, content: str | None = None, team: bool = False):
     # All reels take the Remotion+FLUX path; --remotion still forces it too.
     # Falls back to the ffmpeg POV generator (edge-tts, never OpenAI) only if
     # Node/Remotion is unavailable.
@@ -941,7 +946,36 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         else:
             log.info("  [studio] fell back to legacy templated path")
 
-    if not content and studio_decision is None:
+    elif team:
+        log.info("Step 1: Team system content...")
+        try:
+            from team.bridge import load_team_post
+            slot_for_team = _current_slot()
+            team_quote_data = load_team_post(slot=slot_for_team)
+            if team_quote_data is None:
+                log.info("  [team] no plan found — falling back to legacy")
+                team = False
+            else:
+                # Team provides the quote_id; fetch the actual quote text from excel
+                from src.core.excel_reader import get_quote_by_row
+                quote_text = get_quote_by_row(team_quote_data["row_number"])
+                if quote_text:
+                    team_quote_data["quote"] = quote_text
+                else:
+                    log.warning("  [team] quote not found in excel — using plan copy")
+                    team_quote_data["quote"] = team_quote_data.get("quote", "The only true wisdom is in knowing you know nothing.")
+                quote_data = team_quote_data
+                mood = quote_data["mood"]
+                controversy = ""
+                caption_variant = -1
+                flux_override = quote_data.get("flux_override", "")
+                log.info(f"  [team] content ready — mood={mood}, "
+                         f"hook={quote_data.get('hook', '')[:40]!r}")
+        except Exception as e:
+            log.warning(f"[team] stage failed ({type(e).__name__}: {e}) — falling back to legacy")
+            team = False
+
+    if not content and not team and studio_decision is None:
         log.info("Step 1: Reading quote + legacy templated content...")
         quote_data, mood, controversy, caption_variant = _legacy_content(cfg)
 
@@ -1250,6 +1284,7 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         mark_posted(post_row_id, f"PENDING_MANUAL_{post_row_id}", _rel_path(final_image_path), _rel_path(reel_path))
 
     elif not dry_run:
+      try:
         if reel and reel_path and ffmpeg_available():
             log.info("Step 6/6: Posting Reel to Instagram...")
             post_id = post_reel_to_instagram(
@@ -1307,6 +1342,10 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                 )
             except Exception as e:
                 log.warning(f"Notification failed (non-blocking): {e}")
+      except Exception as e:
+        log.error(f"Publish failed: {e} — releasing slot {slot} for retry")
+        release_post(post_row_id)
+        raise
     else:
         log.info("⏭ dry_run=True — skip Instagram post")
 
@@ -1351,6 +1390,7 @@ if __name__ == "__main__":
     parser.add_argument("--content", type=str, default=None,
                         help="Path to a JSON file of hand-crafted reel content "
                              "(hook/bridge/quote/cta/caption/hashtags/mood); bypasses excel+studio.")
+    parser.add_argument("--team", action="store_true", help="Use the 8-agent team system's approved plan for today; falls back to legacy if no plan exists.")
     args = parser.parse_args()
 
     if args.batch:
@@ -1359,8 +1399,9 @@ if __name__ == "__main__":
     elif args.manual:
         # --manual implies --reel (generate video) but skips API posting
         run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio,
-                     pov=args.pov, remotion=args.remotion, seed=args.seed, content=args.content)
+                     pov=args.pov, remotion=args.remotion, seed=args.seed, content=args.content,
+                     team=args.team)
     else:
         run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio,
                      carousel=args.carousel, pov=args.pov, remotion=args.remotion, seed=args.seed,
-                     content=args.content)
+                     content=args.content, team=args.team)

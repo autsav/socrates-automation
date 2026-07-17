@@ -72,8 +72,19 @@ def _row_to_version(r):
     }
 
 
+_INITIALIZED = set()  # db_path strings that have been init_optimizer_db'd
+
+
+def _ensure_initialized(db_path):
+    """Run init_optimizer_db once per db_path, then skip (idempotent)."""
+    key = str(db_path)
+    if key not in _INITIALIZED:
+        init_optimizer_db(db_path)
+        _INITIALIZED.add(key)
+
+
 def register_asset(key, kind, seed_value, db_path=DB_PATH):
-    init_optimizer_db(db_path)
+    _ensure_initialized(db_path)
     con = _connect(db_path)
     try:
         existing = con.execute(

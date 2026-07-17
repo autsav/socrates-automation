@@ -1,0 +1,46 @@
+name: Weekly Team Planning
+
+on:
+  schedule:
+    # Every Sunday at 00:00 UTC — generates a 7-day content plan for the week
+    - cron: '0 0 * * 0'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -q -r requirements.txt
+
+      - name: Validate required secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is required for team planning"
+            exit 1
+          fi
+
+      - name: Run team pipeline (plan only)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python -m team.orchestrator --dry-run
+
+      - name: Commit plan artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add team/output/approved_plan_*.json team/output/copy_*.json team/output/visual_specs_*.json
+          git commit -m "chore: weekly team plan generated" || echo "No changes to commit"
+          git push

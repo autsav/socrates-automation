@@ -116,7 +116,7 @@ def _create_media_container(ig_account_id: str, image_url: str, caption: str, ac
     return container_id
 
 
-def _wait_for_container(container_id: str, access_token: str, max_wait: int = 60) -> bool:
+def _wait_for_container(container_id: str, access_token: str, max_wait: int = 120) -> bool:
     """Poll until container status is FINISHED."""
     url = f"{GRAPH_URL}/{container_id}"
     params = {"fields": "status_code", "access_token": access_token}

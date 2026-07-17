@@ -217,6 +217,24 @@ def mark_as_posted(excel_path: str, row_number: int, post_id: str):
     print(f"  [excel] Marked row {row_number} as posted ({today})")
 
 
+def get_quote_by_row(row_number: int, excel_path: str = "quotes.xlsx") -> str | None:
+    """Return the quote text for a given row number, or None if not found."""
+    path = Path(excel_path)
+    if not path.exists():
+        return None
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+        ws = wb["Quotes"]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[0] == row_number:
+                wb.close()
+                return str(row[1]).strip() if row[1] else None
+        wb.close()
+    except Exception:
+        return None
+    return None
+
+
 if __name__ == "__main__":
     import os
     from dotenv import load_dotenv

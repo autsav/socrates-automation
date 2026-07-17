@@ -2,6 +2,7 @@
 
 Automated daily philosophy Reels/carousels for Instagram. Entry point `pipeline.py`.
 Run with the 3.11 venv: `.venv/bin/python pipeline.py …`; tests: `.venv/bin/python -m pytest`.
+All scheduled slots now **auto-post directly to Instagram** via the Graph API (no more --manual in the cron).
 
 ## Reel flow (POV / `--remotion`)
 Content stage (`--content` JSON → studio `--studio` → legacy excel) sets `quote_data`

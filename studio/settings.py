@@ -9,7 +9,7 @@ ROLE_MODELS = {
     "analyst":    "claude-sonnet-4-6",
     "strategist": "claude-sonnet-4-6",
     "copywriter": "claude-opus-4-8",
-    "director":   "claude-opus-4-8",
+    "director":   "claude-sonnet-4-6",
     "planner":               "claude-sonnet-4-6",
     "reviewer":               "claude-sonnet-4-6",
     "content_writer":         "claude-opus-4-8",
@@ -20,13 +20,13 @@ ROLE_MODELS = {
     "analytics_analyst":      "claude-haiku-4-5",
     "music_director":         "claude-sonnet-4-6",
     "trend_scout":            "claude-sonnet-4-6",
-    "prompt_critic":          "claude-opus-4-8",
+    "prompt_critic":          "claude-sonnet-4-6",
 }
 ROLE_EFFORT = {
     "analyst":    "medium",
     "strategist": "medium",
     "copywriter": "high",
-    "director":   "high",
+    "director":   "medium",
     "planner":               "medium",
     "reviewer":               "medium",
     "content_writer":         "high",
@@ -37,7 +37,7 @@ ROLE_EFFORT = {
     "analytics_analyst":      "low",
     "music_director":         "medium",
     "trend_scout":            "medium",
-    "prompt_critic":          "high",
+    "prompt_critic":          "medium",
 }
 N_CONCEPTS = 4
 DAILY_SPEND_CEILING_USD = 2.0

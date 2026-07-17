@@ -235,6 +235,23 @@ def mark_posted(row_id: int, post_id: str, image_path: str, reel_path: str | Non
         conn.close()
 
 
+def release_post(row_id: int) -> None:
+    """Delete a claimed-but-unpublished post so the slot can be retried.
+
+    Called when the publish step fails after save_post already claimed the
+    slot. Without this, has_posted_today() blocks all retries for the rest
+    of the day (B5 fix). Best-effort — never raises.
+    """
+    conn = _get_connection()
+    try:
+        conn.execute("DELETE FROM posts WHERE id = ? AND post_id IS NULL", (row_id,))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
 def _ensure_ab_row(dimension: str, variant_a: str, variant_b: str) -> None:
     """Create an ab_results row if it doesn't exist."""
     conn = _get_connection()

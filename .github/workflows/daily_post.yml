@@ -123,7 +123,7 @@ jobs:
           fi
           echo "Detected mode: $(cat $GITHUB_OUTPUT | grep mode | cut -d= -f2)"
 
-      - name: Run pipeline (dry-run on PRs)
+      - name: Run pipeline (dry-run on PRs, auto-post on schedule)
         env:
           ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
           FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
@@ -145,17 +145,17 @@ jobs:
             echo "🔍 PR dry-run"
             python pipeline.py --dry-run
           elif [ "${{ steps.format.outputs.mode }}" = "carousel" ]; then
-            echo "📸 Posting CAROUSEL (Wed/Thu — highest engagement day)"
+            echo "📸 Auto-posting CAROUSEL (Wed/Thu — highest engagement day)"
             python pipeline.py --carousel
           elif [ "${{ steps.format.outputs.mode }}" = "pov" ]; then
-            echo "🎬 POV Reel (Remotion, narrated; auto-falls back to ffmpeg POV) → Telegram for manual upload"
-            python pipeline.py --manual --remotion
+            echo "🎬 POV Reel (Remotion) — auto-posting to Instagram directly"
+            python pipeline.py --remotion
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "🎬 MANUAL TRIGGER — AI Creative Studio → Telegram proposal for manual upload (test)"
-            python pipeline.py --studio --manual --remotion
+            echo "🎬 MANUAL TRIGGER — AI Creative Studio — auto-posting to Instagram"
+            python pipeline.py --studio --remotion
           else
-            echo "📲 SCHEDULED — AI Creative Studio proposal → Telegram for MANUAL upload with trending music (auto-falls back to legacy templates if the studio fails)"
-            python pipeline.py --studio --manual --remotion
+            echo "📲 SCHEDULED — AI Creative Studio — auto-posting to Instagram directly"
+            python pipeline.py --studio --remotion
           fi
 
       - name: Send post notification (Telegram/Slack)
