@@ -1,0 +1,81 @@
+name: Engagement Bot
+
+on:
+  schedule:
+    # Run 5 minutes after each carousel post (Wed/Thu 09:35 UTC)
+    - cron: '35 9 * * 3'   # Wednesday
+    - cron: '35 9 * * 4'   # Thursday
+  workflow_dispatch:
+
+jobs:
+  engage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -q -r requirements.txt
+
+      - name: Validate required secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+        run: |
+          missing=""
+          for key in ANTHROPIC_API_KEY META_ACCESS_TOKEN IG_ACCOUNT_ID; do
+            val="${!key}"
+            if [ -z "$val" ]; then
+              missing="$missing $key"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "❌ MISSING:$missing — engagement bot needs these to reply to comments"
+            exit 0  # Don't fail the workflow, just skip
+          fi
+        env:
+          IG_ACCOUNT_ID: ${{ secrets.IG_ACCOUNT_ID }}
+
+      - name: Run engagement bot
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID: ${{ secrets.IG_ACCOUNT_ID }}
+        run: |
+          python -c "
+          import sqlite3, json
+          from src.engagement.engagement_bot import run_engagement_bot
+          import os
+
+          # Find the most recent published post
+          conn = sqlite3.connect('data/pipeline.db')
+          row = conn.execute(
+              'SELECT post_id, quote_text FROM posts WHERE post_id IS NOT NULL '
+              'AND post_id NOT LIKE \"PENDING_MANUAL_%\" '
+              'ORDER BY posted_at DESC LIMIT 1'
+          ).fetchone()
+          conn.close()
+
+          if not row or not row[0]:
+              print('No published post found — skipping')
+              exit(0)
+
+          media_id, quote = row[0], row[1] or ''
+          print(f'Running engagement bot for post {media_id}')
+
+          run_engagement_bot(
+              media_id=media_id,
+              access_token=os.environ['META_ACCESS_TOKEN'],
+              anthropic_api_key=os.environ['ANTHROPIC_API_KEY'],
+              post_quote=quote,
+              max_rounds=4,
+              delay_sec=0,
+              interval_sec=300,
+          )
+          " 2>&1 || echo "Engagement bot completed (may have had partial errors)"

@@ -27,6 +27,10 @@ class Config:
 
     # ── Voiceover (optional) ────────────────────────────────────────────────
     OPENAI_API_KEY: str = ""         # OpenAI TTS — text-to-speech narration
+    ELEVENLABS_API_KEY: str = ""     # ElevenLabs — human-quality TTS narration
+
+    # ── Stock footage (optional, replaces AI art) ────────────────────────────
+    PEXELS_API_KEY: str = ""         # Pexels — free stock video + photos
 
     # ── Notification backends (all optional) ──────────────────────────────────
     TELEGRAM_BOT_TOKEN: str = ""     # @BotFather on Telegram
@@ -46,6 +50,8 @@ class Config:
         self.JAMENDO_CLIENT_ID       = self._get_opt("JAMENDO_CLIENT_ID")
         self.GNEWS_API_KEY           = self._get_opt("GNEWS_API_KEY")
         self.OPENAI_API_KEY          = self._get_opt("OPENAI_API_KEY")
+        self.ELEVENLABS_API_KEY       = self._get_opt("ELEVENLABS_API_KEY")
+        self.PEXELS_API_KEY           = self._get_opt("PEXELS_API_KEY")
         self.TELEGRAM_BOT_TOKEN      = self._get_opt("TELEGRAM_BOT_TOKEN")
         self.TELEGRAM_CHAT_ID        = self._get_opt("TELEGRAM_CHAT_ID")
         self.SLACK_WEBHOOK_URL       = self._get_opt("SLACK_WEBHOOK_URL")

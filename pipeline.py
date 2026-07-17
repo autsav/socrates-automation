@@ -49,6 +49,10 @@ from src.audio.edge_tts_engine import (
     generate_scene_voiceover_edge_tts, parse_word_srt,
     REEL_VOICE, REEL_RATE, REEL_PITCH,
 )
+from src.audio.elevenlabs_engine import (
+    prepare_reel_voiceover as prepare_reel_voiceover_elevenlabs,
+    elevenlabs_available,
+)
 
 # ── Viral Growth: POV text Reels (zero-cost — ffmpeg + Pillow only) ───────────
 from src.video.pov_reel_generator import generate_pov_reel
@@ -661,9 +665,46 @@ def _select_reel_music(cfg, quote_data, hook_text, mood):
 
 
 def _reel_background(cfg, quote_data, mood):
-    """Best-effort fal.ai FLUX background for a Remotion reel. Builds a smart
-    prompt from the quote + trending topic + mood, generates the image, and
-    returns its Path — or None on any failure (reel falls back to particles)."""
+    """Best-effort background for a Remotion reel.
+
+    Priority: 1) Real stock footage (Pexels) 2) Stock photo (Pexels) 3) FLUX AI art
+    Stock footage avoids Instagram's AI content suppression (2025 algo).
+    """
+    # Try 1: Real stock footage from Pexels
+    pexels_key = getattr(cfg, "PEXELS_API_KEY", "") or os.getenv("PEXELS_API_KEY", "")
+    if pexels_key:
+        try:
+            from src.visual.stock_footage import fetch_stock_background, pexels_available
+            if pexels_available(pexels_key):
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                stock_path = fetch_stock_background(
+                    mood=mood,
+                    api_key=pexels_key,
+                    output_path=OUTPUT_DIR / f"stock_bg_{ts}.mp4",
+                )
+                if stock_path:
+                    log.info(f"  [reel] Real stock footage background: {_rel_path(stock_path)}")
+                    return stock_path
+        except Exception as e:
+            log.warning(f"  [reel] Stock footage unavailable ({e})")
+
+    # Try 2: Real stock photo from Pexels
+    if pexels_key:
+        try:
+            from src.visual.stock_photo import fetch_stock_photo
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            photo_path = fetch_stock_photo(
+                mood=mood,
+                api_key=pexels_key,
+                output_path=OUTPUT_DIR / f"stock_bg_{ts}.jpg",
+            )
+            if photo_path:
+                log.info(f"  [reel] Real stock photo background: {_rel_path(photo_path)}")
+                return photo_path
+        except Exception as e:
+            log.warning(f"  [reel] Stock photo unavailable ({e})")
+
+    # Try 3: FLUX AI art (fallback — still better than no background)
     try:
         prompt = PromptArchitect().build(
             quote=quote_data.get("quote", ""), mood=mood,
@@ -672,7 +713,7 @@ def _reel_background(cfg, quote_data, mood):
         path, _seed = generate_background(
             mood=mood, api_key=cfg.FAL_API_KEY, output_dir=str(OUTPUT_DIR),
             quote=quote_data.get("quote", ""), prompt_override=prompt)
-        log.info(f"  [reel] FLUX background generated: {_rel_path(path)}")
+        log.info(f"  [reel] FLUX background generated (fallback): {_rel_path(path)}")
         return path
     except Exception as e:  # noqa: BLE001 - never crash a reel
         log.warning(f"  [reel] FLUX background unavailable ({e}) — particle bg")
@@ -706,8 +747,23 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         hook_voice = quote_voice = cta_voice = music_path = None
         hook_words = quote_words = cta_words = []
         try:
-            if edge_tts_available():
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Use ElevenLabs (human-quality) when API key is available,
+            # fall back to edge-tts (free but robotic) otherwise.
+            el_api_key = getattr(cfg, "ELEVENLABS_API_KEY", "") or os.getenv("ELEVENLABS_API_KEY", "")
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if elevenlabs_available(el_api_key):
+                log.info("  [voiceover] Using ElevenLabs (human-quality narration)")
+                vo = prepare_reel_voiceover_elevenlabs(
+                    hook_text=hook_text,
+                    quote_text=quote_data["quote"],
+                    cta_text=cta_text,
+                    mood=mood,
+                    output_dir=OUTPUT_DIR,
+                    timestamp=ts,
+                    api_key=el_api_key,
+                )
+            elif edge_tts_available():
+                log.info("  [voiceover] ElevenLabs unavailable — using edge-tts fallback")
                 vo = prepare_reel_voiceover_edge_tts(
                     hook_text=hook_text,
                     quote_text=quote_data["quote"],
@@ -716,7 +772,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     output_dir=OUTPUT_DIR,
                     timestamp=ts,
                 )
-                if isinstance(vo, dict):
+            else:
+                vo = {}
+            if isinstance(vo, dict):
                     hook_voice = vo.get("hook_voice")
                     quote_voice = vo.get("quote_voice")
                     cta_voice = vo.get("cta_voice")
