@@ -866,15 +866,25 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         bridge_words = []
         if bridge_text:
             try:
-                if edge_tts_available():
-                    ts_bridge = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    bridge_path = OUTPUT_DIR / f"voice_bridge_{ts_bridge}.mp3"
+                ts_bridge = datetime.now().strftime("%Y%m%d_%H%M%S")
+                bridge_path = OUTPUT_DIR / f"voice_bridge_{ts_bridge}.mp3"
+                bridge_ok = False
+                # Same engine as the other scenes — a mid-reel voice switch
+                # (ElevenLabs hook, edge-tts bridge) is jarring.
+                el_key = getattr(cfg, "ELEVENLABS_API_KEY", "") or os.getenv("ELEVENLABS_API_KEY", "")
+                if elevenlabs_available(el_key):
+                    from src.audio.elevenlabs_engine import (
+                        generate_scene_voiceover as _el_scene,
+                        REEL_VOICE as _EL_REEL_VOICE,
+                    )
+                    bridge_ok = _el_scene(bridge_text, _EL_REEL_VOICE, bridge_path, el_key)
+                if not bridge_ok and edge_tts_available():
                     from src.audio.edge_tts_engine import SCENE_PROSODY
                     bridge_ok = generate_scene_voiceover_edge_tts(
                         bridge_text, REEL_VOICE, bridge_path, *SCENE_PROSODY["bridge"])
-                    if bridge_ok:
-                        bridge_voice = bridge_path
-                        bridge_words = parse_word_srt(bridge_path.with_suffix(".srt"))
+                if bridge_ok:
+                    bridge_voice = bridge_path
+                    bridge_words = parse_word_srt(bridge_path.with_suffix(".srt"))
             except Exception as e:
                 log.warning(f"  [remotion] bridge voiceover unavailable ({e}) — bridge silent")
 

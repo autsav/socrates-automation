@@ -27,9 +27,11 @@ ELEVENLABS_API = "https://api.elevenlabs.io/v1"
 
 # Pre-selected voices for philosophy content
 VOICES = {
-    "sage":      "pNIncy4yVsqPhqIdc4Kc",   # Adam — deep, authoritative, "wise elder"
-    "intense":   "TxGEqnHWrfWFTfWB9MjX",   # Josh — younger, intense, confrontational
-    "contemplative": "ErXw8Y8QH8n2Zn2l5J8h", # Sam — thoughtful, philosophical
+    # IDs verified against this account's /v1/voices (2026-07-19) — the previous
+    # legacy IDs 404'd on current accounts.
+    "sage":      "pqHfZKP75CvOlQylNhV4",   # Bill — wise, mature, balanced (old, crisp)
+    "intense":   "pNInz6obpgDQGcFmaJgB",   # Adam — dominant, firm
+    "contemplative": "JBFqnCBsd6RMkjVDRZzb", # George — warm, captivating storyteller
 }
 
 # Voice settings optimized for narration (not dialogue)
