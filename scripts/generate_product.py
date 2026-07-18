@@ -31,32 +31,31 @@ CONTENT_SCHEMA = {
     "properties": {
         "title": {"type": "string"},
         "subtitle": {"type": "string"},
-        "intro": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 5},
-        "protocol": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
-        "protocol_explainer": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 4},
+        "intro": {"type": "array", "items": {"type": "string"}},
+        "protocol": {"type": "array", "items": {"type": "string"}},
+        "protocol_explainer": {"type": "array", "items": {"type": "string"}},
         "daily_pages": {
-            "type": "array", "minItems": 21, "maxItems": 21,
+            "type": "array",
             "items": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
                     "quote": {"type": "string"},
                     "attribution": {"type": "string"},
-                    "prompts": {"type": "array", "items": {"type": "string"},
-                                "minItems": 3, "maxItems": 3},
+                    "prompts": {"type": "array", "items": {"type": "string"}},
                     "micro_action": {"type": "string"},
                 },
                 "required": ["quote", "attribution", "prompts", "micro_action"],
             },
         },
         "seven_day": {
-            "type": "array", "minItems": 7, "maxItems": 7,
+            "type": "array",
             "items": {
                 "type": "object", "additionalProperties": False,
                 "properties": {"theme": {"type": "string"}, "instruction": {"type": "string"}},
                 "required": ["theme", "instruction"],
             },
         },
-        "closing": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 3},
+        "closing": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["title", "subtitle", "intro", "protocol", "protocol_explainer",
                  "daily_pages", "seven_day", "closing"],
@@ -87,7 +86,8 @@ def validate_content(content: dict) -> tuple[bool, str]:
 
 
 def _e(s: str) -> str:
-    return html.escape(s or "")
+    # Strip stray markdown emphasis the model sometimes adds, then escape.
+    return html.escape((s or "").strip().strip("*_"))
 
 
 def render_html(content: dict) -> str:

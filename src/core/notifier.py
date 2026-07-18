@@ -313,6 +313,14 @@ class Notifier:
 
         return "\n".join(lines)
 
+    def send_document(self, doc_path, caption: str = "") -> bool:
+        """Send a document to any backend that supports it (Telegram)."""
+        sent = False
+        for backend in self.backends:
+            if hasattr(backend, "send_document"):
+                sent = backend.send_document(doc_path, caption=caption) or sent
+        return sent
+
     def send_message_with_buttons(self, message: str, buttons: list) -> bool:
         """Send a text message with an inline keyboard to any backend that supports
         it (Telegram). Used by the optimizer to surface prompt proposals with
