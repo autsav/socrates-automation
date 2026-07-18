@@ -40,8 +40,19 @@ DEFAULT_VOICE = "en-US-ChristopherNeural"
 # Morgan-Freeman-adjacent delivery. Chosen by ear (sample "A2_Andrew_MAX"); see
 # docs/superpowers/specs/2026-07-12-reel-narration-voice-design.md.
 REEL_VOICE = "en-US-AndrewNeural"
-REEL_RATE = "-30%"    # slow, deliberate
-REEL_PITCH = "-14Hz"  # deep bass
+REEL_RATE = "-30%"    # slow, deliberate (default / fallback)
+REEL_PITCH = "-14Hz"  # deep bass (default / fallback)
+
+# Narration arc — one sage voice, four deliveries. Flat prosody across scenes
+# reads as TTS; an arc reads as a narrator: the hook grabs (closest to natural
+# pace), the bridge builds, the QUOTE lands slowest and deepest (the payoff),
+# and the CTA lifts back up, warm.
+SCENE_PROSODY = {
+    "hook":   ("-18%", "-8Hz"),
+    "bridge": ("-24%", "-11Hz"),
+    "quote":  ("-32%", "-16Hz"),
+    "cta":    ("-20%", "-6Hz"),
+}
 
 
 def get_voice_for_mood(mood: str) -> str:
@@ -188,19 +199,19 @@ def prepare_reel_voiceover_edge_tts(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # One consistent "wise grandfather" sage voice for every reel, slowed and
-    # deepened — independent of mood. (mood still tags the log line.)
+    # One consistent "wise grandfather" sage voice for every reel — with a
+    # per-scene delivery arc (SCENE_PROSODY) instead of flat prosody.
     voice = REEL_VOICE
-    print(f"  [edge-tts] Using sage voice '{voice}' ({REEL_RATE}/{REEL_PITCH}) "
+    print(f"  [edge-tts] Using sage voice '{voice}' (scene-arc prosody) "
           f"for mood '{mood}'")
 
     hook_path = out_dir / f"voice_hook_{timestamp}.mp3"
     quote_path = out_dir / f"voice_quote_{timestamp}.mp3"
     cta_path = out_dir / f"voice_cta_{timestamp}.mp3"
 
-    hook_ok = generate_scene_voiceover_edge_tts(hook_text, voice, hook_path, REEL_RATE, REEL_PITCH)
-    quote_ok = generate_scene_voiceover_edge_tts(quote_text, voice, quote_path, REEL_RATE, REEL_PITCH)
-    cta_ok = generate_scene_voiceover_edge_tts(cta_text, voice, cta_path, REEL_RATE, REEL_PITCH)
+    hook_ok = generate_scene_voiceover_edge_tts(hook_text, voice, hook_path, *SCENE_PROSODY["hook"])
+    quote_ok = generate_scene_voiceover_edge_tts(quote_text, voice, quote_path, *SCENE_PROSODY["quote"])
+    cta_ok = generate_scene_voiceover_edge_tts(cta_text, voice, cta_path, *SCENE_PROSODY["cta"])
 
     return {
         "hook_voice": hook_path if hook_ok else None,

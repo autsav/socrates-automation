@@ -810,8 +810,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                 if edge_tts_available():
                     ts_bridge = datetime.now().strftime("%Y%m%d_%H%M%S")
                     bridge_path = OUTPUT_DIR / f"voice_bridge_{ts_bridge}.mp3"
+                    from src.audio.edge_tts_engine import SCENE_PROSODY
                     bridge_ok = generate_scene_voiceover_edge_tts(
-                        bridge_text, REEL_VOICE, bridge_path, REEL_RATE, REEL_PITCH)
+                        bridge_text, REEL_VOICE, bridge_path, *SCENE_PROSODY["bridge"])
                     if bridge_ok:
                         bridge_voice = bridge_path
                         bridge_words = parse_word_srt(bridge_path.with_suffix(".srt"))
