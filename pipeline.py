@@ -24,7 +24,7 @@ from src.visual.carousel_composer import compose_carousel
 from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram, post_carousel_to_instagram
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword
+from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword, record_arc
 from studio.reconcile import reconcile_token
 from studio.client import StudioClient
 from studio import music_director
@@ -278,6 +278,41 @@ _CTA_VARIANTS = [
     "Comment 'STOIC' for the full reflection — it's one tap away.",   # comment trigger
     "Comment 'RESET' and I'll point you to the 3-line Stoic reset.",  # comment trigger
 ]
+
+
+_ARC_ROTATION = ("classic", "classic", "question", "cold_open")
+
+_QUESTION_HOOKS = [
+    "What if the problem was never out there?",
+    "Why does no one tell you this?",
+    "What are you actually afraid of?",
+    "How long will you keep waiting?",
+]
+
+
+def _pick_arc(row_number: int | None) -> str:
+    """Deterministic arc per post: 50% classic, 25% question, 25% cold_open.
+    Kills pattern fatigue — every reel used to be the same 4-scene shape."""
+    return _ARC_ROTATION[(row_number or 0) % len(_ARC_ROTATION)]
+
+
+def _apply_arc(arc: str, hook_text: str, bridge_text: str, audience: str,
+               row_number: int | None) -> tuple[str, str]:
+    """Shape (hook, bridge) for the chosen arc. Pure — unit-testable.
+
+    classic   → unchanged (Hook → [Bridge] → Quote → CTA)
+    question  → interrogative hook, no bridge (Question → Quote-as-answer → CTA)
+    cold_open → no hook, no bridge (Quote hits at 0:00 — hard pattern interrupt)
+    """
+    if arc == "cold_open":
+        return "", ""
+    if arc == "question":
+        if not hook_text.rstrip().endswith("?"):
+            pool = [h for h in _PSYCHOLOGY_HOOKS.get(audience, []) if h.endswith("?")] \
+                   or _QUESTION_HOOKS
+            hook_text = pool[(row_number or 0) % len(pool)]
+        return hook_text, ""
+    return hook_text, bridge_text
 
 
 def _extract_trigger_keyword(cta: str) -> str | None:
@@ -748,7 +783,16 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     hook_text = quote_data.get("hook") or _generate_psychology_hook(
         quote_data["audience"], quote_data["row_number"])
     cta_text = quote_data.get("cta") or _pick_cta(quote_data.get("row_number") or 0)
-    log.info(f"  [pov] Hook: {hook_text[:50]}...")
+
+    # Arc variety: shape hook/bridge for this post's arc (classic / question /
+    # cold_open) so consecutive reels don't share one predictable structure.
+    arc = _pick_arc(quote_data.get("row_number"))
+    hook_text, arc_bridge = _apply_arc(
+        arc, hook_text, quote_data.get("bridge", ""),
+        quote_data.get("audience", ""), quote_data.get("row_number"))
+    quote_data["bridge"] = arc_bridge
+    quote_data["arc"] = arc
+    log.info(f"  [pov] Arc: {arc} | Hook: {hook_text[:50] or '(cold open)'}...")
 
     reel_path = None
 
@@ -824,7 +868,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         # Finalize hook/CTA with the viral-formula helpers just before render —
         # idempotent for already-finalized (injected) content, and guarantees
         # every renderer sees a formula-compliant hook/CTA regardless of source.
-        hook_text = _enforce_hook_len(quote_data.get("hook") or hook_text)
+        # Arc already shaped the hook upstream — never resurrect it from
+        # quote_data here (a cold_open must stay hook-less).
+        hook_text = _enforce_hook_len(hook_text) if hook_text else ""
         cta_text = _loopify(cta_text, hook_text)
 
         try:
@@ -884,6 +930,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     )
     if post_row_id is not None:
         record_trigger_keyword(post_row_id, _extract_trigger_keyword(cta_text))
+        record_arc(post_row_id, quote_data.get("arc"))
 
     if post_row_id is None:
         log.warning(

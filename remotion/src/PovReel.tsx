@@ -108,7 +108,8 @@ export const PovReel: React.FC<PovReelProps> = ({
     durationInFrames / fps,
     fps,
     voiceDurations,
-    !!bridge
+    !!bridge,
+    !!hook
   );
   const quoteStart = hookF + bridgeF;
   const quoteEnd = quoteStart + quoteF;
@@ -129,7 +130,7 @@ export const PovReel: React.FC<PovReelProps> = ({
     end: start + (dur != null ? Math.round(dur * fps) : sceneLen),
   });
   const duckSpans: DuckSpan[] = [
-    spanFor(0, voiceDurations.hook, hookF),
+    ...(hook ? [spanFor(0, voiceDurations.hook, hookF)] : []),
     ...(bridge ? [spanFor(hookF, voiceDurations.bridge, bridgeF)] : []),
     spanFor(quoteStart, voiceDurations.quote, quoteF),
     spanFor(quoteEnd, voiceDurations.cta, durationInFrames - quoteEnd),
@@ -153,10 +154,13 @@ export const PovReel: React.FC<PovReelProps> = ({
             </PulsingBg>
           )}
 
-          {/* Scene text, timed with Sequences. */}
-          <Sequence from={0} durationInFrames={hookF} name="Hook">
-            <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
-          </Sequence>
+          {/* Scene text, timed with Sequences. The Hook is OPTIONAL — a
+              cold-open arc drops it so the Quote hits at frame 0. */}
+          {hook ? (
+            <Sequence from={0} durationInFrames={hookF} name="Hook">
+              <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
+            </Sequence>
+          ) : null}
 
           {bridge ? (
             <Sequence from={hookF} durationInFrames={bridgeF} name="Bridge">
@@ -186,13 +190,13 @@ export const PovReel: React.FC<PovReelProps> = ({
               hook->quote when there's no bridge), bridge->quote (only when a
               Bridge is present — otherwise quoteStart === hookF and this would
               double up the flash above), and quote->cta. */}
-          <WhiteFlash at={hookF} />
+          {hook ? <WhiteFlash at={hookF} /> : null}
           {bridge ? <WhiteFlash at={quoteStart} /> : null}
           <WhiteFlash at={quoteEnd} />
         </AbsoluteFill>
       </ColorGrade>
 
-      {voices.hook ? (
+      {hook && voices.hook ? (
         <Sequence from={0} durationInFrames={hookF} name="HookVO">
           <Audio src={staticFile(voices.hook)} />
         </Sequence>
@@ -224,9 +228,11 @@ export const PovReel: React.FC<PovReelProps> = ({
       ) : null}
       {sfx.whoosh ? (
         <>
-          <Sequence from={hookF} durationInFrames={12} name="WhooshQuote">
-            <Audio src={staticFile(sfx.whoosh)} volume={0.35} />
-          </Sequence>
+          {hook ? (
+            <Sequence from={hookF} durationInFrames={12} name="WhooshQuote">
+              <Audio src={staticFile(sfx.whoosh)} volume={0.35} />
+            </Sequence>
+          ) : null}
           <Sequence from={quoteEnd} durationInFrames={12} name="WhooshCta">
             <Audio src={staticFile(sfx.whoosh)} volume={0.35} />
           </Sequence>

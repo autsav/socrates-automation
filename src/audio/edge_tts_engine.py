@@ -209,7 +209,9 @@ def prepare_reel_voiceover_edge_tts(
     quote_path = out_dir / f"voice_quote_{timestamp}.mp3"
     cta_path = out_dir / f"voice_cta_{timestamp}.mp3"
 
-    hook_ok = generate_scene_voiceover_edge_tts(hook_text, voice, hook_path, *SCENE_PROSODY["hook"])
+    # A cold-open arc has no hook — skip its synthesis entirely.
+    hook_ok = bool(hook_text) and generate_scene_voiceover_edge_tts(
+        hook_text, voice, hook_path, *SCENE_PROSODY["hook"])
     quote_ok = generate_scene_voiceover_edge_tts(quote_text, voice, quote_path, *SCENE_PROSODY["quote"])
     cta_ok = generate_scene_voiceover_edge_tts(cta_text, voice, cta_path, *SCENE_PROSODY["cta"])
 

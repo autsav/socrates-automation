@@ -19,7 +19,8 @@ export function sceneFrames(
   durationSec: number,
   fps: number,
   voiceDurations?: { hook?: number; bridge?: number; quote?: number; cta?: number },
-  hasBridge = false
+  hasBridge = false,
+  hasHook = true
 ): SceneFrames {
   const vd = voiceDurations;
   const bridgeOn = hasBridge || !!(vd && vd.bridge);
@@ -27,7 +28,7 @@ export function sceneFrames(
     const PAD = 0.6;
     const MIN = { hook: 2.5, bridge: 2.5, quote: 3.0, cta: 2.0 };
     const secs = (d: number | undefined, min: number) => Math.max(min, (d ?? 0) + PAD);
-    const hook = Math.round(secs(vd.hook, MIN.hook) * fps);
+    const hook = hasHook ? Math.round(secs(vd.hook, MIN.hook) * fps) : 0;
     const bridge = bridgeOn ? Math.round(secs(vd.bridge, MIN.bridge) * fps) : 0;
     const quote = Math.round(secs(vd.quote, MIN.quote) * fps);
     const cta = Math.round(secs(vd.cta, MIN.cta) * fps);
@@ -39,7 +40,7 @@ export function sceneFrames(
   // When the Bridge is on, slightly smaller fractions carve out room for it.
   const hookFrac = bridgeOn ? 0.3 : 0.34;
   const ctaFrac = bridgeOn ? 0.24 : 0.26;
-  const hook = Math.min(Math.round(3.5 * fps), Math.round(total * hookFrac));
+  const hook = hasHook ? Math.min(Math.round(3.5 * fps), Math.round(total * hookFrac)) : 0;
   const bridge = bridgeOn ? Math.round(2.5 * fps) : 0;
   const cta = Math.min(Math.round(2.5 * fps), Math.round(total * ctaFrac));
   const quote = Math.max(total - hook - bridge - cta, Math.round(2 * fps));

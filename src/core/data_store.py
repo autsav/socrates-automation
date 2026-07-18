@@ -107,6 +107,11 @@ def init_db() -> None:
         if "trigger_keyword" not in post_columns:
             cursor.execute("ALTER TABLE posts ADD COLUMN trigger_keyword TEXT DEFAULT NULL")
 
+        # Migration: reel arc variant (classic/question/cold_open) — recorded so
+        # the optimizer's bandit can learn which structure performs (policy.arc).
+        if "arc" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN arc TEXT DEFAULT NULL")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -169,6 +174,20 @@ def init_db() -> None:
                 )
 
         conn.commit()
+    finally:
+        conn.close()
+
+
+def record_arc(row_id: int, arc: str | None) -> None:
+    """Record which reel arc variant produced this post. Best-effort; never raises."""
+    if not arc:
+        return
+    conn = _get_connection()
+    try:
+        conn.execute("UPDATE posts SET arc = ? WHERE id = ?", (arc, row_id))
+        conn.commit()
+    except Exception:
+        pass
     finally:
         conn.close()
 

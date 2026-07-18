@@ -241,7 +241,8 @@ def prepare_reel_voiceover(
     quote_path = out_dir / f"voice_quote_{timestamp}.mp3"
     cta_path = out_dir / f"voice_cta_{timestamp}.mp3"
 
-    hook_ok = generate_scene_voiceover(hook_text, voice, hook_path, api_key)
+    # A cold-open arc has no hook — skip its synthesis (and its API cost).
+    hook_ok = bool(hook_text) and generate_scene_voiceover(hook_text, voice, hook_path, api_key)
     quote_ok = generate_scene_voiceover(quote_text, voice, quote_path, api_key)
     cta_ok = generate_scene_voiceover(cta_text, voice, cta_path, api_key)
 

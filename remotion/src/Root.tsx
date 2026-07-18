@@ -24,7 +24,8 @@ export const RemotionRoot: React.FC = () => {
         povReelDefaultProps.duration,
         povReelDefaultProps.fps,
         povReelDefaultProps.voiceDurations,
-        !!povReelDefaultProps.bridge
+        !!povReelDefaultProps.bridge,
+        !!povReelDefaultProps.hook
       ).total}
       calculateMetadata={({ props }: { props: PovReelProps }) => {
         const fps = props.fps || VIDEO.fps;
@@ -32,7 +33,8 @@ export const RemotionRoot: React.FC = () => {
           props.duration || 10.5,
           fps,
           props.voiceDurations,
-          !!props.bridge
+          !!props.bridge,
+          !!props.hook
         );
         return { durationInFrames: total, fps };
       }}
