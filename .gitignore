@@ -34,7 +34,7 @@ server.log
 *.db
 *.db-shm
 *.db-wal
-!data/pipeline.db
+
 
 # Claude IDE
 .claude/
