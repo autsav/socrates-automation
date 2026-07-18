@@ -103,3 +103,11 @@ def test_daily_post_uses_remotion_for_pov():
 
 def test_edge_tts_in_requirements():
     assert "edge-tts" in _read("requirements.txt"), "edge-tts must be a dependency so CI can generate voiceover"
+
+
+def test_funnel_workflow_is_readonly_and_valid():
+    import yaml
+    t = _read(".github/workflows/funnel.yml")
+    yaml.safe_load(t)
+    assert "git push" not in t, "funnel.yml must never push (DB push-race)"
+    assert "contents: read" in t

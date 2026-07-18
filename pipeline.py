@@ -24,7 +24,7 @@ from src.visual.carousel_composer import compose_carousel
 from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram, post_carousel_to_instagram
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal
+from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword
 from studio.reconcile import reconcile_token
 from studio.client import StudioClient
 from studio import music_director
@@ -273,9 +273,20 @@ _CTA_VARIANTS = [
     "Send this to your group chat. One of them needs it.",     # share → DM
     "Screenshot the line that hurts most.",                    # save
     "Share to your Story if this is exactly what you needed.", # share → Story
-    "Comment 'STOIC' and I'll DM you the full reflection.",     # DM trigger
-    "Comment 'RESET' and I'll DM you the 3-line Stoic reset.",  # DM trigger
+    # Comment triggers steer to the bio (funnel_worker replies publicly —
+    # NEVER promise a DM: nothing sends DMs).
+    "Comment 'STOIC' for the full reflection — it's one tap away.",   # comment trigger
+    "Comment 'RESET' and I'll point you to the 3-line Stoic reset.",  # comment trigger
 ]
+
+
+def _extract_trigger_keyword(cta: str) -> str | None:
+    """Return the comment-trigger keyword from a CTA (Comment 'RESET' … -> RESET),
+    or None when the CTA has no comment trigger. Used to register the keyword on
+    the post row so funnel_worker knows what to match."""
+    import re
+    m = re.search(r"Comment '([A-Za-z]+)'", cta or "")
+    return m.group(1).upper() if m else None
 
 _AUDIENCE_EMOJIS = {
     "procrastinator": "⏳",
@@ -870,6 +881,8 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         dry_run=dry_run,
         hook_id=hook_pick["hook_id"],
     )
+    if post_row_id is not None:
+        record_trigger_keyword(post_row_id, _extract_trigger_keyword(cta_text))
 
     if post_row_id is None:
         log.warning(
@@ -1221,6 +1234,11 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
         hook_id=hook_pick["hook_id"],
         seed=image_seed,
     )
+    if post_row_id is not None:
+        # cta_text isn't built yet on this path — the trigger (if any) lives in
+        # the studio cta or the caption's engagement block.
+        record_trigger_keyword(post_row_id, _extract_trigger_keyword(
+            (quote_data.get("cta") or "") + " " + (quote_data.get("caption") or "")))
 
     if post_row_id is None:
         log.warning(

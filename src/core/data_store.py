@@ -102,6 +102,11 @@ def init_db() -> None:
         if "opt_versions_json" not in post_columns:
             cursor.execute("ALTER TABLE posts ADD COLUMN opt_versions_json TEXT DEFAULT NULL")
 
+        # Migration: funnel trigger keyword — the Comment 'X' keyword this post's
+        # CTA asks for, so funnel_worker knows what to match in the comments.
+        if "trigger_keyword" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN trigger_keyword TEXT DEFAULT NULL")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -164,6 +169,22 @@ def init_db() -> None:
                 )
 
         conn.commit()
+    finally:
+        conn.close()
+
+
+def record_trigger_keyword(row_id: int, keyword: str | None) -> None:
+    """Register the post's comment-trigger keyword (e.g. 'RESET') for the
+    funnel_worker to match against comments. Best-effort; never raises."""
+    if not keyword:
+        return
+    conn = _get_connection()
+    try:
+        conn.execute("UPDATE posts SET trigger_keyword = ? WHERE id = ?",
+                     (keyword.upper(), row_id))
+        conn.commit()
+    except Exception:
+        pass
     finally:
         conn.close()
 

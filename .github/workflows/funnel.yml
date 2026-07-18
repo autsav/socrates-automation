@@ -1,0 +1,42 @@
+name: Socrates Funnel Sweep
+
+on:
+  schedule:
+    - cron: '30 * * * *'   # hourly at :30 — offset from daily_post/analytics on-the-hour crons
+  workflow_dispatch:
+
+permissions:
+  contents: read           # read-only: this workflow must NEVER push the DB
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run funnel sweep (trigger comments → bio-steering replies)
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID:     ${{ secrets.IG_ACCOUNT_ID }}
+        run: python -m src.engagement.funnel_worker || echo "sweep failed (non-blocking)"
+
+      - name: Upload funnel log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: funnel-log-${{ github.run_number }}
+          path: data/funnel_log.json
+          retention-days: 30
+          if-no-files-found: ignore
