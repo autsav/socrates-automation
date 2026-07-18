@@ -29,6 +29,7 @@ audio/*.mp3
 
 # Data & logs
 data/*
+!data/pipeline.db
 logs/
 server.log
 *.db
