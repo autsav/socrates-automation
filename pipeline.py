@@ -830,6 +830,21 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                 )
             else:
                 vo = {}
+            # Resilience: if ElevenLabs came back without the critical quote VO
+            # (bad key/scope, quota, outage), redo the whole VO with edge-tts
+            # rather than shipping a silent reel. (Seen live: a key missing the
+            # text_to_speech permission 401'd every scene.)
+            if (not vo or not vo.get("quote_voice")) and edge_tts_available():
+                log.warning("  [voiceover] ElevenLabs produced no usable VO — "
+                            "falling back to edge-tts")
+                vo = prepare_reel_voiceover_edge_tts(
+                    hook_text=hook_text,
+                    quote_text=quote_data["quote"],
+                    cta_text=cta_text,
+                    mood=mood,
+                    output_dir=OUTPUT_DIR,
+                    timestamp=ts,
+                )
             if isinstance(vo, dict):
                     hook_voice = vo.get("hook_voice")
                     quote_voice = vo.get("quote_voice")
