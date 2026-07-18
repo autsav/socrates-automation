@@ -28,3 +28,18 @@ def test_background_omitted_when_none(tmp_path):
         duration=8.0, fps=30, bridge_path=_bridge(tmp_path), background=None)
     payload = json.loads(Path(out).read_text())
     assert "background" not in payload
+
+
+def test_video_background_included_with_extension(tmp_path):
+    # Pexels stock footage is .mp4 — the bridge must carry the extension so the
+    # Remotion component can branch Img vs Video.
+    import json
+    bg = tmp_path / "clip.mp4"
+    bg.write_bytes(b"\x00" * 32)
+    out = remotion_reel.write_bridge_file(
+        hook="h", quote="q", attribution="a", cta="c", mood="dark_philosophical",
+        duration=8.0, fps=30, bridge_path=tmp_path / "public" / "reel-data.json",
+        background=bg)
+    payload = json.loads(Path(out).read_text())
+    assert payload["background"] == "bg.mp4"
+    assert (Path(out).parent / "bg.mp4").exists()

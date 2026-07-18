@@ -2,32 +2,43 @@ import React from "react";
 import {
   AbsoluteFill,
   Img,
+  Video,
   staticFile,
   interpolate,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 
-/** Full-bleed FLUX photo background with a slow Ken-Burns zoom and a
- *  bottom-weighted dark scrim so the animated text stays legible over it. */
+const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v"];
+
+const isVideo = (src: string) =>
+  VIDEO_EXTS.some((e) => src.toLowerCase().endsWith(e));
+
+/** Full-bleed background — real stock footage (video, looped, muted) or a FLUX
+ *  photo (Ken-Burns zoom) — under a bottom-weighted dark scrim so the animated
+ *  text stays legible over it. */
 export const BackgroundPhoto: React.FC<{ src: string }> = ({ src }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
+  // Slow Ken-Burns zoom for stills; footage already moves, so no zoom there.
   const scale = interpolate(frame, [0, durationInFrames], [1.06, 1.14], {
     extrapolateRight: "clamp",
   });
+  const cover: React.CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  };
   return (
     <AbsoluteFill>
-      <Img
-        src={staticFile(src)}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          transform: `scale(${scale})`,
-          transformOrigin: "center",
-        }}
-      />
+      {isVideo(src) ? (
+        <Video src={staticFile(src)} muted loop style={cover} />
+      ) : (
+        <Img
+          src={staticFile(src)}
+          style={{ ...cover, transform: `scale(${scale})`, transformOrigin: "center" }}
+        />
+      )}
       <AbsoluteFill
         style={{
           background:
