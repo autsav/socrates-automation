@@ -141,8 +141,12 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
               style={{
                 display: "inline-block",
                 overflow: "hidden",
-                paddingBottom: size * 0.12,
-                marginBottom: -size * 0.12,
+                // Clearance so the mask never shears settled glyphs: descenders
+                // need ~0.25em below the 1.02 line-box, and the emphasis punch
+                // (scale > 1) overshoots on every side. Negative margins cancel
+                // the layout impact so word spacing is unchanged.
+                padding: `${size * 0.12}px ${size * 0.1}px ${size * 0.3}px`,
+                margin: `${-size * 0.12}px ${-size * 0.1}px ${-size * 0.3}px`,
               }}
             >
               <span
