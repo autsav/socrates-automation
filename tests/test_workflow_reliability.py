@@ -96,7 +96,7 @@ def test_workflows_scrub_token_before_committing_db():
 
 def test_daily_post_uses_remotion_for_pov():
     t = _read(".github/workflows/daily_post.yml")
-    assert "python pipeline.py --manual --remotion" in t
+    assert "python pipeline.py --remotion" in t          # auto-post, no --manual
     assert "actions/setup-node" in t
     assert "npm --prefix remotion ci" in t
 
@@ -111,3 +111,12 @@ def test_funnel_workflow_is_readonly_and_valid():
     yaml.safe_load(t)
     assert "git push" not in t, "funnel.yml must never push (DB push-race)"
     assert "contents: read" in t
+
+
+def test_reel_slots_auto_post_no_manual_gate():
+    # Decision 2026-07-18: reels post automatically. --manual on a scheduled
+    # reel slot would silently re-introduce the human-upload bottleneck.
+    t = _read(".github/workflows/daily_post.yml")
+    for line in t.splitlines():
+        if "pipeline.py" in line and "--remotion" in line:
+            assert "--manual" not in line, f"reel slot re-gated to manual: {line.strip()}"
