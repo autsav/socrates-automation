@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<style>
+  @page {{ size: A5; margin: 0; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: Georgia, 'Iowan Old Style', serif; color: #e9e6dc; background: #0e0e13; }}
+  .page {{ width: 148mm; height: 210mm; padding: 18mm 16mm; page-break-after: always;
+           background: #0e0e13; position: relative; overflow: hidden; }}
+  .page::after {{ content: ""; position: absolute; inset: 6mm; border: 0.4mm solid #2a2a35;
+                  pointer-events: none; }}
+  h1 {{ font-size: 26pt; font-weight: 600; color: #d8b25c; line-height: 1.15; }}
+  h2 {{ font-size: 15pt; color: #d8b25c; margin-bottom: 6mm; }}
+  .eyebrow {{ font-family: 'Courier New', monospace; font-size: 8pt; letter-spacing: 0.25em;
+              text-transform: uppercase; color: #8f8a7c; margin-bottom: 5mm; }}
+  .quote {{ font-size: 13pt; font-style: italic; color: #ecca77; line-height: 1.45;
+            margin: 6mm 0 2mm; }}
+  .attr {{ font-size: 9pt; color: #8f8a7c; margin-bottom: 7mm; }}
+  .prompt {{ font-size: 10.5pt; line-height: 1.5; margin: 4mm 0 1mm; }}
+  .lines {{ border-bottom: 0.3mm solid #2a2a35; height: 9mm; margin-bottom: 1mm; }}
+  .micro {{ margin-top: 6mm; padding: 4mm; border-left: 1mm solid #d8b25c;
+            background: #16161d; font-size: 10pt; line-height: 1.45; }}
+  .micro b {{ color: #d8b25c; }}
+  .body-text {{ font-size: 11pt; line-height: 1.65; }}
+  .body-text p {{ margin-bottom: 4mm; }}
+  .protocol-line {{ font-size: 14pt; color: #ecca77; line-height: 1.6; margin: 5mm 0;
+                    padding-left: 6mm; border-left: 1mm solid #d8b25c; }}
+  .daynum {{ font-family: 'Courier New', monospace; font-size: 9pt; color: #d8b25c;
+             letter-spacing: 0.2em; }}
+  .cover {{ display: flex; flex-direction: column; justify-content: center; text-align: center; }}
+  .cover h1 {{ font-size: 32pt; margin: 8mm 0 4mm; }}
+  .cover .sub {{ font-size: 11pt; color: #8f8a7c; font-style: italic; }}
+  .cover .mark {{ font-size: 30pt; color: #d8b25c; }}
+</style>
+</head>
+<body>
+{pages}
+</body>
+</html>
