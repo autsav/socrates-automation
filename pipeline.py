@@ -970,9 +970,12 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         # any failure leaves bridge_voice/bridge_words empty — the Bridge scene
         # still renders (text-only, no narration), it just plays silent.
         # Cap the bridge here — the single chokepoint every source (trend-scout,
-        # --content injection, generators) flows through — so no bridge can
-        # balloon the reel past ~25s regardless of where it came from.
-        bridge_text = _enforce_bridge_len(quote_data.get("bridge", ""))
+        # --content injection, generators) flows through. Story/weird arcs are
+        # the exception: the bridge IS the story (validated 130-200 spoken
+        # words upstream → a ~60-75s reel), so it gets the story-sized cap.
+        _bridge_cap = 170 if quote_data.get("arc") in ("story", "weird") else 20
+        bridge_text = _enforce_bridge_len(quote_data.get("bridge", ""),
+                                          max_words=_bridge_cap)
         bridge_voice = None
         bridge_words = []
         if bridge_text:

@@ -4,9 +4,13 @@ One agent, three modes. Beats map 1:1 onto the existing Hook/Bridge/Quote/CTA
 scene machinery:
   beat_hook    -> Hook scene    (<=15 words, a STATEMENT — questions cost
                                  0.5s-retention; recipe #5)
-  beat_reframe -> Bridge scene  (<=45 words — the real issue / escalation)
+  beat_reframe -> Bridge scene  (the story itself, told in short chapters —
+                                 BridgeScene chunk-displays it against the VO)
   quote        -> Quote scene   (the twist: Socrates/Stoics said it first)
   beat_cta     -> CTA scene     (weird mode: always a SEND-framed CTA)
+
+Length contract: total spoken words 170-220 → a ~60-75s reel (the scenes are
+VO-sized, so narration length IS reel length).
 """
 import json
 
@@ -14,7 +18,8 @@ from studio.types import _obj
 from src.optimizer import prompt_store
 
 _PREFIX = (
-    "You write scroll-stopping 30-second reels for a viral Stoic-philosophy "
+    "You write scroll-stopping 60-75 second story reels for a viral Stoic-"
+    "philosophy "
     "Instagram account. Your specialty: stories people feel COMPELLED to send "
     "to a friend. Contrarian about culture and behavior — never about named "
     "living individuals. No politics, religion, tragedy, or medical/financial "
@@ -29,10 +34,15 @@ _ROLE_DEFAULT = (
     "Write the reel as four beats:\n"
     "- beat_hook: <=15 words. A STATEMENT, not a question (statements hold "
     "3-second retention; questions don't). 'No way this is real' energy.\n"
-    "- beat_reframe: <=45 words. Escalate the story / name the real issue. "
+    "- beat_reframe: 140-190 words. THE STORY ITSELF, told as 5-7 short "
+    "chapters: setup -> escalation -> weirder escalation -> consequence -> "
+    "the turn that sets up the quote. Short punchy sentences (a new mini-"
+    "revelation every ~8 seconds keeps retention). "
     "For weird mode: use ONLY the facts given in the material — never invent "
     "or exaggerate historical claims; if the material is flagged hypothetical, "
-    "keep it clearly framed as imagination ('Imagine...', 'Suppose...').\n"
+    "keep it clearly framed as imagination ('Imagine...', 'Suppose...'). "
+    "You may expand with texture (setting, what people around thought, what "
+    "it looked like) but every factual claim must come from the material.\n"
     "- quote_row: the chosen quote's row_number (integer).\n"
     "- beat_cta: one line. For weird mode this MUST be a send-CTA telling the "
     "viewer to send the reel to a specific kind of friend. For debate mode it "
@@ -48,7 +58,8 @@ _ROLE_DEFAULT = (
     "abstractions where a concrete image will do.\n"
     "- Extreme specificity beats broad claims: '2am doom-scrolling in bed' not "
     "'wasting time online'.\n"
-    "Total spoken words across beats <=90 (a ~30s reel). Output JSON only."
+    "Total spoken words across beats 170-220 (a ~65-80 second reel — this is "
+    "a LONG-form story reel, not a quick quote card). Output JSON only."
 )
 
 STORY_SCHEMA = _obj({
@@ -63,7 +74,14 @@ STORY_SCHEMA = _obj({
     "caption_first_line"])
 
 
-def validate_story(d: dict) -> tuple[bool, str]:
+# Measured pace (ElevenLabs Adam + scene pads): ~125 spoken words ≈ 49s, so
+# >=160 words guarantees the >=60s story. Scenes are VO-sized, so the word
+# budget IS the runtime budget.
+MIN_SPOKEN_WORDS = 160
+MAX_SPOKEN_WORDS = 230
+
+
+def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS) -> tuple[bool, str]:
     """Hard limits the prompt promises — enforced deterministically."""
     try:
         hook = (d.get("beat_hook") or "").strip()
@@ -75,11 +93,13 @@ def validate_story(d: dict) -> tuple[bool, str]:
             return False, f"hook too long ({len(hook.split())} words)"
         if hook.rstrip().endswith("?"):
             return False, "hook must be a statement, not a question"
-        if len(reframe.split()) > 45:
+        if len(reframe.split()) > 200:
             return False, f"reframe too long ({len(reframe.split())} words)"
         total = len(hook.split()) + len(reframe.split()) + len(cta.split())
-        if total > 90:
-            return False, f"total spoken words {total} > 90"
+        if total < min_total:
+            return False, f"total spoken words {total} < {min_total} (needs a ~60s story)"
+        if total > MAX_SPOKEN_WORDS:
+            return False, f"total spoken words {total} > {MAX_SPOKEN_WORDS}"
         if not isinstance(d.get("quote_row"), int):
             return False, "quote_row must be an integer"
         return True, "ok"
@@ -100,6 +120,14 @@ def write_story(client, mode: str, material: dict, pool: list) -> dict | None:
         d = client.call("story_writer", _PREFIX, role,
                         "Write the four beats now.", STORY_SCHEMA)
         ok, reason = validate_story(d or {})
+        if not ok:
+            # One corrective retry — a length miss shouldn't cost the whole arc.
+            print(f"  [story_writer] draft rejected ({reason}) — retrying once")
+            d = client.call("story_writer", _PREFIX, role,
+                            f"Your last draft was rejected: {reason}. "
+                            "Write the four beats again, fixing exactly that.",
+                            STORY_SCHEMA)
+            ok, reason = validate_story(d or {})
         if not ok:
             print(f"  [story_writer] rejected ({reason})")
             return None

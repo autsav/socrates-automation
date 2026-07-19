@@ -59,8 +59,9 @@ def test_named_person_guard_allows_ancients_and_sentences():
 
 
 def test_validate_story_limits():
+    long_reframe = 'Seneca was one of the richest men in Rome. Marble halls, hundreds of servants, senators begging for his time. And once a month he walked away from all of it. He put on the roughest cloak he owned. He slept on the bare floor. He ate stale bread and drank only water, for days at a time, on purpose. His friends thought he had lost his mind. He said he was rehearsing. Rehearsing the exact thing he was most afraid of, so the fear could never blackmail him again. When exile finally came for him, and it did come, he walked out of Rome calm, because he had already lived his nightmare a hundred times and knew he could survive it.His rich friends never understood it. They spent fortunes guarding against a day they prayed would never come. Seneca just walked toward it, over and over, until the day itself gave up its power over him. The man who practiced losing everything became the one man in Rome who could not be robbed.'
     good = {"beat_hook": "This man lived in a barrel and won.",
-            "beat_reframe": "He owned nothing and feared no one alive.",
+            "beat_reframe": long_reframe,
             "quote_row": 3, "beat_cta": "Send this to your freest friend.",
             "topic_query": "ancient ruins", "caption_first_line": "He chose the barrel."}
     ok, r = validate_story(good)
@@ -69,6 +70,11 @@ def test_validate_story_limits():
     assert validate_story(bad_q)[0] is False           # question hook rejected
     bad_len = dict(good, beat_hook=" ".join(["word"] * 16))
     assert validate_story(bad_len)[0] is False
+    too_short = dict(good, beat_reframe="He owned nothing and feared no one alive.")
+    ok, r = validate_story(too_short)
+    assert ok is False and "60s story" in r            # <1-min stories rejected
+    too_long = dict(good, beat_reframe=" ".join(["word"] * 205))
+    assert validate_story(too_long)[0] is False
 
 
 def test_write_story_uses_client_and_validates():
@@ -77,7 +83,7 @@ def test_write_story_uses_client_and_validates():
             assert role == "story_writer"
             assert schema == STORY_SCHEMA
             return {"beat_hook": "A rich man rehearsed being poor.",
-                    "beat_reframe": "Seneca scheduled poverty days to interrogate his fear.",
+                    "beat_reframe": 'Seneca was one of the richest men in Rome. Marble halls, hundreds of servants, senators begging for his time. And once a month he walked away from all of it. He put on the roughest cloak he owned. He slept on the bare floor. He ate stale bread and drank only water, for days at a time, on purpose. His friends thought he had lost his mind. He said he was rehearsing. Rehearsing the exact thing he was most afraid of, so the fear could never blackmail him again. When exile finally came for him, and it did come, he walked out of Rome calm, because he had already lived his nightmare a hundred times and knew he could survive it.His rich friends never understood it. They spent fortunes guarding against a day they prayed would never come. Seneca just walked toward it, over and over, until the day itself gave up its power over him. The man who practiced losing everything became the one man in Rome who could not be robbed.',
                     "quote_row": 7, "beat_cta": "Send this to a friend ruled by fear.",
                     "topic_query": "roman villa", "caption_first_line": "He practiced losing everything.",
                     "trend_tag": "stoicism"}
