@@ -2,9 +2,11 @@ name: Weekly prompt optimizer
 
 on:
   schedule:
-    # Every Monday at 08:00 UTC — evaluates open A/B experiments, then proposes
-    # digest-informed prompt challengers (spec 2.4)
-    - cron: '0 8 * * 1'
+    # Every Monday at 09:00 UTC (1h after analytics.yml's 08:00 Monday run) —
+    # evaluates open A/B experiments, then proposes digest-informed prompt
+    # challengers (spec 2.4). Offset avoids both workflows racing to commit
+    # + push data/pipeline.db on the same Monday tick.
+    - cron: '0 9 * * 1'
   workflow_dispatch:  # Manual trigger
 
 permissions:
@@ -51,6 +53,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/pipeline.db
           git diff --staged --quiet || git commit -m "chore: update pipeline.db optimizer state [skip ci]"
+          # Race guard: analytics.yml's daily 08:00 UTC run (and its own Monday
+          # tick) may push data/pipeline.db between our checkout and our push —
+          # rebase our commit onto the latest remote state instead of rejecting.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

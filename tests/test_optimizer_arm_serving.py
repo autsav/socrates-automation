@@ -26,7 +26,13 @@ def teardown_function():
 
 
 def test_no_run_context_serves_champion(db):
-    assert prompt_store.get("prompt.strategist.role", "DEF", db) == "CHAMP {x}"
+    # Pass the SAME default the fixture seeded with — prompt_store.get() now
+    # re-seeds the champion when the passed default's hash no longer matches
+    # what was last seeded (stale-champion guard), so a mismatched literal
+    # here would no longer prove "champion served over a call-site default"
+    # the way it did before that fix; a real call site always passes its own
+    # constant default unchanged, so this reflects real usage.
+    assert prompt_store.get("prompt.strategist.role", "CHAMP {x}", db) == "CHAMP {x}"
 
 
 def test_begin_run_can_serve_challenger(db):
@@ -54,5 +60,5 @@ def test_both_arms_reachable_across_seeds(db):
 def test_end_run_restores_champion(db):
     prompt_store.begin_run(0, db)
     prompt_store.end_run()
-    assert prompt_store.get("prompt.strategist.role", "DEF", db) == "CHAMP {x}"
+    assert prompt_store.get("prompt.strategist.role", "CHAMP {x}", db) == "CHAMP {x}"
     assert prompt_store.run_versions() == {}

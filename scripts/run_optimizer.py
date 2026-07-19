@@ -63,11 +63,19 @@ def main(dry_run=False) -> int:
     for p in evaluated:
         _print_proposal(p, surface=not dry_run)
 
+    if dry_run:
+        # True dry-run: no run_once (which would queue a challenger + open an
+        # experiment) and no API call — just list the managed prompts that
+        # WOULD be considered for a fresh challenger.
+        from src.optimizer import assets
+        keys = [m["key"] for m in assets.iter_managed()]
+        print(f"[optimizer] dry-run: would evaluate {len(keys)} managed prompt(s) for "
+              f"new challengers, not queued (no API call): {', '.join(keys)}")
+        return 0
+
     proposals = loop.run_once(_client(), _digest()) or []
     for p in proposals:
         _print_proposal(p, surface=not dry_run)
-    if dry_run:
-        print(f"[optimizer] dry-run: {len(proposals)} proposal(s), not queued")
     return len(proposals)
 
 

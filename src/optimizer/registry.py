@@ -1,7 +1,15 @@
 """Optimizable asset registry — versioned prompts/policies/weights in SQLite.
 
 Each asset has a champion version (active) + history. Additive migrations only,
-matching src/core/data_store.py conventions. Never raises on read paths."""
+matching src/core/data_store.py conventions. Never raises on read paths.
+
+Stale-champion guard: `opt_assets.default_hash` records the hash of the code
+default last seeded for a key. When a caller's code default changes (e.g. a
+playbook rewrite), `register_asset` detects the hash mismatch and re-seeds the
+new default as champion — inserting a fresh version, retiring the old one —
+so an edited default is never permanently shadowed by a stale DB row (see
+`_reseed_on_default_change`)."""
+import hashlib
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -83,31 +91,86 @@ def _ensure_initialized(db_path):
         _INITIALIZED.add(key)
 
 
+def _hash_value(value):
+    return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+
+
+def _ensure_default_hash_column(con):
+    """Additive migration: add opt_assets.default_hash if missing, backfilled from
+    each key's seed v1 version so unchanged defaults don't spuriously re-seed."""
+    cols = [r[1] for r in con.execute("PRAGMA table_info(opt_assets)").fetchall()]
+    if "default_hash" in cols:
+        return
+    con.execute("ALTER TABLE opt_assets ADD COLUMN default_hash TEXT")
+    for (key,) in con.execute("SELECT key FROM opt_assets").fetchall():
+        v1 = con.execute(
+            "SELECT value_json FROM opt_versions WHERE key=? AND version_num=1 "
+            "ORDER BY id LIMIT 1", (key,)
+        ).fetchone()
+        if v1:
+            con.execute(
+                "UPDATE opt_assets SET default_hash=? WHERE key=?",
+                (_hash_value(v1[0]), key),
+            )
+    con.commit()
+
+
 def register_asset(key, kind, seed_value, db_path=DB_PATH):
     _ensure_initialized(db_path)
     con = _connect(db_path)
     try:
+        _ensure_default_hash_column(con)
+        new_hash = _hash_value(seed_value)
         existing = con.execute(
-            "SELECT champion_version_id FROM opt_assets WHERE key=?", (key,)
+            "SELECT champion_version_id, default_hash FROM opt_assets WHERE key=?", (key,)
         ).fetchone()
-        if existing and existing[0] is not None:
-            return existing[0]
         now = datetime.utcnow().isoformat()
-        cur = con.execute(
-            "INSERT INTO opt_versions (key, version_num, value_json, source, rationale, "
-            "predicted_delta, status, created_at) VALUES (?,1,?,?,?,0.0,'champion',?)",
-            (key, seed_value, "seed", "seed v1", now),
-        )
-        vid = cur.lastrowid
-        con.execute(
-            "INSERT OR REPLACE INTO opt_assets (key, kind, champion_version_id, created_at) "
-            "VALUES (?,?,?,?)",
-            (key, kind, vid, now),
-        )
-        con.commit()
-        return vid
+        if not existing or existing[0] is None:
+            cur = con.execute(
+                "INSERT INTO opt_versions (key, version_num, value_json, source, rationale, "
+                "predicted_delta, status, created_at) VALUES (?,1,?,?,?,0.0,'champion',?)",
+                (key, seed_value, "seed", "seed v1", now),
+            )
+            vid = cur.lastrowid
+            con.execute(
+                "INSERT OR REPLACE INTO opt_assets (key, kind, champion_version_id, "
+                "created_at, default_hash) VALUES (?,?,?,?,?)",
+                (key, kind, vid, now, new_hash),
+            )
+            con.commit()
+            return vid
+
+        champion_id, stored_hash = existing
+        if stored_hash != new_hash:
+            return _reseed_on_default_change(con, key, seed_value, new_hash, now)
+        return champion_id
     finally:
         con.close()
+
+
+def _reseed_on_default_change(con, key, seed_value, new_hash, now):
+    """The code default for `key` no longer matches the hash recorded at last
+    seed/reseed — insert the new default as a fresh champion version (history
+    preserved) and retire whatever was champion before it."""
+    n = con.execute(
+        "SELECT COALESCE(MAX(version_num),0)+1 FROM opt_versions WHERE key=?", (key,)
+    ).fetchone()[0]
+    cur = con.execute(
+        "INSERT INTO opt_versions (key, version_num, value_json, source, rationale, "
+        "predicted_delta, status, created_at) VALUES (?,?,?,?,?,0.0,'champion',?)",
+        (key, n, seed_value, "default-reseed", "code default changed", now),
+    )
+    new_vid = cur.lastrowid
+    con.execute(
+        "UPDATE opt_versions SET status='retired' WHERE key=? AND status='champion' AND id!=?",
+        (key, new_vid),
+    )
+    con.execute(
+        "UPDATE opt_assets SET champion_version_id=?, default_hash=? WHERE key=?",
+        (new_vid, new_hash, key),
+    )
+    con.commit()
+    return new_vid
 
 
 def add_version(key, value, source, rationale, predicted_delta, status="challenger", db_path=DB_PATH):

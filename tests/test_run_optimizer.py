@@ -8,6 +8,7 @@ from scripts import run_optimizer
 
 
 def test_main_passes_digest_as_perf_context(monkeypatch):
+    # Non-dry path: run_once is actually called, digest-fed.
     captured = {}
     monkeypatch.setattr(run_optimizer, "_digest", lambda: "DIGEST BLOCK")
     monkeypatch.setattr(run_optimizer.loop, "evaluate_experiments", lambda: [])
@@ -15,7 +16,7 @@ def test_main_passes_digest_as_perf_context(monkeypatch):
                         lambda client, perf_context, **kw:
                         captured.setdefault("ctx", perf_context) or [])
     monkeypatch.setattr(run_optimizer, "_client", lambda: object())
-    run_optimizer.main(dry_run=True)
+    run_optimizer.main(dry_run=False)
     assert captured["ctx"] == "DIGEST BLOCK"
 
 
@@ -41,15 +42,35 @@ def test_main_dry_run_never_surfaces(monkeypatch):
     proposal = {"key": "story_writer", "challenger_version_id": 1}
     monkeypatch.setattr(run_optimizer, "_digest", lambda: "DIGEST BLOCK")
     monkeypatch.setattr(run_optimizer.loop, "evaluate_experiments", lambda: [proposal])
-    monkeypatch.setattr(run_optimizer.loop, "run_once",
-                        lambda client, perf_context, **kw: [proposal])
-    monkeypatch.setattr(run_optimizer, "_client", lambda: object())
     monkeypatch.setattr(run_optimizer, "_surface",
                         lambda proposal, msg: surfaced.append(proposal))
 
     run_optimizer.main(dry_run=True)
 
     assert surfaced == []
+
+
+def test_main_dry_run_skips_run_once_no_api_call(monkeypatch, capsys):
+    """MINOR fix: --dry-run must not call run_once (which would queue a
+    challenger + open an experiment + spend an API call) despite printing
+    'not queued'. It should only list the managed prompts that would be
+    considered, via assets.iter_managed (no client, no API call)."""
+    def _boom(*a, **kw):
+        raise AssertionError("run_once must not be called under --dry-run")
+
+    monkeypatch.setattr(run_optimizer.loop, "evaluate_experiments", lambda: [])
+    monkeypatch.setattr(run_optimizer.loop, "run_once", _boom)
+    monkeypatch.setattr(run_optimizer, "_client", _boom)
+    from src.optimizer import assets
+    monkeypatch.setattr(assets, "iter_managed",
+                        lambda *a, **kw: [{"key": "prompt.x", "champion_text": "t"}])
+
+    rc = run_optimizer.main(dry_run=True)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "prompt.x" in out
+    assert "not queued" in out
 
 
 def test_surface_failure_never_raises(monkeypatch):

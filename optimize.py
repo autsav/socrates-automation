@@ -35,12 +35,22 @@ def _default_client():
 
 
 def _perf_context(db_path):
-    """Best-effort performance context for the critic (empty at cold start)."""
+    """Best-effort performance context for the critic (empty at cold start).
+    Also appends the sends-per-reach digest so the daily `--run` cycle is
+    digest-informed too — without this, `loop.run_once` skipping keys with an
+    open experiment meant the weekly digest-fed proposals rarely got a turn
+    (IMPORTANT 2)."""
     try:
         p = Path(__file__).parent / "data" / "perf_brief.json"
-        return json.dumps(json.loads(p.read_text())) if p.exists() else "No performance data yet."
+        base = json.dumps(json.loads(p.read_text())) if p.exists() else "No performance data yet."
     except Exception:
-        return "No performance data yet."
+        base = "No performance data yet."
+    try:
+        from src.analytics.performance_digest import digest_text
+        digest = digest_text("story_writer", db_path)
+    except Exception:
+        digest = ""
+    return f"{base}\n{digest}" if digest else base
 
 
 def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
