@@ -97,3 +97,47 @@ def test_write_story_none_on_invalid():
             return {"beat_hook": "Why?", "beat_reframe": "r", "quote_row": 1,
                     "beat_cta": "c", "topic_query": "t", "caption_first_line": "f"}
     assert write_story(BadClient(), "debate", {}, []) is None
+
+
+def test_write_story_two_drafts_rubric_picks_winner():
+    calls = []
+
+    class TwoDraftClient:
+        def call(self, role, prefix, role_system, user, schema):
+            calls.append(user)
+            base = {"quote_row": 7, "topic_query": "roman villa",
+                    "caption_first_line": "He practiced losing everything.",
+                    "trend_tag": "stoicism",
+                    "beat_reframe": ('Seneca was one of the richest men in Rome. '
+                                     * 16) + 'He trained. Fear lost.',
+                    "beat_cta": "Send this to a friend ruled by fear."}
+            if len(calls) == 1:   # draft A: abstract hook -> lower rubric score
+                return dict(base, beat_hook="Success is about mindset and growth daily.")
+            return dict(base, beat_hook="He slept on a marble floor for 3 nights.")
+
+    out = write_story(TwoDraftClient(), "weird", {"hook_fact": "x"},
+                      [{"row_number": 7, "quote": "q"}])
+    assert out is not None
+    assert out["beat_hook"].startswith("He slept")     # concrete draft won
+    assert len(calls) == 2                              # exactly two drafts
+    assert calls[0] != calls[1]                         # different personas
+
+
+def test_write_story_extra_context_reaches_user_message():
+    seen = {}
+
+    class SpyClient:
+        def call(self, role, prefix, role_system, user, schema):
+            seen["user"] = user
+            raise RuntimeError("stop after capture")
+
+    write_story(SpyClient(), "weird", {"hook_fact": "x"},
+                [{"row_number": 1, "quote": "q"}],
+                extra_context="TOP PERFORMER: barefoot senator hook")
+    assert "TOP PERFORMER" in seen["user"]
+
+
+def test_story_prompt_embeds_playbook_and_critique():
+    from studio import story_writer, playbooks
+    assert playbooks.STORY_CRAFT in story_writer._ROLE_DEFAULT
+    assert "critique" in story_writer._ROLE_DEFAULT.lower()

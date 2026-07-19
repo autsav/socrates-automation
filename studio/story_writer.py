@@ -15,7 +15,15 @@ VO-sized, so narration length IS reel length).
 import json
 
 from studio.types import _obj
+from studio import playbooks
 from src.optimizer import prompt_store
+
+_PERSONAS = (
+    "Voice: a historian-screenwriter — cinematic scenes, period texture, "
+    "the past made visible.",
+    "Voice: a growth-storyteller — modern parallels, the viewer's own life "
+    "mirrored in the ancient story.",
+)
 
 _PREFIX = (
     "You write scroll-stopping 60-75 second story reels for a viral Stoic-"
@@ -58,6 +66,11 @@ _ROLE_DEFAULT = (
     "abstractions where a concrete image will do.\n"
     "- Extreme specificity beats broad claims: '2am doom-scrolling in bed' not "
     "'wasting time online'.\n"
+    + playbooks.STORY_CRAFT + "\n"
+    "Before answering: draft internally, critique your draft against the "
+    "craft rules above (hook concreteness, escalation, CTA specificity, "
+    "simplicity), fix every weakness, then output ONLY the improved final "
+    "JSON.\n"
     "Total spoken words across beats 145-185 (a ~60-80 second reel — this is "
     "a LONG-form story reel, not a quick quote card). Output JSON only."
 )
@@ -108,8 +121,11 @@ def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS) -> tuple[bool, st
         return False, f"malformed: {e}"
 
 
-def write_story(client, mode: str, material: dict, pool: list) -> dict | None:
-    """Generate story beats. Returns validated dict or None (never raises)."""
+def write_story(client, mode: str, material: dict, pool: list,
+                extra_context: str = "") -> dict | None:
+    """Two persona drafts -> rubric picks the winner (spec 1.2 B-lite).
+    Returns validated dict or None (never raises)."""
+    from studio.rubric import score_story
     try:
         role_tmpl = prompt_store.get("prompt.story_writer.role", _ROLE_DEFAULT)
         role = role_tmpl.format(
@@ -118,17 +134,29 @@ def write_story(client, mode: str, material: dict, pool: list) -> dict | None:
             pool=json.dumps([{"row_number": p["row_number"], "quote": p["quote"]}
                              for p in pool[:20]], ensure_ascii=False, indent=2),
         )
+        ctx = f"\n{extra_context}" if extra_context else ""
+        drafts = []
+        for persona in _PERSONAS:
+            try:
+                d = client.call("story_writer", _PREFIX, role,
+                                f"Write the four beats now. {persona}{ctx}",
+                                STORY_SCHEMA)
+                ok, reason = validate_story(d or {})
+                drafts.append((d, ok, reason))
+            except Exception as e:  # noqa: BLE001 - one dead draft is fine
+                drafts.append((None, False, str(e)))
+        valid = [(score_story(d), d) for d, ok, _ in drafts if ok]
+        if valid:
+            valid.sort(key=lambda t: t[0], reverse=True)
+            return valid[0][1]
+        # Neither validated: corrective retry on draft A's failure reason.
+        d0, _, reason = drafts[0]
+        print(f"  [story_writer] both drafts rejected ({reason}) — retrying once")
         d = client.call("story_writer", _PREFIX, role,
-                        "Write the four beats now.", STORY_SCHEMA)
+                        f"Your last draft was rejected: {reason}. "
+                        f"Write the four beats again, fixing exactly that.{ctx}",
+                        STORY_SCHEMA)
         ok, reason = validate_story(d or {})
-        if not ok:
-            # One corrective retry — a length miss shouldn't cost the whole arc.
-            print(f"  [story_writer] draft rejected ({reason}) — retrying once")
-            d = client.call("story_writer", _PREFIX, role,
-                            f"Your last draft was rejected: {reason}. "
-                            "Write the four beats again, fixing exactly that.",
-                            STORY_SCHEMA)
-            ok, reason = validate_story(d or {})
         if not ok:
             print(f"  [story_writer] rejected ({reason})")
             return None
