@@ -5,9 +5,12 @@ let prompt_critic propose challengers with REAL performance context.
 returns any data-backed win-proposals (still requires human approval to
 promote). `run_once` then asks the critic for fresh challengers per managed
 prompt, guardrails them, and — on success — records a challenger version and
-opens a new experiment (queued via the opt_versions/opt_experiments tables;
-Telegram surfacing + approval happens in optimize.py's approval flow, not
-here). Both proposal lists are printed via loop.format_proposal_message.
+opens a new experiment (queued via the opt_versions/opt_experiments tables).
+Both proposal lists are printed via loop.format_proposal_message AND surfaced
+to Telegram (approve/reject buttons) via optimize.py's `_default_surface` —
+the same mechanism `optimize.py --run`/`--surface-pending` use. Surfacing is
+best-effort: a Telegram failure never fails the weekly workflow, and
+`--dry-run` prints proposals without surfacing them.
 """
 import sys
 from pathlib import Path
@@ -28,11 +31,26 @@ def _client():
     return StudioClient(Config().ANTHROPIC_API_KEY)
 
 
-def _print_proposal(p):
+def _surface(proposal, msg):
+    """Surface a proposal to Telegram via optimize.py's existing notifier plumbing
+    (same mechanism as `optimize.py --run` / `--surface-pending`). Best-effort: a
+    Telegram failure must never fail the weekly workflow."""
     try:
-        print(loop.format_proposal_message(p))
+        import optimize
+        optimize._default_surface(proposal, msg)
+    except Exception as e:  # noqa: BLE001 - best-effort, never block the weekly run
+        print(f"[optimizer] surface failed: {e}")
+
+
+def _print_proposal(p, *, surface=True):
+    try:
+        msg = loop.format_proposal_message(p)
     except Exception as e:  # noqa: BLE001 - malformed proposal never aborts the run
         print(f"[optimizer] could not format proposal: {e}")
+        return
+    print(msg)
+    if surface:
+        _surface(p, msg)
 
 
 def main(dry_run=False) -> int:
@@ -43,11 +61,11 @@ def main(dry_run=False) -> int:
         evaluated = []
     print(f"[optimizer] experiments evaluated: {len(evaluated)} win-proposal(s)")
     for p in evaluated:
-        _print_proposal(p)
+        _print_proposal(p, surface=not dry_run)
 
     proposals = loop.run_once(_client(), _digest()) or []
     for p in proposals:
-        _print_proposal(p)
+        _print_proposal(p, surface=not dry_run)
     if dry_run:
         print(f"[optimizer] dry-run: {len(proposals)} proposal(s), not queued")
     return len(proposals)
