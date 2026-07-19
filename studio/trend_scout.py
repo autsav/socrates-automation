@@ -3,6 +3,7 @@ that bridges to a timeless Socratic quote. The trend is bait; the quote is the
 payoff. Hard safety rules; returns used=false when nothing bridges safely."""
 import json
 
+from studio import playbooks
 from studio.types import TrendHook, TREND_HOOK_SCHEMA
 from src.optimizer import prompt_store
 
@@ -28,7 +29,8 @@ _ROLE_DEFAULT = (
     "sentence, MAX 18 words — the '…but 2,400 years ago Socrates already knew…' "
     "pivot connecting trend -> quote, using But/Therefore momentum; it hands off "
     "to the quote, it does NOT state the payoff). Set topic + source to the chosen candidate. "
-    "Output a TrendHook as JSON only."
+    "Output a TrendHook as JSON only.\n"
+    + playbooks.TREND_CRAFT
 )
 _ROLE = _ROLE_DEFAULT  # backward-compat alias (assets.py reads _ROLE)
 

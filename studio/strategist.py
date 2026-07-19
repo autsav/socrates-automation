@@ -1,6 +1,7 @@
 """Content Strategist agent — turns the PerformanceBrief into a per-post CreativeBrief."""
 import json
 
+from studio import playbooks
 from studio.types import CreativeBrief, CREATIVE_BRIEF_SCHEMA
 from src.optimizer import prompt_store
 
@@ -17,7 +18,8 @@ _ROLE_DEFAULT = (
     "none fits, set quote to {{\"need_new\": true, \"theme\": \"...\"}}):\n{pool}\n"
     "Choose audience, theme, format, emotional angle, and the quote. Pull "
     "must_include / must_avoid from what is winning/dying. Output a CreativeBrief "
-    "as JSON only."
+    "as JSON only.\n"
+    + playbooks.STRATEGY_CRAFT
 )
 
 # Backward-compat aliases for any importer expecting the old names.

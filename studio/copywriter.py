@@ -1,7 +1,7 @@
 """Copywriter agent — drafts N concepts and revises one on Director feedback."""
 import json
 
-from studio import settings
+from studio import settings, playbooks
 from studio.strategist import shared_prefix
 from studio.types import Concept, CONCEPTS_SCHEMA, CONCEPT_SCHEMA
 from src.optimizer import prompt_store
@@ -16,7 +16,10 @@ _DRAFT_ROLE_DEFAULT = (
     "A full caption (controversial first line that sparks debate, then the payoff, "
     "then an agree/disagree CTA), a one-line cta, reel_scenes (on-screen text per "
     "scene; [] if not a reel), and 3-5 non-generic hashtags. Do NOT change the "
-    "quote text. Output {{\"concepts\": [...]}} as JSON only."
+    "quote text. Output {{\"concepts\": [...]}} as JSON only.\n"
+    + playbooks.COPY_CRAFT
+    + "\nBefore answering: draft internally, critique against the copy craft "
+    "rules, fix every weakness, output ONLY the improved final JSON.\n"
 )
 _REVISE_ROLE_DEFAULT = (
     "You are the Copywriter. Brief:\n{brief}\nConcept to revise:\n{concept}\n"

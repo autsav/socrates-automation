@@ -7,6 +7,7 @@ in ``src/audio/jamendo_music.py`` and degrades gracefully.
 """
 import json
 
+from studio import playbooks
 from studio.types import (
     MusicDirection, MUSIC_DIRECTION_SCHEMA,
     MusicPick, MUSIC_PICK_SCHEMA,
@@ -25,7 +26,8 @@ _QUERY_ROLE_DEFAULT = (
     "Reel content:\n{ctx}\n"
     "Compose ONE music search query (2-5 words, instrumental) plus the "
     "target energy, bpm range, instruments to feature, and things to avoid. Match "
-    "the quote's emotion, not just the mood label. Output a MusicDirection as JSON only."
+    "the quote's emotion, not just the mood label. Output a MusicDirection as JSON only.\n"
+    + playbooks.MUSIC_CRAFT
 )
 
 _RANK_ROLE_DEFAULT = (
