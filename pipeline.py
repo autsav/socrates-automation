@@ -364,6 +364,36 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
         return None
 
 
+# SEO keyword pool (recipe #6): Instagram ranks caption keywords for search.
+_SEO_KEYWORDS = {
+    "procrastinator": "stop procrastinating, discipline, getting things done",
+    "doomscroller": "screen time, dopamine detox, digital minimalism",
+    "stuck": "personal growth, stoic mindset, life change",
+    "lazy": "motivation, discipline over motivation, daily habits",
+    "quitter": "consistency, mental toughness, keep going",
+    "lost": "finding purpose, stoic philosophy, self discovery",
+    "overwhelmed": "stress relief, stoic calm, mental clarity",
+}
+
+
+def _seo_line(audience: str) -> str:
+    kws = _SEO_KEYWORDS.get(audience, "stoic philosophy, discipline, mindset")
+    return f"Stoic wisdom for {kws}."
+
+
+def _enforce_caption_gap(caption: str, first_line: str = "") -> str:
+    """Recipe: the pre-fold first line must be a <=8-word curiosity gap."""
+    lines = (caption or "").split("\n")
+    gap = (first_line or "").strip()
+    if not gap:
+        gap = lines[0].strip() if lines else ""
+        if len(gap.split()) > 8:
+            words = gap.split()[:8]
+            gap = " ".join(words).rstrip(".,;:") + "…"
+        return "\n".join([gap] + lines[1:]) if lines else gap
+    return "\n".join([gap] + lines)
+
+
 def _extract_trigger_keyword(cta: str) -> str | None:
     """Return the comment-trigger keyword from a CTA (Comment 'RESET' … -> RESET),
     or None when the CTA has no comment trigger. Used to register the keyword on
@@ -860,6 +890,21 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     quote_data["arc"] = arc
     log.info(f"  [pov] Arc: {arc} | Hook: {hook_text[:50] or '(cold open)'}...")
 
+    # Discovery levers (recipes #6/#7/#9): curiosity-gap first line, caption
+    # SEO keywords, one topical hashtag (total tags stay <=5). Best-effort.
+    try:
+        cap = quote_data.get("caption", "")
+        cap = _enforce_caption_gap(cap, quote_data.get("caption_first_line", ""))
+        seo = _seo_line(quote_data.get("audience", ""))
+        if seo not in cap:
+            cap = f"{cap}\n\n{seo}"
+        tag = (quote_data.get("trend_tag") or "").strip().lstrip("#")
+        if tag and f"#{tag}" not in cap and cap.count("#") < 5:
+            cap = f"{cap} #{tag}"
+        quote_data["caption"] = cap
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"  [caption] levers skipped ({e})")
+
     reel_path = None
 
     if use_remotion:
@@ -1068,6 +1113,13 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
             log.info(f"✅ Posted! ID: {post_id}")
             mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
             mark_posted(post_row_id, post_id, None, _rel_path(reel_path))
+            # Recipe #20: seed the comment section with the debate question.
+            try:
+                from src.engagement.first_comment import post_comment, first_comment_text
+                if post_comment(post_id, first_comment_text(quote_data), access_token):
+                    log.info("  [first-comment] engagement question attached")
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"  [first-comment] skipped ({e})")
             if post_id:
                 try:
                     notifier = Notifier(cfg)

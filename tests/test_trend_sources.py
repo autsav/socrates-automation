@@ -16,7 +16,8 @@ def test_gnews_headlines_parses_titles(monkeypatch):
         assert params["apikey"] == "KEY"
         return _Resp({"articles": [{"title": "A"}, {"title": "B"}, {"title": ""}]})
     monkeypatch.setattr(ts.requests, "get", fake_get)
-    assert ts.gnews_headlines("KEY", limit=10) == ["A", "B"]
+    out = ts.gnews_headlines("KEY", limit=10)
+    assert [t for t, _ in out] == ["A", "B"]   # (title, published_at) tuples
 
 
 def test_gnews_headlines_no_key_or_error(monkeypatch):

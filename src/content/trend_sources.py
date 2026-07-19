@@ -76,7 +76,8 @@ def gnews_headlines(api_key, limit=10):
             "apikey": api_key, "lang": "en", "category": "general", "max": limit,
         }, timeout=15)
         r.raise_for_status()
-        return [a["title"] for a in r.json().get("articles", []) if a.get("title")]
+        return [(a["title"], a.get("publishedAt")) for a in r.json().get("articles", [])
+                if a.get("title")]
     except Exception as e:  # noqa: BLE001
         print(f"  [trends] gnews unavailable ({e}) — skipping")
         return []
@@ -90,11 +91,12 @@ def fetch_trends(cfg, limit=20):
         if k and k not in seen and not is_unsafe(topic):
             seen.add(k)
             out.append({"topic": topic, "source": "google_trends"})
-    for title in gnews_headlines(getattr(cfg, "GNEWS_API_KEY", ""), 10):
+    for item in gnews_headlines(getattr(cfg, "GNEWS_API_KEY", ""), 10):
+        title, published_at = item if isinstance(item, tuple) else (item, None)
         k = (title or "").strip().lower()
         if k and k not in seen and not is_unsafe(title):
             seen.add(k)
-            out.append({"topic": title, "source": "gnews"})
+            out.append({"topic": title, "source": "gnews", "published_at": published_at})
     # Reddit trends — philosophy/stoicism communities
     try:
         from src.content.reddit_trends import reddit_trending_for_socrates
@@ -105,4 +107,17 @@ def fetch_trends(cfg, limit=20):
                 out.append(item)
     except Exception:
         pass  # Reddit unavailable — never break the pipeline
+    # Recency weighting (recipe #9): trend-jacking works inside ~24h. Fresh
+    # timestamped candidates first, older last; undated keep insertion order.
+    def _recency_key(c):
+        ts = c.get("published_at")
+        if not ts:
+            return 1  # undated: middle
+        from datetime import datetime, timezone, timedelta
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return 0 if datetime.now(timezone.utc) - dt <= timedelta(hours=24) else 2
+        except ValueError:
+            return 1
+    out.sort(key=_recency_key)
     return out[:limit]
