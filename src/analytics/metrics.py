@@ -127,6 +127,41 @@ def ingest_all_pending(
     return updated
 
 
+def ingest_window(access_token, ig_account_id, db_path, days=7, dry_run=False):
+    """Re-poll every live post 1-{days} days old and upsert its metrics —
+    engagement keeps moving for a week, one snapshot at 24h under-counts
+    sends (spec 2.1). Returns the number of posts updated."""
+    import sqlite3
+    con = sqlite3.connect(str(db_path))
+    try:
+        rows = con.execute(
+            "SELECT post_id FROM posts WHERE post_id IS NOT NULL AND dry_run=0 "
+            "AND posted_at <= datetime('now', '-1 day') "
+            "AND posted_at >= datetime('now', ?)", (f"-{days} days",)).fetchall()
+        updated = 0
+        for (post_id,) in rows:
+            if dry_run:
+                print(f"    [dry-run] would re-poll {post_id}")
+                continue
+            try:
+                m = fetch_post_metrics(post_id, access_token, ig_account_id)
+            except Exception as e:  # noqa: BLE001 - one dead post never stops the sweep
+                print(f"    [analytics] {post_id} failed ({e}) — skipping")
+                continue
+            con.execute(
+                "INSERT OR REPLACE INTO post_metrics "
+                "(post_id, likes, comments, shares, reach, impressions, saved) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (post_id, m.get("likes", 0), m.get("comments", 0),
+                 m.get("shares", 0), m.get("reach", 0),
+                 m.get("impressions", 0), m.get("saved", 0)))
+            updated += 1
+        con.commit()
+        return updated
+    finally:
+        con.close()
+
+
 def calculate_save_rate(saved: int, reach: int) -> float:
     """
     Point 44: Save rate = saves / reach.

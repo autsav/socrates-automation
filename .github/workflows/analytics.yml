@@ -89,6 +89,20 @@ jobs:
             python -m src.analytics.metrics
           fi
 
+      - name: Re-poll 7-day window
+        if: github.event_name != 'pull_request'
+        env:
+          ANTHROPIC_API_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          FAL_API_KEY:            ${{ secrets.FAL_API_KEY }}
+          META_ACCESS_TOKEN:      ${{ secrets.META_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID:          ${{ secrets.IG_ACCOUNT_ID }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+          META_APP_ID:            ${{ secrets.META_APP_ID }}
+          META_APP_SECRET:        ${{ secrets.META_APP_SECRET }}
+        run: python -c "from src.analytics.metrics import ingest_window; import os; print(ingest_window(os.environ['META_ACCESS_TOKEN'], os.environ['IG_ACCOUNT_ID'], 'data/pipeline.db'))"
+
       - name: Self-improving loop — apply approvals, then propose
         if: github.event_name != 'pull_request'
         env:
