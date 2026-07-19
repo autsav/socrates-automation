@@ -90,11 +90,19 @@ def upload_to_cloudinary(image_path: str | Path, config: dict) -> str:
 # ── Meta Graph API ─────────────────────────────────────────────────────────────
 
 GRAPH_URL = "https://graph.instagram.com/v22.0"
+FB_GRAPH_URL = "https://graph.facebook.com/v22.0"
+
+
+def _graph(access_token: str) -> str:
+    """Pick the Graph host by token type: Facebook-login tokens (EAA…) publish
+    via graph.facebook.com; Instagram-login tokens via graph.instagram.com.
+    Both speak the same Content Publishing API for IG business accounts."""
+    return FB_GRAPH_URL if (access_token or "").startswith("EAA") else GRAPH_URL
 
 
 def _create_media_container(ig_account_id: str, image_url: str, caption: str, access_token: str) -> str:
     """Step 1: Create media container. Returns container ID."""
-    url = f"{GRAPH_URL}/{ig_account_id}/media"
+    url = f"{_graph(access_token)}/{ig_account_id}/media"
     params = {
         "image_url": image_url,
         "caption": caption,
@@ -118,7 +126,7 @@ def _create_media_container(ig_account_id: str, image_url: str, caption: str, ac
 
 def _wait_for_container(container_id: str, access_token: str, max_wait: int = 120) -> bool:
     """Poll until container status is FINISHED."""
-    url = f"{GRAPH_URL}/{container_id}"
+    url = f"{_graph(access_token)}/{container_id}"
     params = {"fields": "status_code", "access_token": access_token}
 
     for _ in range(max_wait // 5):
@@ -149,7 +157,7 @@ def _wait_for_container(container_id: str, access_token: str, max_wait: int = 12
 
 def _publish_container(ig_account_id: str, container_id: str, access_token: str) -> str:
     """Step 2: Publish container. Returns post ID."""
-    url = f"{GRAPH_URL}/{ig_account_id}/media_publish"
+    url = f"{_graph(access_token)}/{ig_account_id}/media_publish"
     params = {
         "creation_id": container_id,
         "access_token": access_token,
@@ -207,7 +215,7 @@ def _create_reel_container(
     cover_url: str | None = None,
 ) -> str:
     """Create a Reel media container. Returns container ID."""
-    url = f"{GRAPH_URL}/{ig_account_id}/media"
+    url = f"{_graph(access_token)}/{ig_account_id}/media"
     params = {
         "media_type": "REELS",
         "video_url": video_url,
@@ -262,7 +270,7 @@ def post_to_instagram(
 
 def _create_carousel_item_container(ig_account_id: str, image_url: str, access_token: str) -> str:
     """Create a carousel child container (image, no caption). Returns container ID."""
-    url = f"{GRAPH_URL}/{ig_account_id}/media"
+    url = f"{_graph(access_token)}/{ig_account_id}/media"
     params = {
         "image_url": image_url,
         "is_carousel_item": "true",
@@ -288,7 +296,7 @@ def _create_carousel_container(
     ig_account_id: str, children_ids: list[str], caption: str, access_token: str
 ) -> str:
     """Create the parent carousel container referencing child item containers."""
-    url = f"{GRAPH_URL}/{ig_account_id}/media"
+    url = f"{_graph(access_token)}/{ig_account_id}/media"
     params = {
         "media_type": "CAROUSEL",
         "children": ",".join(children_ids),
