@@ -6,6 +6,7 @@ import studio.copywriter as copywriter
 import studio.director as director
 import studio.trend_scout as trend_scout
 import studio.music_director as music_director
+import studio.story_writer as story_writer
 
 MANAGED_PROMPTS = [
     {"key": "prompt.strategist.role", "default": strategist._ROLE_DEFAULT},
@@ -16,6 +17,7 @@ MANAGED_PROMPTS = [
     {"key": "prompt.trend_scout.role", "default": trend_scout._ROLE_DEFAULT},
     {"key": "prompt.music_director.query", "default": music_director._QUERY_ROLE_DEFAULT},
     {"key": "prompt.music_director.rank", "default": music_director._RANK_ROLE_DEFAULT},
+    {"key": "prompt.story_writer.role", "default": story_writer._ROLE_DEFAULT},
 ]
 
 
