@@ -351,7 +351,7 @@ def test_write_story_two_drafts_rubric_picks_winner():
                     "caption_first_line": "He practiced losing everything.",
                     "trend_tag": "stoicism",
                     "beat_reframe": ('Seneca was one of the richest men in Rome. '
-                                     * 12)[:900] + ' He trained. Fear lost.',
+                                     * 16) + 'He trained. Fear lost.',
                     "beat_cta": "Send this to a friend ruled by fear."}
             if len(calls) == 1:   # draft A: abstract hook -> lower rubric score
                 return dict(base, beat_hook="Success is about mindset and growth daily.")
