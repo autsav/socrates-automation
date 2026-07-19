@@ -350,7 +350,12 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
 
         client = StudioClient(cfg.ANTHROPIC_API_KEY)
         pool = [{"row_number": row or 0, "quote": quote_data.get("quote", "")}]
-        story = write_story(client, mode, material, pool)
+        try:
+            from src.analytics.performance_digest import digest_text
+            extra = digest_text("story_writer")
+        except Exception:  # noqa: BLE001
+            extra = ""
+        story = write_story(client, mode, material, pool, extra_context=extra)
         if not story:
             return None
         joined = " ".join([story["beat_hook"], story["beat_reframe"], story["beat_cta"]])

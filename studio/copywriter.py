@@ -32,11 +32,14 @@ _DRAFT_ROLE = _DRAFT_ROLE_DEFAULT
 _REVISE_ROLE = _REVISE_ROLE_DEFAULT
 
 
-def draft(client, perf, brief, n=settings.N_CONCEPTS):
+def draft(client, perf, brief, n=settings.N_CONCEPTS, extra_context=""):
     tmpl = prompt_store.get("prompt.copywriter.draft", _DRAFT_ROLE_DEFAULT)
     role = tmpl.format(brief=json.dumps(brief.to_dict(), indent=2), n=n)
+    user = "Write the concepts now."
+    if extra_context:
+        user += f"\n{extra_context}"
     data = client.call("copywriter", shared_prefix(perf), role,
-                       "Write the concepts now.", CONCEPTS_SCHEMA)
+                       user, CONCEPTS_SCHEMA)
     return [Concept.from_dict(c) for c in data["concepts"]]
 
 

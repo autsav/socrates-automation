@@ -19,8 +19,15 @@ def run_studio(client, slot, pool, recent_posts):
         return None
     try:
         perf = analyst.get_or_build_brief(client)
-        brief = strategist.make_brief(client, perf, slot, recent_posts, pool)
-        concepts = copywriter.draft(client, perf, brief)
+        from src.analytics.performance_digest import digest_text
+        try:
+            cw_digest = digest_text("copywriter")
+            st_digest = digest_text("strategist")
+        except Exception:  # noqa: BLE001 - digest optional
+            cw_digest = st_digest = ""
+        brief = strategist.make_brief(client, perf, slot, recent_posts, pool,
+                                      extra_context=st_digest)
+        concepts = copywriter.draft(client, perf, brief, extra_context=cw_digest)
         concept = concept_picker.pick_concept(concepts)
         decision = concept_picker.build_decision(concept, brief)
         cmap = {c.id: c for c in concepts}

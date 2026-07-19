@@ -29,7 +29,7 @@ def test_fallback_arc_never_story():
 def test_build_story_beats_weird_mode(monkeypatch):
     captured = {}
 
-    def fake_write(client, mode, material, pool):
+    def fake_write(client, mode, material, pool, extra_context=""):
         captured.update(mode=mode, material=material)
         return {"beat_hook": "A man lived in a barrel and won.",
                 "beat_reframe": "He owned one cup, then threw it away.",
@@ -50,7 +50,7 @@ def test_build_story_beats_weird_mode(monkeypatch):
 def test_build_story_beats_debate_when_no_trend(monkeypatch):
     captured = {}
 
-    def fake_write(client, mode, material, pool):
+    def fake_write(client, mode, material, pool, extra_context=""):
         captured.update(mode=mode, material=material)
         return {"beat_hook": "Talent is an excuse.", "beat_reframe": "Reframe here.",
                 "quote_row": 1, "beat_cta": "Pick a side in the comments.",

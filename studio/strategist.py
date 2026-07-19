@@ -52,8 +52,11 @@ def parse_response(d):
     return CreativeBrief.from_dict(d)
 
 
-def make_brief(client, perf, slot, recent_posts, pool):
+def make_brief(client, perf, slot, recent_posts, pool, extra_context=""):
     prefix, role = build_prompt(perf, slot, recent_posts, pool)
+    user = "Produce the CreativeBrief now."
+    if extra_context:
+        user += f"\n{extra_context}"
     data = client.call("strategist", prefix, role,
-                       "Produce the CreativeBrief now.", CREATIVE_BRIEF_SCHEMA)
+                       user, CREATIVE_BRIEF_SCHEMA)
     return parse_response(data)
