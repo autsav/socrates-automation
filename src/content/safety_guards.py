@@ -18,6 +18,13 @@ ALLOWED_FIGURES = {
     "anaxagoras", "aristippus", "epicurus", "alexander",  # Alexander the Great in the Diogenes story
     "laertius", "iamblichus", "origen", "lucilius", "athens", "rome", "greece",
     "stoicism", "stoic", "stoics",
+    # Ancients that long-form story texture naturally pulls in (all dead >1500
+    # years — the guard exists for LIVING/modern individuals).
+    "caesar", "julius", "pompey", "crassus", "nero", "caligula", "augustus",
+    "hadrian", "antoninus", "brutus", "sparta", "corinth", "sinope", "croesus",
+    "xerxes", "darius", "cyrus", "solon", "pericles", "sophocles", "euripides",
+    "herodotus", "thucydides", "homer", "achilles", "odysseus", "musonius",
+    "rufus", "hierocles", "cleanthes", "antisthenes", "crates", "hipparchia",
 }
 
 # Common sentence-lead words that capitalize without naming anyone.

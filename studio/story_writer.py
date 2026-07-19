@@ -9,7 +9,7 @@ scene machinery:
   quote        -> Quote scene   (the twist: Socrates/Stoics said it first)
   beat_cta     -> CTA scene     (weird mode: always a SEND-framed CTA)
 
-Length contract: total spoken words 170-220 → a ~60-75s reel (the scenes are
+Length contract: total spoken words 145-185 → a ~60-75s reel (the scenes are
 VO-sized, so narration length IS reel length).
 """
 import json
@@ -34,7 +34,7 @@ _ROLE_DEFAULT = (
     "Write the reel as four beats:\n"
     "- beat_hook: <=15 words. A STATEMENT, not a question (statements hold "
     "3-second retention; questions don't). 'No way this is real' energy.\n"
-    "- beat_reframe: 140-190 words. THE STORY ITSELF, told as 5-7 short "
+    "- beat_reframe: 120-155 words. THE STORY ITSELF, told as 5-7 short "
     "chapters: setup -> escalation -> weirder escalation -> consequence -> "
     "the turn that sets up the quote. Short punchy sentences (a new mini-"
     "revelation every ~8 seconds keeps retention). "
@@ -58,7 +58,7 @@ _ROLE_DEFAULT = (
     "abstractions where a concrete image will do.\n"
     "- Extreme specificity beats broad claims: '2am doom-scrolling in bed' not "
     "'wasting time online'.\n"
-    "Total spoken words across beats 170-220 (a ~65-80 second reel — this is "
+    "Total spoken words across beats 145-185 (a ~60-80 second reel — this is "
     "a LONG-form story reel, not a quick quote card). Output JSON only."
 )
 
@@ -74,11 +74,12 @@ STORY_SCHEMA = _obj({
     "caption_first_line"])
 
 
-# Measured pace (ElevenLabs Adam + scene pads): ~125 spoken words ≈ 49s, so
-# >=160 words guarantees the >=60s story. Scenes are VO-sized, so the word
-# budget IS the runtime budget.
-MIN_SPOKEN_WORDS = 160
-MAX_SPOKEN_WORDS = 230
+# Measured pace (ElevenLabs Adam, un-truncated): ~2.3 words/sec + ~2s of scene
+# pads, so >=140 words guarantees the >=60s story and 215 caps it near ~95s
+# (the model aims high; generous caps beat rejection-churn).
+# Scenes are VO-sized, so the word budget IS the runtime budget.
+MIN_SPOKEN_WORDS = 140
+MAX_SPOKEN_WORDS = 215
 
 
 def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS) -> tuple[bool, str]:
@@ -93,7 +94,7 @@ def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS) -> tuple[bool, st
             return False, f"hook too long ({len(hook.split())} words)"
         if hook.rstrip().endswith("?"):
             return False, "hook must be a statement, not a question"
-        if len(reframe.split()) > 200:
+        if len(reframe.split()) > 185:
             return False, f"reframe too long ({len(reframe.split())} words)"
         total = len(hook.split()) + len(reframe.split()) + len(cta.split())
         if total < min_total:

@@ -354,8 +354,12 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
         if not story:
             return None
         joined = " ".join([story["beat_hook"], story["beat_reframe"], story["beat_cta"]])
-        if is_unsafe(joined) or mentions_named_person(joined):
-            log.warning("  [story] beats failed safety guards — falling back")
+        if is_unsafe(joined):
+            log.warning("  [story] beats failed is_unsafe denylist — falling back")
+            return None
+        if mentions_named_person(joined):
+            log.warning("  [story] beats name an individual — falling back "
+                        f"(text: {joined[:160]}...)")
             return None
         story["mode"] = mode
         return story

@@ -151,8 +151,11 @@ def generate_voiceover(
     output_path = Path(output_path) if output_path else Path(tempfile.mktemp(suffix=".mp3"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if len(text) > 500:
-        text = text[:497] + "..."
+    # Cost guard. Was 500 — which silently truncated 60s story-arc bridges
+    # (~1000+ chars) to their first ~90 words. 1500 covers a 185-word story
+    # beat; anything longer is a caller bug, not a reel.
+    if len(text) > 1500:
+        text = text[:1497] + "..."
 
     try:
         response = requests.post(
