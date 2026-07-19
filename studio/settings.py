@@ -42,7 +42,7 @@ ROLE_EFFORT = {
     "story_writer":           "high",
 }
 N_CONCEPTS = 4
-DAILY_SPEND_CEILING_USD = 2.0
+DAILY_SPEND_CEILING_USD = 5.0  # raised for 2-draft + critique passes (spec 1.5)
 
 _DATA = Path(__file__).resolve().parent.parent / "data"
 PERF_BRIEF_PATH = _DATA / "perf_brief.json"
