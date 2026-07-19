@@ -381,7 +381,7 @@ def post_reel_to_instagram(
     print(f"  Container ID: {container_id}")
 
     print("  Waiting for container to finish processing...")
-    _wait_for_container(container_id, access_token)
+    _wait_for_container(container_id, access_token, max_wait=360)  # video processing is slow
 
     print("  Publishing Reel to Instagram...")
     post_id = _publish_container(ig_account_id, container_id, access_token)
