@@ -73,6 +73,15 @@ export const povReelDefaultProps: PovReelProps = {
   backgroundDurationSec: undefined,
 };
 
+/** Fades its children in across the loop-preview window. */
+const LoopFadeIn: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const f = useCurrentFrame();
+  const opacity = interpolate(f, [0, 12], [0, 0.9], {
+    extrapolateRight: "clamp",
+  });
+  return <div style={{ position: "absolute", inset: 0, opacity }}>{children}</div>;
+};
+
 /** A brief hard white flash — a pattern interrupt at each scene boundary. */
 const WhiteFlash: React.FC<{ at: number }> = ({ at }) => {
   const frame = useCurrentFrame();
@@ -179,6 +188,7 @@ export const PovReel: React.FC<PovReelProps> = ({
               palette={palette}
               beats={beats}
               wordTimes={wordTimes.quote}
+              staticFirstFrames={quoteStart === 0 ? 3 : 0}
             />
           </Sequence>
 
@@ -197,6 +207,21 @@ export const PovReel: React.FC<PovReelProps> = ({
           {hook ? <WhiteFlash at={hookF} /> : null}
           {bridge ? <WhiteFlash at={quoteStart} /> : null}
           <WhiteFlash at={quoteEnd} />
+
+          {/* Seamless-loop preview (recipe #4): the final 12 frames crossfade
+              toward the opening composition so replay feels continuous and
+              average watch time can exceed 100%. */}
+          {hook ? (
+            <Sequence
+              from={Math.max(0, durationInFrames - 12)}
+              durationInFrames={12}
+              name="LoopPreview"
+            >
+              <LoopFadeIn>
+                <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
+              </LoopFadeIn>
+            </Sequence>
+          ) : null}
         </AbsoluteFill>
       </ColorGrade>
 

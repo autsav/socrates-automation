@@ -30,6 +30,9 @@ export interface AnimatedTextProps {
   maxWidthPct?: number;
   /** Per-word VO timings (scene-relative seconds); drives karaoke reveal when present. */
   wordTimes?: WordTime[];
+  /** Render the FULL text statically for this many opening frames — the feed
+   *  thumbnail is frame 1, and an empty first frame kills feed CTR (recipe #2). */
+  staticFirstFrames?: number;
 }
 
 /** Estimate a font size so the longest word and total text fill ~80%+ width
@@ -58,6 +61,7 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
   weight = 900,
   maxWidthPct = 90,
   wordTimes = [],
+  staticFirstFrames = 0,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -99,9 +103,10 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
           config: { damping: 12, mass: 0.6, stiffness: 120 },
           durationInFrames: 24,
         });
-        const scale = interpolate(enter, [0, 1], [0.8, 1]);
-        const translateY = interpolate(enter, [0, 1], [28, 0]);
-        const opacity = interpolate(enter, [0, 0.6], [0, 1], {
+        const inStaticWindow = staticFirstFrames > 0 && frame < staticFirstFrames;
+        const scale = inStaticWindow ? 1 : interpolate(enter, [0, 1], [0.8, 1]);
+        const translateY = inStaticWindow ? 0 : interpolate(enter, [0, 1], [28, 0]);
+        const opacity = inStaticWindow ? 1 : interpolate(enter, [0, 0.6], [0, 1], {
           extrapolateRight: "clamp",
         });
 

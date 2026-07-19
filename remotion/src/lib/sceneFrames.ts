@@ -25,7 +25,7 @@ export function sceneFrames(
   const vd = voiceDurations;
   const bridgeOn = hasBridge || !!(vd && vd.bridge);
   if (vd && (vd.hook || vd.bridge || vd.quote || vd.cta)) {
-    const PAD = 0.6;
+    const PAD = 0.35;  // dead-air trim: retention rate beats runtime (recipe #3)
     const MIN = { hook: 2.5, bridge: 2.5, quote: 3.0, cta: 2.0 };
     const secs = (d: number | undefined, min: number) => Math.max(min, (d ?? 0) + PAD);
     const hook = hasHook ? Math.round(secs(vd.hook, MIN.hook) * fps) : 0;

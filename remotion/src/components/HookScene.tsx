@@ -38,6 +38,28 @@ export const HookScene: React.FC<{
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
 
+  // Big-type retention pattern (recipe #2): show <=4 words at a time during the
+  // 3-second hold window. Chunks cut hard (pattern interrupt), timed to the VO
+  // word timings when present, equal splits otherwise.
+  const words = text.trim().split(/\s+/);
+  const chunkCount = Math.max(1, Math.ceil(words.length / 4));
+  const wt = wordTimes ?? [];
+  const chunkStart = (ci: number): number => {
+    if (ci === 0) return 0;
+    const wi = ci * 4;
+    if (wt.length > wi) return Math.round(wt[wi].start * fps);
+    return Math.floor(((durationInFrames - 8) / chunkCount) * ci);
+  };
+  let active = 0;
+  for (let ci = chunkCount - 1; ci >= 0; ci--) {
+    if (frame >= chunkStart(ci)) { active = ci; break; }
+  }
+  const chunk = {
+    index: active,
+    text: words.slice(active * 4, active * 4 + 4).join(" "),
+    times: wt.slice(active * 4, active * 4 + 4),
+  };
+
   return (
     <div
       style={{
@@ -48,11 +70,12 @@ export const HookScene: React.FC<{
       }}
     >
       <AnimatedText
-        text={text}
+        text={chunk.text}
         palette={palette}
-        fontSize={168}
+        fontSize={192}
         stagger={0.08}
-        wordTimes={wordTimes}
+        wordTimes={chunk.times}
+        staticFirstFrames={chunk.index === 0 ? 3 : 0}
       />
     </div>
   );

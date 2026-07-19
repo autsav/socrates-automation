@@ -22,6 +22,9 @@ export interface AnimatedQuoteProps {
   stagger?: number;
   /** Per-word VO timings (scene-relative seconds); drives karaoke reveal/highlight when present. */
   wordTimes?: WordTime[];
+  /** Render the full quote settled for this many opening frames (cold-open
+   *  arcs start at reel frame 0 — the feed thumbnail must not be blank). */
+  staticFirstFrames?: number;
 }
 
 /** Smallest scene-relative beat frame at or after `notBefore`, else null.
@@ -47,6 +50,7 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
   fontSize = 146,
   stagger = 0.065,
   wordTimes = [],
+  staticFirstFrames = 0,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -127,8 +131,9 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
             durationInFrames: 24,
           });
           // Mask rise: word translates up from one line-height below.
-          const rise = interpolate(enter, [0, 1], [size * 1.1, 0]);
-          const opacity = interpolate(enter, [0, 0.5], [0, 1], {
+          const inStaticWindow = staticFirstFrames > 0 && frame < staticFirstFrames;
+          const rise = inStaticWindow ? 0 : interpolate(enter, [0, 1], [size * 1.1, 0]);
+          const opacity = inStaticWindow ? 1 : interpolate(enter, [0, 0.5], [0, 1], {
             extrapolateRight: "clamp",
           });
           const isEmphasis = i === (activeWord >= 0 ? activeWord : emphasis);

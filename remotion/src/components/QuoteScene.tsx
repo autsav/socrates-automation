@@ -16,7 +16,8 @@ export const QuoteScene: React.FC<{
   palette: Palette;
   beats?: number[];
   wordTimes?: WordTime[];
-}> = ({ quote, attribution, palette, beats = [], wordTimes }) => {
+  staticFirstFrames?: number;
+}> = ({ quote, attribution, palette, beats = [], wordTimes, staticFirstFrames = 0 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -65,6 +66,7 @@ export const QuoteScene: React.FC<{
         }}
       >
         <AnimatedQuote
+          staticFirstFrames={staticFirstFrames}
           quote={quote}
           palette={palette}
           beats={beats}
