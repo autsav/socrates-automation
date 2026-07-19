@@ -114,6 +114,7 @@ def _loudnorm(path: Path, timeout: int = 120) -> None:
     cmd = [
         "ffmpeg", "-y", "-i", str(path),
         "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+        "-ar", "48000",            # Meta caps Reels audio at 48kHz; loudnorm upsamples to 96kHz (error 2207085)
         "-c:v", "copy", str(tmp),
     ]
     try:
