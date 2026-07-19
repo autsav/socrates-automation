@@ -84,4 +84,5 @@ def test_all_managed_keys_are_loaded_by_some_agent(monkeypatch):
         "prompt.copywriter.draft", "prompt.copywriter.revise",
         "prompt.director.role", "prompt.trend_scout.role",
         "prompt.music_director.query", "prompt.music_director.rank",
+        "prompt.story_writer.role",
     }
