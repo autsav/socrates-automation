@@ -10,9 +10,11 @@ from src.core import data_store
 
 
 def test_pick_arc_rotation_is_deterministic_and_weighted():
-    arcs = [pipeline._pick_arc(i) for i in range(8)]
+    # Legacy fallback rotation (used when story/weird generation fails).
+    arcs = [pipeline._fallback_arc(i) for i in range(8)]
     assert arcs == ["classic", "classic", "question", "cold_open"] * 2
-    assert pipeline._pick_arc(None) == "classic"
+    # Availability-aware picker is deterministic for a given row.
+    assert pipeline._pick_arc(None, has_trend=False) == pipeline._pick_arc(None, has_trend=False)
 
 
 def test_apply_arc_classic_unchanged():

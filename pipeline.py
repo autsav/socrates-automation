@@ -280,7 +280,12 @@ _CTA_VARIANTS = [
 ]
 
 
-_ARC_ROTATION = ("classic", "classic", "question", "cold_open")
+# Rotations are availability-aware: story needs a trend or debate topic (always
+# available via the debate pool), weird is always available. Sends/watch-time
+# engineered arcs get the larger share; the bandit re-weights once data lands.
+_ARC_ROTATION_TREND = ("story", "story", "weird", "classic", "question", "story", "cold_open", "weird", "story", "classic")
+_ARC_ROTATION_NO_TREND = ("weird", "classic", "story", "question", "weird", "cold_open", "story", "classic", "weird", "question")
+_ARC_ROTATION = ("classic", "classic", "question", "cold_open")  # legacy (non-story fallback)
 
 _QUESTION_HOOKS = [
     "What if the problem was never out there?",
@@ -290,9 +295,17 @@ _QUESTION_HOOKS = [
 ]
 
 
-def _pick_arc(row_number: int | None) -> str:
-    """Deterministic arc per post: 50% classic, 25% question, 25% cold_open.
-    Kills pattern fatigue — every reel used to be the same 4-scene shape."""
+def _pick_arc(row_number: int | None, has_trend: bool = False) -> str:
+    """Deterministic, availability-aware arc per post. With a safe trend:
+    story-heavy (story 40% / weird 20% / rest 40%). Without: weird 30% /
+    debate-fed story 20% / rest 50%. Kills pattern fatigue and biases toward
+    the send/watch-time arcs the 2026 algorithm rewards."""
+    rot = _ARC_ROTATION_TREND if has_trend else _ARC_ROTATION_NO_TREND
+    return rot[(row_number or 0) % len(rot)]
+
+
+def _fallback_arc(row_number: int | None) -> str:
+    """Non-story arc used when story/weird generation fails."""
     return _ARC_ROTATION[(row_number or 0) % len(_ARC_ROTATION)]
 
 
@@ -313,6 +326,42 @@ def _apply_arc(arc: str, hook_text: str, bridge_text: str, audience: str,
             hook_text = pool[(row_number or 0) % len(pool)]
         return hook_text, ""
     return hook_text, bridge_text
+
+
+def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
+    """Generate story/weird beats via the story_writer agent. Returns the beat
+    dict (safety-checked) or None so the caller can fall back to a plain arc."""
+    try:
+        from studio.client import StudioClient
+        from studio.story_writer import write_story
+        from src.content.safety_guards import mentions_named_person
+        from src.content.trend_sources import is_unsafe
+        from src.content.debate_topics import pick_debate
+        from src.content.weird_stories import pick_weird
+
+        row = quote_data.get("row_number")
+        if arc == "weird":
+            material, mode = pick_weird(row), "weird"
+        elif quote_data.get("trend_topic"):
+            material, mode = {"trend_topic": quote_data["trend_topic"],
+                              "angle": "contrarian about the culture around this topic"}, "trend"
+        else:
+            material, mode = pick_debate(row), "debate"
+
+        client = StudioClient(cfg.ANTHROPIC_API_KEY)
+        pool = [{"row_number": row or 0, "quote": quote_data.get("quote", "")}]
+        story = write_story(client, mode, material, pool)
+        if not story:
+            return None
+        joined = " ".join([story["beat_hook"], story["beat_reframe"], story["beat_cta"]])
+        if is_unsafe(joined) or mentions_named_person(joined):
+            log.warning("  [story] beats failed safety guards — falling back")
+            return None
+        story["mode"] = mode
+        return story
+    except Exception as e:  # noqa: BLE001 - never crash a reel
+        log.warning(f"  [story] beat generation unavailable ({e}) — falling back")
+        return None
 
 
 def _extract_trigger_keyword(cta: str) -> str | None:
@@ -728,6 +777,7 @@ def _reel_background(cfg, quote_data, mood):
                     mood=mood,
                     api_key=pexels_key,
                     output_path=OUTPUT_DIR / f"stock_bg_{ts}.mp4",
+                    query=quote_data.get("topic_query") or None,
                 )
                 if stock_path:
                     log.info(f"  [reel] Real stock footage background: {_rel_path(stock_path)}")
@@ -786,11 +836,27 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
     # Arc variety: shape hook/bridge for this post's arc (classic / question /
     # cold_open) so consecutive reels don't share one predictable structure.
-    arc = _pick_arc(quote_data.get("row_number"))
-    hook_text, arc_bridge = _apply_arc(
-        arc, hook_text, quote_data.get("bridge", ""),
-        quote_data.get("audience", ""), quote_data.get("row_number"))
-    quote_data["bridge"] = arc_bridge
+    row_n = quote_data.get("row_number")
+    arc = _pick_arc(row_n, has_trend=bool(quote_data.get("trend_topic")))
+    story = None
+    if arc in ("story", "weird"):
+        story = _build_story_beats(cfg, arc, quote_data)
+        if story is None:
+            arc = _fallback_arc(row_n)
+    if story is not None:
+        # Beats ride the existing scenes: hook->Hook, reframe->Bridge, quote
+        # stays the twist, cta->CTA. Weird arcs are send-engineered by prompt.
+        hook_text = story["beat_hook"]
+        cta_text = story["beat_cta"]
+        quote_data["bridge"] = story["beat_reframe"]
+        quote_data["topic_query"] = story.get("topic_query", "")
+        quote_data["caption_first_line"] = story.get("caption_first_line", "")
+        quote_data["trend_tag"] = story.get("trend_tag", "")
+    else:
+        hook_text, arc_bridge = _apply_arc(
+            arc, hook_text, quote_data.get("bridge", ""),
+            quote_data.get("audience", ""), row_n)
+        quote_data["bridge"] = arc_bridge
     quote_data["arc"] = arc
     log.info(f"  [pov] Arc: {arc} | Hook: {hook_text[:50] or '(cold open)'}...")
 

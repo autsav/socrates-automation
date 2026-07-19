@@ -35,6 +35,7 @@ def search_stock_video(
     mood: str,
     api_key: str,
     per_page: int = 15,
+    query: str | None = None,
 ) -> list[dict]:
     """Search Pexels for stock videos matching the mood.
 
@@ -46,6 +47,10 @@ def search_stock_video(
         return []
 
     search_terms = MOOD_SEARCH_TERMS.get(mood, ["philosophy", "nature", "cinematic"])
+    if query:
+        # Topic-matched visuals (story/weird arcs): try the story's own visual
+        # world first; mood terms remain as fallback in the same sweep.
+        search_terms = [query] + list(search_terms)
     all_results = []
 
     for term in search_terms:
@@ -155,6 +160,7 @@ def fetch_stock_background(
     mood: str,
     api_key: str,
     output_path: Path | str,
+    query: str | None = None,
 ) -> Path | None:
     """Main entry: search + pick + download a stock video for a Reel background.
 
@@ -164,13 +170,13 @@ def fetch_stock_background(
     output_path = Path(output_path)
 
     # Check cache first
-    cache_key = f"stock_{mood}"
+    cache_key = f"stock_{query or mood}"
     if cache_key in _CACHE:
         cached = _CACHE[cache_key]
         if cached.get("path") and Path(cached["path"]).exists():
             return Path(cached["path"])
 
-    videos = search_stock_video(mood, api_key)
+    videos = search_stock_video(mood, api_key, query=query)
     if not videos:
         return None
 
