@@ -86,3 +86,13 @@ def test_build_story_beats_never_raises(monkeypatch):
     class _Cfg:
         ANTHROPIC_API_KEY = "k"
     assert pipeline._build_story_beats(_Cfg(), "story", {"row_number": 2}) is None
+
+
+def test_story_bridge_bypasses_pivot_trim():
+    # Regression: _enforce_bridge_len cuts at the FIRST sentence end past the
+    # cap, which collapsed a 190-word story to "Meet Cato." (12.8s reel).
+    story = "Meet Cato. " + " ".join(["word"] * 180) + "."
+    assert pipeline._bridge_for_vo({"bridge": story, "arc": "story"}) == story
+    assert pipeline._bridge_for_vo({"bridge": story, "arc": "weird"}) == story
+    trimmed = pipeline._bridge_for_vo({"bridge": story, "arc": "classic"})
+    assert trimmed == "Meet Cato."  # pivot arcs keep the one-sentence cap

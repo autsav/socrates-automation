@@ -394,6 +394,18 @@ def _enforce_caption_gap(caption: str, first_line: str = "") -> str:
     return "\n".join([gap] + lines)
 
 
+def _bridge_for_vo(quote_data: dict) -> str:
+    """The bridge text that actually gets narrated. Story/weird arcs BYPASS
+    the pivot-trim entirely: the bridge IS the story (validated to 140-200
+    words upstream → a ~60-75s reel), and _enforce_bridge_len's cut-at-first-
+    sentence trim would collapse a story to its opening line ('Meet Cato.').
+    Every other arc keeps the one-sentence pivot cap."""
+    bridge = quote_data.get("bridge", "")
+    if quote_data.get("arc") in ("story", "weird"):
+        return bridge
+    return _enforce_bridge_len(bridge)
+
+
 def _extract_trigger_keyword(cta: str) -> str | None:
     """Return the comment-trigger keyword from a CTA (Comment 'RESET' … -> RESET),
     or None when the CTA has no comment trigger. Used to register the keyword on
@@ -970,12 +982,8 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         # any failure leaves bridge_voice/bridge_words empty — the Bridge scene
         # still renders (text-only, no narration), it just plays silent.
         # Cap the bridge here — the single chokepoint every source (trend-scout,
-        # --content injection, generators) flows through. Story/weird arcs are
-        # the exception: the bridge IS the story (validated 130-200 spoken
-        # words upstream → a ~60-75s reel), so it gets the story-sized cap.
-        _bridge_cap = 170 if quote_data.get("arc") in ("story", "weird") else 20
-        bridge_text = _enforce_bridge_len(quote_data.get("bridge", ""),
-                                          max_words=_bridge_cap)
+        # --content injection, generators) flows through.
+        bridge_text = _bridge_for_vo(quote_data)
         bridge_voice = None
         bridge_words = []
         if bridge_text:

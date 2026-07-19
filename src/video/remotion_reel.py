@@ -355,7 +355,7 @@ def generate_remotion_reel(
     output_path: str | Path | None = None,
     duration: float | None = None,
     fps: int = 30,
-    timeout: int = 600,
+    timeout: int = 1800,  # 60s story reels need ~10-20min of OffthreadVideo frames
     hook_voice: Path | None = None,
     quote_voice: Path | None = None,
     cta_voice: Path | None = None,
