@@ -296,10 +296,18 @@ _QUESTION_HOOKS = [
 
 
 def _pick_arc(row_number: int | None, has_trend: bool = False) -> str:
-    """Deterministic, availability-aware arc per post. With a safe trend:
+    """Deterministic, availability-aware arc per post. Bandit (spec 2.3) picks
+    once >=20 scored posts exist; else static rotation. With a safe trend:
     story-heavy (story 40% / weird 20% / rest 40%). Without: weird 30% /
     debate-fed story 20% / rest 50%. Kills pattern fatigue and biases toward
     the send/watch-time arcs the 2026 algorithm rewards."""
+    try:
+        from src.analytics.arc_bandit import pick as _bandit_pick
+        chosen = _bandit_pick(row_number, has_trend)
+        if chosen:
+            return chosen
+    except Exception:  # noqa: BLE001 - bandit optional
+        pass
     rot = _ARC_ROTATION_TREND if has_trend else _ARC_ROTATION_NO_TREND
     return rot[(row_number or 0) % len(rot)]
 
