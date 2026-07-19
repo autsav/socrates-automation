@@ -36,10 +36,15 @@ _SENTENCE_LEADS = {
     "one", "two", "ancient", "modern", "real", "true",
 }
 
-_HONORIFICS = re.compile(
-    r"\b(?:Mr|Mrs|Ms|Dr|President|Senator|CEO|Coach|Judge|Prof|Professor|Sir|Elon|Kanye|Taylor|Drake|Trump|Biden|Musk|Bezos|Zuckerberg|Ronaldo|Messi|LeBron|Oprah|Kardashian)\.?\s+[A-Z][a-z]+",
-    re.UNICODE,
-)
+# Two honorific shapes: abbreviations keep their optional period ("Dr. Huberman");
+# word-titles must NOT allow one — "Meet Cato. Senator. Loaded." is a sentence
+# boundary, not "Senator Loaded" (long story beats hit this constantly).
+_HONORIFIC_ABBREV = re.compile(
+    r"\b(?:Mr|Mrs|Ms|Dr|Prof)\.?\s+([A-Z][a-z]+)", re.UNICODE)
+_HONORIFIC_WORD = re.compile(
+    r"\b(?:President|Senator|CEO|Coach|Judge|Professor|Sir|Elon|Kanye|Taylor|"
+    r"Drake|Trump|Biden|Musk|Bezos|Zuckerberg|Ronaldo|Messi|LeBron|Oprah|"
+    r"Kardashian)\s+([A-Z][a-z]+)", re.UNICODE)
 
 # Capitalized bigram mid-sentence: "Firstname Lastname" pattern.
 _NAME_BIGRAM = re.compile(r"(?<![.!?]\s)(?<!^)\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,})\b")
@@ -53,8 +58,11 @@ def mentions_named_person(text: str) -> bool:
     """True when the text appears to reference a named (modern) individual."""
     if not text:
         return False
-    if _HONORIFICS.search(text):
-        return True
+    for pat in (_HONORIFIC_ABBREV, _HONORIFIC_WORD):
+        for m in pat.finditer(text):
+            # "Senator Cato" names an allowed ancient, not a modern individual.
+            if not _allowed(m.group(1)):
+                return True
     for m in _NAME_BIGRAM.finditer(text):
         first, second = m.group(1), m.group(2)
         if _allowed(first) or _allowed(second):

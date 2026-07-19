@@ -141,3 +141,11 @@ def test_story_prompt_embeds_playbook_and_critique():
     from studio import story_writer, playbooks
     assert playbooks.STORY_CRAFT in story_writer._ROLE_DEFAULT
     assert "critique" in story_writer._ROLE_DEFAULT.lower()
+
+
+def test_named_person_guard_title_at_sentence_boundary():
+    # "Senator." ending a sentence is not a title before the next word.
+    assert not mentions_named_person("Meet Cato. Senator. Loaded. He owned Rome.")
+    assert not mentions_named_person("Senator Cato walked barefoot in storms.")
+    assert mentions_named_person("Senator Whitfield said discipline is dead.")
+    assert mentions_named_person("Dr. Huberman has a protocol for that.")
