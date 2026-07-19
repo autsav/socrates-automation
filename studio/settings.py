@@ -9,7 +9,7 @@ ROLE_MODELS = {
     "analyst":    "claude-sonnet-4-6",
     "strategist": "claude-sonnet-4-6",
     "copywriter": "claude-opus-4-8",
-    "director":   "claude-sonnet-4-6",
+    "director":   "claude-sonnet-4-6",  # legacy — retired (spec 1.4)
     "planner":               "claude-sonnet-4-6",
     "reviewer":               "claude-sonnet-4-6",
     "content_writer":         "claude-opus-4-8",
@@ -27,7 +27,7 @@ ROLE_EFFORT = {
     "analyst":    "medium",
     "strategist": "medium",
     "copywriter": "high",
-    "director":   "medium",
+    "director":   "medium",  # legacy — retired (spec 1.4)
     "planner":               "medium",
     "reviewer":               "medium",
     "content_writer":         "high",

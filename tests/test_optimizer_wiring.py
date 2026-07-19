@@ -7,7 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import studio.copywriter as copywriter
-import studio.director as director
 import studio.trend_scout as trend_scout
 import studio.music_director as music_director
 from src.optimizer import prompt_store, assets
@@ -28,7 +27,7 @@ def _spy(monkeypatch):
         seen.append(key)
         return default
 
-    for mod in (copywriter, director, trend_scout, music_director):
+    for mod in (copywriter, trend_scout, music_director):
         monkeypatch.setattr(mod.prompt_store, "get", fake_get)
     return seen
 
@@ -41,12 +40,6 @@ class _Brief:
 class _Perf:
     def to_dict(self):
         return {}
-
-
-def test_director_loads_prompt_via_store(monkeypatch):
-    seen = _spy(monkeypatch)
-    director.build_prompt(_Perf(), _Brief(), [])
-    assert "prompt.director.role" in seen
 
 
 def test_copywriter_draft_loads_prompt_via_store(monkeypatch):
@@ -82,7 +75,7 @@ def test_all_managed_keys_are_loaded_by_some_agent(monkeypatch):
     assert keys == {
         "prompt.strategist.role", "prompt.strategist.prefix",
         "prompt.copywriter.draft", "prompt.copywriter.revise",
-        "prompt.director.role", "prompt.trend_scout.role",
+        "prompt.trend_scout.role",
         "prompt.music_director.query", "prompt.music_director.rank",
         "prompt.story_writer.role",
     }

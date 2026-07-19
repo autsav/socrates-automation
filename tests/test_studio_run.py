@@ -23,6 +23,10 @@ def _decision():
                      "palette": "amber"}, "c1 wins")
 
 
+def _concept():
+    return Concept("c1", "a", "h", "c", "s", [], [])
+
+
 class _OkClient:
     def over_daily_ceiling(self):
         return False
@@ -33,7 +37,8 @@ def test_run_studio_happy(monkeypatch):
     monkeypatch.setattr(run.strategist, "make_brief", lambda *a, **k: _brief())
     monkeypatch.setattr(run.copywriter, "draft",
                         lambda *a, **k: [Concept("c1", "a", "h", "c", "s", [], [])])
-    monkeypatch.setattr(run.director, "review", lambda *a, **k: _decision())
+    monkeypatch.setattr(run.concept_picker, "pick_concept", lambda *a, **k: _concept())
+    monkeypatch.setattr(run.concept_picker, "build_decision", lambda *a, **k: _decision())
     out = run.run_studio(_OkClient(), 0, [{"row_number": 3, "quote": "q"}], [])
     assert out is not None
     brief, decision, cmap = out

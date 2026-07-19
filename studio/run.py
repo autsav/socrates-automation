@@ -1,7 +1,7 @@
 """Studio orchestrator — chains the four agents; returns None to signal fallback."""
 import logging
 
-from studio import analyst, strategist, copywriter, director
+from studio import analyst, strategist, copywriter, concept_picker
 from studio.client import StudioClient
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,8 @@ def run_studio(client, slot, pool, recent_posts):
         perf = analyst.get_or_build_brief(client)
         brief = strategist.make_brief(client, perf, slot, recent_posts, pool)
         concepts = copywriter.draft(client, perf, brief)
-        decision = director.review(client, perf, brief, concepts)
+        concept = concept_picker.pick_concept(concepts)
+        decision = concept_picker.build_decision(concept, brief)
         cmap = {c.id: c for c in concepts}
         return brief, decision, cmap
     except Exception as e:

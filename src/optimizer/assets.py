@@ -3,7 +3,6 @@ champion text (seeding the hardcoded default as v1 on first access)."""
 from src.optimizer import prompt_store, registry
 import studio.strategist as strategist
 import studio.copywriter as copywriter
-import studio.director as director
 import studio.trend_scout as trend_scout
 import studio.music_director as music_director
 import studio.story_writer as story_writer
@@ -13,7 +12,6 @@ MANAGED_PROMPTS = [
     {"key": "prompt.strategist.prefix", "default": strategist._PREFIX_DEFAULT},
     {"key": "prompt.copywriter.draft", "default": copywriter._DRAFT_ROLE_DEFAULT},
     {"key": "prompt.copywriter.revise", "default": copywriter._REVISE_ROLE_DEFAULT},
-    {"key": "prompt.director.role", "default": director._ROLE_DEFAULT},
     {"key": "prompt.trend_scout.role", "default": trend_scout._ROLE_DEFAULT},
     {"key": "prompt.music_director.query", "default": music_director._QUERY_ROLE_DEFAULT},
     {"key": "prompt.music_director.rank", "default": music_director._RANK_ROLE_DEFAULT},
