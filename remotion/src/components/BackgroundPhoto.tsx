@@ -2,7 +2,8 @@ import React from "react";
 import {
   AbsoluteFill,
   Img,
-  Video,
+  Loop,
+  OffthreadVideo,
   staticFile,
   interpolate,
   useCurrentFrame,
@@ -14,13 +15,17 @@ const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v"];
 const isVideo = (src: string) =>
   VIDEO_EXTS.some((e) => src.toLowerCase().endsWith(e));
 
-/** Full-bleed background — real stock footage (video, looped, muted) or a FLUX
- *  photo (Ken-Burns zoom) — under a bottom-weighted dark scrim so the animated
- *  text stays legible over it. */
-export const BackgroundPhoto: React.FC<{ src: string }> = ({ src }) => {
+/** Full-bleed background — real stock footage (OffthreadVideo: deterministic
+ *  server-side frames, no Html5Video delayRender timeouts) or a FLUX photo
+ *  (Ken-Burns zoom) — under a dark scrim for text legibility. Footage shorter
+ *  than the reel loops via <Loop> when its duration is known; otherwise it
+ *  holds its last frame. */
+export const BackgroundPhoto: React.FC<{ src: string; videoDurationSec?: number }> = ({
+  src,
+  videoDurationSec,
+}) => {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
-  // Slow Ken-Burns zoom for stills; footage already moves, so no zoom there.
+  const { durationInFrames, fps } = useVideoConfig();
   const scale = interpolate(frame, [0, durationInFrames], [1.06, 1.14], {
     extrapolateRight: "clamp",
   });
@@ -29,10 +34,15 @@ export const BackgroundPhoto: React.FC<{ src: string }> = ({ src }) => {
     height: "100%",
     objectFit: "cover",
   };
+  const video = <OffthreadVideo src={staticFile(src)} muted style={cover} />;
+  const loopFrames =
+    videoDurationSec && videoDurationSec > 0
+      ? Math.max(1, Math.floor(videoDurationSec * fps))
+      : null;
   return (
     <AbsoluteFill>
       {isVideo(src) ? (
-        <Video src={staticFile(src)} muted loop style={cover} />
+        loopFrames ? <Loop durationInFrames={loopFrames}>{video}</Loop> : video
       ) : (
         <Img
           src={staticFile(src)}

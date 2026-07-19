@@ -50,6 +50,8 @@ export type PovReelProps = {
   /** OPTIONAL fal.ai FLUX photo background (staticFile name). When set, it
    *  replaces the gradient base; the particle field renders over it. */
   background?: string;
+  /** Duration of a video background in seconds (for looping). */
+  backgroundDurationSec?: number;
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -68,6 +70,7 @@ export const povReelDefaultProps: PovReelProps = {
   sfx: {},
   wordTimes: {},
   background: undefined,
+  backgroundDurationSec: undefined,
 };
 
 /** A brief hard white flash — a pattern interrupt at each scene boundary. */
@@ -101,6 +104,7 @@ export const PovReel: React.FC<PovReelProps> = ({
   sfx = {},
   wordTimes = {},
   background,
+  backgroundDurationSec,
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -144,7 +148,7 @@ export const PovReel: React.FC<PovReelProps> = ({
               the gradient base when supplied; particles ride over either. */}
           {background ? (
             <>
-              <BackgroundPhoto src={background} />
+              <BackgroundPhoto src={background} videoDurationSec={backgroundDurationSec} />
               <ParticleField palette={palette} />
             </>
           ) : (

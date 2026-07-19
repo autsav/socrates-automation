@@ -283,9 +283,12 @@ def write_bridge_file(
 
     # Optional FLUX background image, copied next to the bridge for staticFile().
     bg_name: str | None = None
+    bg_duration: float | None = None
     if background and Path(background).exists():
         bp = Path(background)
         bg_name = _copy_audio(bp, f"bg{bp.suffix}")   # _copy_audio copies any file
+        if bp.suffix.lower() in (".mp4", ".webm", ".mov", ".m4v"):
+            bg_duration = _probe_duration(bp)         # lets Remotion <Loop> it
 
     beats: list[float] = []
     if quote_voice and Path(quote_voice).exists():
@@ -332,6 +335,8 @@ def write_bridge_file(
         payload["music"] = music_name
     if bg_name:
         payload["background"] = bg_name
+        if bg_duration:
+            payload["backgroundDurationSec"] = bg_duration
     if sfx:
         payload["sfx"] = sfx
 
@@ -414,6 +419,7 @@ def generate_remotion_reel(
         ENTRY_POINT,
         COMPOSITION_ID,
         str(output_path),
+        "--timeout=120000",
         f"--props={bridge_file}",
         "--log=error",
     ]

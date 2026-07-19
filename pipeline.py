@@ -1066,7 +1066,8 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
     # ── Pre-flight guard: skip if this slot already posted today ──────────────
     slot = _current_slot()
-    if has_posted_today(slot):
+    # Dry runs publish nothing — never block them on the slot dedup guard.
+    if not dry_run and has_posted_today(slot):
         log.info(f"⏭ Slot {slot} already posted today — skipping")
         return {"skipped": True, "reason": f"slot {slot} already posted today"}
 
