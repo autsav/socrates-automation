@@ -144,3 +144,23 @@ Bio → **"Short resets for people rebuilding discipline."** Pillars: ① trend/
 
 ## Sources
 [Hootsuite](https://blog.hootsuite.com/instagram-algorithm/) · [Later](https://later.com/blog/how-instagram-algorithm-works/) · [Dataslayer/Mosseri signals](https://www.dataslayer.ai/blog/instagram-algorithm-2025-complete-guide-for-marketers) · [Socialync sends](https://www.socialync.io/blog/instagram-shares-algorithm-complete-guide-2026) · [TrueFuture caption SEO](https://www.truefuturemedia.com/articles/instagram-reach-2026-algorithm-reels-carousels-caption-seo) · [OpusClip hooks](https://www.opus.pro/blog/instagram-reels-hook-formulas) · [Fobet retention](https://fobetmedia.com/instagram-reel-hooks/) · [Toptal SEO](https://www.toptal.com/creator/post/instagram-seo) · [Stan faceless](https://stan.store/blog/faceless-account/) · [Flowshorts niches](https://flowshorts.app/blog/best-niches-for-faceless-reels)
+
+---
+
+## Addendum — NotebookLM sweep (2026-07-19, "2026 Instagram Marketing and Algorithm Growth Guide", 10 sources)
+
+New levers not in the 100 above (thresholds are the notebook's claims, not verified facts):
+
+101. **Value hierarchy of signals** — 1 share ≈ 150 extra views (up to 300–450); save ≈ 45; like ≈ 75; comment ≈ 15. Confirms sends-first strategy (#95/#97). H/S — already the reward-function bias. ✅
+102. **3-8-12 pitch framework** — 0–3s visual hook, 3–8s suspense, payoff/pitch at exactly 8s as a second hook carrying past the 12s commitment barrier. H/S — story beats roughly follow this; tune scene timing to hit 8s payoff. 🔨
+103. **8-second cut-off trick** — end just before a natural resolution to force rewatches (3–4x repeat views). M/S — the loop crossfade (#C3) is our version. ✅
+104. **60% 3-second hold threshold** — >60% hold outperforms <40% by 5–10x reach; measure per-arc. H/S — needs Insights API polling per post. 📋
+105. **Trending audio under 5,000 uses** — catch sounds pre-saturation. M/M — Jamendo is licensed-only; native IG audio needs manual pick. ⛔ (API can't set trending audio on API-published reels)
+106. **Audio mix ratio 40–50% original VO / 30–40% trending / 15–20% evergreen** — we are ~100% original VO+licensed music. M/M — revisit if native-audio posting becomes possible. ⛔
+107. **Alt-text SEO** — keyword-rich alt text as a meta description for Explore. L/S — Graph API supports custom alt text on feed images, not reels. 📋 (carousel path)
+108. **Republish 60-day-old hits as-is** — top performer recycling. M/S — needs per-post metrics history first (#104). 📋
+109. **9–12 post categorization rule** — the algorithm classifies the account from the last 9–12 posts; niche drift punished. H/S — arc rotation keeps every post in-niche by design. ✅
+110. **Drunk-Grandma vocabulary + extreme specificity + write-for-ONE-person** — simplicity/specificity psychology. H/S — SHIPPED: baked into story_writer style rules. ✅
+111. **Thursday 7–9am anomaly** — only morning slot beating evenings; Wed/Thu best days, dead zone 1–5am. M/S — cron currently 6pm/9pm; consider adding Thu-morning slot. 📋
+112. **5-3-1 daily engagement rule** — engage 5 small + 3 medium + 1 large account daily. M/M — manual or risky automation. ⛔ (ToS-fragile)
+113. **30–60 minute first-reply window** — reply to early comments fast; funnel_worker cron already runs every 30 min. ✅

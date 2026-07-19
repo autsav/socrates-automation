@@ -41,6 +41,13 @@ _ROLE_DEFAULT = (
     "VISUAL world (e.g. 'ancient greek ruins', 'crowded city night').\n"
     "- caption_first_line: <=8 words, curiosity gap, no hashtags.\n"
     "- trend_tag: one hashtag (no #) matching the topic, or empty string.\n"
+    "Style rules (non-negotiable):\n"
+    "- Write for ONE specific person, not an audience — the viewer must think "
+    "'this is so my friend' and hit send.\n"
+    "- Vocabulary so simple a tired 12-year-old instantly gets every word. No "
+    "abstractions where a concrete image will do.\n"
+    "- Extreme specificity beats broad claims: '2am doom-scrolling in bed' not "
+    "'wasting time online'.\n"
     "Total spoken words across beats <=90 (a ~30s reel). Output JSON only."
 )
 

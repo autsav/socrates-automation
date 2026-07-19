@@ -21,6 +21,7 @@ ROLE_MODELS = {
     "music_director":         "claude-sonnet-4-6",
     "trend_scout":            "claude-sonnet-4-6",
     "prompt_critic":          "claude-sonnet-4-6",
+    "story_writer":           "claude-opus-4-8",
 }
 ROLE_EFFORT = {
     "analyst":    "medium",
@@ -38,6 +39,7 @@ ROLE_EFFORT = {
     "music_director":         "medium",
     "trend_scout":            "medium",
     "prompt_critic":          "medium",
+    "story_writer":           "high",
 }
 N_CONCEPTS = 4
 DAILY_SPEND_CEILING_USD = 2.0
