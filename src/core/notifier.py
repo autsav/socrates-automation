@@ -313,6 +313,14 @@ class Notifier:
 
         return "\n".join(lines)
 
+    def send(self, message: str) -> bool:
+        """Send a plain text message to every configured backend."""
+        sent = False
+        for backend in self.backends:
+            if hasattr(backend, "send"):
+                sent = backend.send(message) or sent
+        return sent
+
     def send_document(self, doc_path, caption: str = "") -> bool:
         """Send a document to any backend that supports it (Telegram)."""
         sent = False

@@ -30,6 +30,7 @@ audio/*.mp3
 # Data & logs
 data/*
 !data/pipeline.db
+!data/token_meta.json
 logs/
 server.log
 *.db
