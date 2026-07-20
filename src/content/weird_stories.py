@@ -227,7 +227,7 @@ WEIRD_CAPSULES = [
     {"key": "epictetus-stolen-lamp",
      "hook_fact": "A thief broke in and stole an iron lamp. The philosopher who owned it was almost relieved.",
      "escalation": "Epictetus, who owned almost nothing valuable, lost his one iron lamp to a burglar. He said the thief paid a price for it he didn't realize, his own honesty, for a lamp. Epictetus went out and bought a cheap clay one instead and slept fine.",
-     "source_note": "Epictetus, Discourses I.29.21",
+     "source_note": "Epictetus, Fragments (via Stobaeus)",
      "lesson_theme": "what a theft actually costs the thief",
      "send_cta": "Send this to the friend who never lets small losses ruin their day."},
     {"key": "zeno-two-ears-one-mouth",
