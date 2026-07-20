@@ -38,3 +38,22 @@ def test_signoff_appended_to_caption():
     assert "— The Stoic Reset" in cap
     # Idempotent: never doubled.
     assert pipeline._append_signoff(cap).count("— The Stoic Reset") == 1
+
+
+def test_punch_beats_force_empty_reframe(monkeypatch):
+    import pipeline as p
+
+    def fake_write_story(client, mode, material, pool, extra_context=""):
+        return {"beat_hook": "Nobody is coming to rescue you from this couch tonight.",
+                "beat_reframe": "Rogue reframe the model should not have written here.",
+                "quote_row": 1,
+                "beat_cta": "Send this to the friend who keeps waiting for someday to arrive.",
+                "topic_query": "man alone rooftop", "caption_first_line": "Read it twice."}
+
+    monkeypatch.setattr("studio.story_writer.write_story", fake_write_story)
+
+    class _Cfg:
+        ANTHROPIC_API_KEY = "k"
+
+    story = p._build_story_beats(_Cfg(), "punch", {"row_number": 1, "quote": "q", "audience": "stuck"})
+    assert story is not None and story["beat_reframe"] == ""

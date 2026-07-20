@@ -388,6 +388,8 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
             log.warning("  [story] beats name an individual — falling back "
                         f"(text: {joined[:160]}...)")
             return None
+        if mode == "punch":
+            story["beat_reframe"] = ""   # format guarantee: punch has NO bridge scene
         story["mode"] = mode
         return story
     except Exception as e:  # noqa: BLE001 - never crash a reel
