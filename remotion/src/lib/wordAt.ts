@@ -2,6 +2,7 @@ export interface WordTime {
   w: string;
   start: number;
   end: number;
+  cls?: string;
 }
 
 /** Index of the word active at `sceneSeconds` (seconds from scene start); the

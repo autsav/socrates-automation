@@ -7,6 +7,7 @@ import {
 } from "remotion";
 import { FONT_FAMILY, Palette } from "../styles/theme";
 import { WordTime } from "../lib/wordAt";
+import { countupTarget, effectFor } from "../lib/animDirector";
 
 /**
  * AnimatedText — HUGE, bold, centered text that reveals word-by-word with
@@ -33,6 +34,9 @@ export interface AnimatedTextProps {
   /** Render the FULL text statically for this many opening frames — the feed
    *  thumbnail is frame 1, and an empty first frame kills feed CTR (recipe #2). */
   staticFirstFrames?: number;
+  /** Seed varying which per-word effect flavor (e.g. pop vs pop2) is used;
+   *  deterministic given the seed, differs between reels. */
+  animSeed?: number;
 }
 
 /** Estimate a font size so the longest word and total text fill ~80%+ width
@@ -62,6 +66,7 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
   maxWidthPct = 90,
   wordTimes = [],
   staticFirstFrames = 0,
+  animSeed = 0,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -110,6 +115,47 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
           extrapolateRight: "clamp",
         });
 
+        // Word effect director (spec 3): class-driven technique, real word
+        // start frame, suppressed during the static thumbnail window so the
+        // frame-0 feed thumbnail stays settled.
+        const fx = effectFor(wordTimes[i]?.cls, i, animSeed);
+        const local = frame - wordStart; // frames since word's real start
+        let fxScale = 1,
+          fxDx = 0,
+          fxColor: string | null = null,
+          fxGlow = 0;
+        let display = word;
+        if (!inStaticWindow && fx !== "plain") {
+          if (fx === "pop" || fx === "pop2") {
+            const amp = fx === "pop" ? 0.18 : 0.12;
+            fxScale = 1 + amp * Math.max(0, 1 - Math.abs(local - 4) / 4);
+            if (local >= 0 && local <= 8) fxColor = palette.accent;
+          } else if (fx === "shake") {
+            if (local >= 0 && local < 4) fxDx = (local % 2 === 0 ? 1 : -1) * 3;
+          } else if (fx === "glowpop") {
+            if (local >= 0 && local <= 10) {
+              fxColor = palette.accent;
+              fxGlow = 1;
+            }
+          } else if (fx === "countup") {
+            const target = countupTarget(word);
+            if (target !== null && local >= 0 && local < 8) {
+              display = word.replace(
+                /\d+/,
+                String(Math.round(target * Math.min(1, local / 8)))
+              );
+            } else if (target === null && local >= 0 && local <= 8) {
+              fxScale = 1 + 0.18 * Math.max(0, 1 - Math.abs(local - 4) / 4); // pop fallback
+            }
+          }
+        }
+
+        const baseTextShadow = palette.dark
+          ? `0 0 ${glowRadius}px ${palette.glow}, 0 ${size * 0.03}px ${
+              size * 0.05
+            }px rgba(0,0,0,0.85)`
+          : `0 ${size * 0.02}px ${size * 0.04}px rgba(0,0,0,0.25)`;
+
         return (
           <span
             key={`${word}-${i}`}
@@ -120,21 +166,24 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
               fontSize: size,
               lineHeight: 1.02,
               letterSpacing: "-0.01em",
-              color: palette.text,
+              color: fxColor ?? palette.text,
               opacity,
-              transform: `translateY(${translateY}px) scale(${scale})`,
+              transform:
+                fx === "plain"
+                  ? `translateY(${translateY}px) scale(${scale})`
+                  : `translateY(${translateY}px) translateX(${fxDx}px) scale(${
+                      scale * fxScale
+                    })`,
               // Heavy contrast outline + pulsing glow so the text is razor-legible
               // over the moving, pulsing background.
               WebkitTextStroke: `${Math.max(2, size * 0.02)}px ${palette.stroke}`,
               paintOrder: "stroke fill",
-              textShadow: palette.dark
-                ? `0 0 ${glowRadius}px ${palette.glow}, 0 ${size * 0.03}px ${
-                    size * 0.05
-                  }px rgba(0,0,0,0.85)`
-                : `0 ${size * 0.02}px ${size * 0.04}px rgba(0,0,0,0.25)`,
+              textShadow: fxGlow
+                ? `${baseTextShadow}, 0 0 ${28 + 26 * fxGlow}px ${palette.glow}`
+                : baseTextShadow,
             }}
           >
-            {word}
+            {display}
           </span>
         );
       })}
