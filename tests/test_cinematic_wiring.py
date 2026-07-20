@@ -36,6 +36,24 @@ def test_multi_clip_payload(tmp_path):
     assert d["silenceDropSec"] == 0.8
 
 
+def test_quote_voice_duration_absorbs_silence_drop(tmp_path, monkeypatch):
+    import src.video.remotion_reel as remotion_reel
+    monkeypatch.setattr(remotion_reel, "_probe_duration", lambda p: 4.0)
+    qv = tmp_path / "quote.mp3"
+    qv.write_bytes(b"x")
+    d = _write(tmp_path, quote_voice=qv, silence_drop_sec=0.8)
+    assert d["voiceDurations"]["quote"] == 4.0 + 0.8
+
+
+def test_quote_voice_duration_unchanged_without_drop(tmp_path, monkeypatch):
+    import src.video.remotion_reel as remotion_reel
+    monkeypatch.setattr(remotion_reel, "_probe_duration", lambda p: 4.0)
+    qv = tmp_path / "quote.mp3"
+    qv.write_bytes(b"x")
+    d = _write(tmp_path, quote_voice=qv)
+    assert d["voiceDurations"]["quote"] == 4.0
+
+
 def test_sfx_set_includes_riser_and_sub_impact(tmp_path):
     d = _write(tmp_path)
     if d.get("sfx"):                      # ffmpeg present in env

@@ -301,6 +301,16 @@ def write_bridge_file(
                 voices[key] = nm
                 voice_durations[key] = _probe_duration(p)
 
+    if silence_drop_sec > 0 and voice_durations.get("quote") is not None:
+        # The Quote VO's leading silence is trimmed and its Sequence starts
+        # `silence_drop_sec` after the visual Quote scene begins (see
+        # PovReel.tsx `dropFrames`). Reporting the probed (trimmed) length
+        # alone under-sizes the Quote scene window in sceneFrames() — the
+        # narration then ends ~ (drop - PAD) late, overlapping CtaVO and
+        # escaping the duck span. Padding the reported duration by the drop
+        # makes the Quote window absorb it, same as every other scene.
+        voice_durations["quote"] = voice_durations["quote"] + silence_drop_sec
+
     music_name: str | None = None
     if music_path and Path(music_path).exists():
         mp = Path(music_path)
