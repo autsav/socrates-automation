@@ -28,8 +28,9 @@ audio/*.mp3
 !audio/stark_minimal.mp3
 
 # Data & logs
+# data/pipeline.db is deliberately ignored (security decision 2026-07-20,
+# c23a260) — CI persists it via Actions cache, never via git.
 data/*
-!data/pipeline.db
 !data/token_meta.json
 data/perf_digest.json
 logs/

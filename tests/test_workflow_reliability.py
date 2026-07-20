@@ -9,8 +9,10 @@ def _read(rel):
     return (ROOT / rel).read_text()
 
 
-def test_analytics_uses_force_add():
-    assert "git add -f data/pipeline.db" in _read(".github/workflows/analytics.yml")
+def test_no_workflow_commits_the_db():
+    import glob
+    for wf in glob.glob(str(ROOT / ".github/workflows/*.yml")):
+        assert "git add -f data/pipeline.db" not in _read(wf.replace(str(ROOT) + "/", "")), wf
 
 
 def test_both_workflows_have_write_permission():
@@ -19,20 +21,26 @@ def test_both_workflows_have_write_permission():
         assert "permissions:" in t and "contents: write" in t, f"{wf} missing write permission"
 
 
-def test_daily_post_fails_loudly_on_missing_db():
+def test_daily_post_restores_db_from_cache():
     t = _read(".github/workflows/daily_post.yml")
-    assert "data/pipeline.db missing" in t and "exit 1" in t
+    assert "actions/cache/restore" in t and "data/pipeline.db" in t
+    assert "actions/cache/save" in t
 
 
-def test_gitignore_negates_pipeline_db():
-    assert "!data/pipeline.db" in _read(".gitignore")
+def test_gitignore_ignores_pipeline_db():
+    # The DB must be ignored so it can never be committed (security posture).
+    r = subprocess.run(["git", "check-ignore", "data/pipeline.db"],
+                       cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, "data/pipeline.db must be gitignored"
 
 
-def test_pipeline_db_is_tracked():
+def test_pipeline_db_is_not_tracked():
+    # Security posture (user decision c23a260, 2026-07-20): the DB never lives
+    # in the public repo. CI persists it via Actions cache instead.
     out = subprocess.run(
         ["git", "ls-files", "data/pipeline.db"], cwd=ROOT, capture_output=True, text=True
     ).stdout.strip()
-    assert out == "data/pipeline.db", "data/pipeline.db must be tracked in git"
+    assert out == "", "data/pipeline.db must NOT be tracked in git (security)"
 
 
 def test_committed_db_has_no_token():
@@ -85,13 +93,15 @@ def test_scrub_committed_tokens_clears_all_services(tmp_path, monkeypatch):
     assert n == 0, f"scrub_committed_tokens must clear ALL services, {n} rows remain"
 
 
-def test_workflows_scrub_token_before_committing_db():
-    for wf in (".github/workflows/analytics.yml", ".github/workflows/daily_post.yml"):
+def test_workflows_scrub_token_before_caching_db():
+    for wf in (".github/workflows/analytics.yml", ".github/workflows/daily_post.yml",
+               ".github/workflows/optimizer.yml", ".github/workflows/engagement_bot.yml"):
         t = _read(wf)
         i_scrub = t.find("DELETE FROM token_state")
-        i_add = t.find("git add -f data/pipeline.db")
-        assert i_scrub != -1, f"{wf} must scrub token_state before committing the DB"
-        assert i_add != -1 and i_scrub < i_add, f"{wf}: token scrub must precede git add -f"
+        i_save = t.find("actions/cache/save")
+        assert i_scrub != -1, f"{wf} must scrub token_state before caching the DB"
+        assert i_save != -1 and i_scrub < i_save, f"{wf}: token scrub must precede cache save"
+        assert "git add -f data/pipeline.db" not in t, f"{wf} must never re-commit the DB"
 
 
 def test_daily_post_uses_remotion_for_pov():

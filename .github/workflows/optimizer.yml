@@ -29,6 +29,12 @@ jobs:
         run: |
           pip install -q -r requirements.txt
 
+      - name: Restore pipeline DB from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/pipeline.db
+          key: pipeline-db-${{ github.run_id }}
+          restore-keys: pipeline-db-
       - name: Validate required secrets
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -46,17 +52,13 @@ jobs:
         run: |
           python scripts/run_optimizer.py
 
-      - name: Commit SQLite database back to repo
-        run: |
-          python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state\"); c.commit(); c.close()"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f data/pipeline.db
-          git diff --staged --quiet || git commit -m "chore: update pipeline.db optimizer state [skip ci]"
-          # Race guard: analytics.yml's daily 08:00 UTC run (and its own Monday
-          # tick) may push data/pipeline.db between our checkout and our push —
-          # rebase our commit onto the latest remote state instead of rejecting.
-          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Scrub token from DB
+        if: github.event_name != 'pull_request'
+        run: python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state\"); c.commit(); c.close()"
+
+      - name: Save pipeline DB to cache
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          path: data/pipeline.db
+          key: pipeline-db-${{ github.run_id }}

@@ -23,6 +23,12 @@ jobs:
       - name: Install dependencies
         run: pip install -q -r requirements.txt
 
+      - name: Restore pipeline DB from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/pipeline.db
+          key: pipeline-db-${{ github.run_id }}
+          restore-keys: pipeline-db-
       - name: Validate required secrets
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -79,3 +85,13 @@ jobs:
               interval_sec=300,
           )
           " 2>&1 || echo "Engagement bot completed (may have had partial errors)"
+      - name: Scrub token from DB
+        if: github.event_name != 'pull_request'
+        run: python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state\"); c.commit(); c.close()"
+
+      - name: Save pipeline DB to cache
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          path: data/pipeline.db
+          key: pipeline-db-${{ github.run_id }}

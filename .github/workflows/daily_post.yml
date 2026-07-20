@@ -99,13 +99,20 @@ jobs:
           key: music-${{ steps.week.outputs.week }}
           restore-keys: music-
 
-      - name: Verify tracked SQLite database present
+      - name: Restore pipeline DB from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/pipeline.db
+          key: pipeline-db-${{ github.run_id }}
+          restore-keys: pipeline-db-
+
+      - name: Report DB provenance
         run: |
-          if [ ! -f "data/pipeline.db" ]; then
-            echo "❌ data/pipeline.db missing after checkout — it must be committed to the repo (spec A2). Refusing to continue on an empty DB."
-            exit 1
+          if [ -f "data/pipeline.db" ]; then
+            echo "✅ pipeline.db restored from Actions cache ($(du -h data/pipeline.db | cut -f1))"
+          else
+            echo "⚠️ No cached pipeline.db — first run since DB left git; init_db will create a fresh one."
           fi
-          echo "✅ pipeline.db present from repo ($(du -h data/pipeline.db | cut -f1))"
 
       - name: Init/migrate SQLite database
         run: python -c "from src.core.data_store import init_db; init_db()"
@@ -186,20 +193,28 @@ jobs:
             echo "ℹ️ No notification backend configured — check logs/notifications.jsonl"
           fi
 
-      - name: Commit SQLite database + logs back to repo
+      - name: Scrub token from DB
+        if: github.event_name != 'pull_request'
+        run: python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state\"); c.commit(); c.close()"
+
+      - name: Save pipeline DB to cache
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          path: data/pipeline.db
+          key: pipeline-db-${{ github.run_id }}
+
+      - name: Commit logs back to repo
         if: github.event_name != 'pull_request'
         run: |
-          python -c "import sqlite3; c=sqlite3.connect('data/pipeline.db'); c.execute(\"DELETE FROM token_state\"); c.commit(); c.close()"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Force-add because data/ and logs/ are in .gitignore
-          git add -f data/pipeline.db
           git add -f logs/notifications.jsonl 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "chore: update pipeline.db + logs [skip ci]"
+          git commit -m "chore: update logs [skip ci]"
           # NOTE: GitHub Actions default GITHUB_TOKEN may not have write access.
           # If this fails with 403, go to Settings → Actions → Workflow permissions
           # and select "Read and write permissions".

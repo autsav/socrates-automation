@@ -32,9 +32,10 @@ Arc: **Hook → [Bridge] → Quote → CTA** (bridge scene only when `quote_data
   Google Trends is a graceful `[]` skip.
 - **edge-tts uses the Python API** (`Communicate(boundary="WordBoundary")`), NOT the CLI — no PATH
   needed. Reel sage voice = `en-US-AndrewNeural`, rate `-30%`, pitch `-14Hz` (`REEL_VOICE/RATE/PITCH`).
-- **`data/pipeline.db` is git-tracked and must NOT contain a Meta token** (test
-  `test_committed_db_has_no_token`). Any live/dry run writes a token → `git checkout -- data/pipeline.db`
-  before committing.
+- **`data/pipeline.db` is NOT git-tracked (security decision 2026-07-20, c23a260)** —
+  gitignored; CI persists it via Actions cache (`pipeline-db-*` keys: restore at job
+  start, token_state scrub, then save — in every DB-touching workflow). Never
+  `git add -f` it; the guard tests enforce ignored + never-committed.
 - **GitHub Actions cron needs all 12 secrets set** (`gh secret set …`); the `Validate required secrets`
   step `exit 1`s the whole job if any of the 7 required is missing. Optional: JAMENDO/GNEWS/OPENAI/TELEGRAM×2.
 
