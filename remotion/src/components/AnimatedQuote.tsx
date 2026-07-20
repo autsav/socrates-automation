@@ -120,10 +120,10 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
         }}
       >
         {words.map((word, i) => {
-          const wordStart =
-            wordTimes.length > i
-              ? Math.round(wordTimes[i].start * fps)
-              : startFrame + i * staggerFrames;
+          const hasTiming = wordTimes.length > i;
+          const wordStart = hasTiming
+            ? Math.round(wordTimes[i].start * fps)
+            : startFrame + i * staggerFrames;
           const enter = spring({
             frame: frame - wordStart,
             fps,
@@ -139,6 +139,14 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
           const isEmphasis = i === (activeWord >= 0 ? activeWord : emphasis);
           const scale = isEmphasis ? punch : 1;
           const color = isEmphasis ? palette.accent : palette.text;
+
+          // Letter-cascade: when the word has a real VO timing span, reveal
+          // it letter-by-letter staggered across [start, end] instead of a
+          // single word-level rise. Emphasis punch + karaoke color above stay
+          // word-level. Words without timings (or the static cold-open
+          // window) keep the plain word-level reveal.
+          const cascade = hasTiming && !inStaticWindow;
+          const letters = cascade ? word.split("") : null;
 
           return (
             <span
@@ -163,8 +171,8 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
                   lineHeight: 1.02,
                   letterSpacing: "-0.01em",
                   color,
-                  opacity,
-                  transform: `translateY(${rise}px) scale(${scale})`,
+                  opacity: cascade ? 1 : opacity,
+                  transform: `translateY(${cascade ? 0 : rise}px) scale(${scale})`,
                   WebkitTextStroke: `${Math.max(2, size * 0.02)}px ${palette.stroke}`,
                   paintOrder: "stroke fill",
                   textShadow: palette.dark
@@ -172,7 +180,43 @@ export const AnimatedQuote: React.FC<AnimatedQuoteProps> = ({
                     : `0 ${size * 0.02}px ${size * 0.04}px rgba(0,0,0,0.25)`,
                 }}
               >
-                {word}
+                {cascade && letters
+                  ? letters.map((ch, j) => {
+                      const wordSpanSec = wordTimes[i].end - wordTimes[i].start;
+                      const letterStart = Math.round(
+                        (wordTimes[i].start + wordSpanSec * (j / letters.length)) * fps
+                      );
+                      const letterEnter = spring({
+                        frame: frame - letterStart,
+                        fps,
+                        config: { damping: 14, mass: 0.6, stiffness: 110 },
+                        durationInFrames: 14,
+                      });
+                      const letterOpacity = interpolate(
+                        letterEnter,
+                        [0, 0.5],
+                        [0, 1],
+                        { extrapolateRight: "clamp" }
+                      );
+                      const letterRise = interpolate(
+                        letterEnter,
+                        [0, 1],
+                        [size * 0.35, 0]
+                      );
+                      return (
+                        <span
+                          key={j}
+                          style={{
+                            display: "inline-block",
+                            opacity: letterOpacity,
+                            transform: `translateY(${letterRise}px)`,
+                          }}
+                        >
+                          {ch}
+                        </span>
+                      );
+                    })
+                  : word}
               </span>
             </span>
           );

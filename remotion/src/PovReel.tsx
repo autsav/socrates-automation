@@ -61,6 +61,9 @@ export type PovReelProps = {
   /** OPTIONAL: seconds of leading silence trimmed from the Quote VO clip —
    *  the audio Sequence starts this much later than the visual Quote scene. */
   silenceDropSec?: number;
+  /** Seed varying which per-word effect flavor (e.g. pop vs pop2) AnimatedText
+   *  uses; deterministic given the seed, differs between reels (spec 3). */
+  animSeed?: number;
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -83,6 +86,7 @@ export const povReelDefaultProps: PovReelProps = {
   backgrounds: undefined,
   backgroundDurationsSec: undefined,
   silenceDropSec: undefined,
+  animSeed: 0,
 };
 
 /** Fades its children in across the loop-preview window. */
@@ -129,6 +133,7 @@ export const PovReel: React.FC<PovReelProps> = ({
   backgrounds,
   backgroundDurationsSec,
   silenceDropSec,
+  animSeed = 0,
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -217,6 +222,32 @@ export const PovReel: React.FC<PovReelProps> = ({
   const subImpactFrame =
     firstQuoteBeat !== undefined ? firstQuoteBeat : quoteStart + dropFrames;
 
+  // Quote beats/wordTimes, shifted for the silence-drop gap — shared by the
+  // real Quote scene and its ghost-trail echo below.
+  const quoteBeats =
+    dropFrames > 0 && beats.length > 0
+      ? beats.map((t) => t + (silenceDropSec ?? 0))
+      : beats;
+  const quoteWordTimes =
+    dropFrames > 0 && wordTimes.quote && wordTimes.quote.length > 0
+      ? wordTimes.quote.map((wt) => ({
+          ...wt,
+          start: wt.start + (silenceDropSec ?? 0),
+          end: wt.end + (silenceDropSec ?? 0),
+        }))
+      : wordTimes.quote;
+
+  // Ghost-trail (spec 3): a faint, drifting echo of the Quote scene's own
+  // opening frames, previewed just before it lands — only when the Quote
+  // isn't a cold open (quoteStart > 0) and only within the 12-frame ramp
+  // window right before it.
+  const showGhostTrail =
+    quoteStart > 0 && frame >= quoteStart - 12 && frame < quoteStart;
+
+  const ctaVoEndFrame = voiceDurations.cta
+    ? Math.round(voiceDurations.cta * fps)
+    : undefined;
+
   return (
     <AbsoluteFill style={{ background: palette.bg[0] }}>
       <ColorGrade grade={getGrade(mood)}>
@@ -250,14 +281,37 @@ export const PovReel: React.FC<PovReelProps> = ({
               cold-open arc drops it so the Quote hits at frame 0. */}
           {hook ? (
             <Sequence from={0} durationInFrames={hookF} name="Hook">
-              <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
+              <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} animSeed={animSeed} />
             </Sequence>
           ) : null}
 
           {bridge ? (
             <Sequence from={hookF} durationInFrames={bridgeF} name="Bridge">
-              <BridgeScene text={bridge} palette={palette} wordTimes={wordTimes.bridge} />
+              <BridgeScene text={bridge} palette={palette} wordTimes={wordTimes.bridge} animSeed={animSeed} />
             </Sequence>
+          ) : null}
+
+          {showGhostTrail ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0.3,
+                transform: `translateY(${(quoteStart - frame) * 0.8}px)`,
+                pointerEvents: "none",
+              }}
+            >
+              <Sequence from={quoteStart - 12} durationInFrames={12} name="QuoteGhost">
+                <QuoteScene
+                  quote={quote}
+                  attribution={attribution}
+                  palette={palette}
+                  beats={quoteBeats}
+                  wordTimes={quoteWordTimes}
+                  staticFirstFrames={0}
+                />
+              </Sequence>
+            </div>
           ) : null}
 
           <Sequence from={quoteStart} durationInFrames={quoteF} name="Quote">
@@ -265,20 +319,8 @@ export const PovReel: React.FC<PovReelProps> = ({
               quote={quote}
               attribution={attribution}
               palette={palette}
-              beats={
-                dropFrames > 0 && beats.length > 0
-                  ? beats.map((t) => t + (silenceDropSec ?? 0))
-                  : beats
-              }
-              wordTimes={
-                dropFrames > 0 && wordTimes.quote && wordTimes.quote.length > 0
-                  ? wordTimes.quote.map((wt) => ({
-                      ...wt,
-                      start: wt.start + (silenceDropSec ?? 0),
-                      end: wt.end + (silenceDropSec ?? 0),
-                    }))
-                  : wordTimes.quote
-              }
+              beats={quoteBeats}
+              wordTimes={quoteWordTimes}
               staticFirstFrames={quoteStart === 0 ? 3 : 0}
             />
           </Sequence>
@@ -288,7 +330,7 @@ export const PovReel: React.FC<PovReelProps> = ({
             durationInFrames={durationInFrames - quoteEnd}
             name="CTA"
           >
-            <CtaScene text={cta} palette={palette} />
+            <CtaScene text={cta} palette={palette} voEndFrame={ctaVoEndFrame} />
           </Sequence>
 
           {/* Pattern-interrupt flashes at each scene boundary: hook->bridge (or
@@ -309,7 +351,7 @@ export const PovReel: React.FC<PovReelProps> = ({
               name="LoopPreview"
             >
               <LoopFadeIn>
-                <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} />
+                <HookScene text={hook} palette={palette} wordTimes={wordTimes.hook} animSeed={animSeed} />
               </LoopFadeIn>
             </Sequence>
           ) : null}

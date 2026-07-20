@@ -13,7 +13,8 @@ export const HookScene: React.FC<{
   text: string;
   palette: Palette;
   wordTimes?: WordTime[];
-}> = ({ text, palette, wordTimes }) => {
+  animSeed?: number;
+}> = ({ text, palette, wordTimes, animSeed }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -76,6 +77,7 @@ export const HookScene: React.FC<{
         stagger={0.08}
         wordTimes={chunk.times}
         staticFirstFrames={chunk.index === 0 ? 3 : 0}
+        animSeed={animSeed}
       />
     </div>
   );

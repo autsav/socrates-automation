@@ -6,10 +6,13 @@ import { FONT_FAMILY, Palette } from "../styles/theme";
  * CtaScene — the close. The CTA slides up from the bottom with a springy bounce
  * and then pulses (scale + glow) to draw the eye toward the save/follow action.
  */
-export const CtaScene: React.FC<{ text: string; palette: Palette }> = ({
-  text,
-  palette,
-}) => {
+export const CtaScene: React.FC<{
+  text: string;
+  palette: Palette;
+  /** Frame (scene-relative) the CTA VO ends — drives a freeze-pop punch once
+   *  the words have settled, so the save/follow beat lands with the audio. */
+  voEndFrame?: number;
+}> = ({ text, palette, voEndFrame }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const t = frame / fps;
@@ -29,6 +32,13 @@ export const CtaScene: React.FC<{ text: string; palette: Palette }> = ({
   // Attention pulse once it has arrived.
   const pulse = 1 + 0.04 * Math.sin(t * Math.PI * 2 * 1.4);
   const glow = 24 + 20 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 1.4));
+
+  // Freeze-pop (spec 3): once the VO ends and the words have settled, a
+  // brief extra punch over 8 frames — a beat for the save/follow action.
+  const freezePop =
+    voEndFrame !== undefined && frame >= voEndFrame && frame <= voEndFrame + 8
+      ? 1 + 0.06 * (1 - Math.abs(frame - voEndFrame - 4) / 4)
+      : 1;
 
   const outFade = interpolate(
     frame,
@@ -52,7 +62,7 @@ export const CtaScene: React.FC<{ text: string; palette: Palette }> = ({
     >
       <div
         style={{
-          transform: `translateY(${slideY}px) scale(${pulse})`,
+          transform: `translateY(${slideY}px) scale(${pulse * freezePop})`,
           opacity,
           padding: "0 6%",
           textAlign: "center",

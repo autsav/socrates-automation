@@ -1,5 +1,5 @@
 import React from "react";
-import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { AnimatedText } from "./AnimatedText";
 import { Palette } from "../styles/theme";
 import { WordTime } from "../lib/wordAt";
@@ -15,7 +15,8 @@ export const BridgeScene: React.FC<{
   text: string;
   palette: Palette;
   wordTimes?: WordTime[];
-}> = ({ text, palette, wordTimes }) => {
+  animSeed?: number;
+}> = ({ text, palette, wordTimes, animSeed }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const entrance = spring({ frame, fps, config: { damping: 16, mass: 0.9, stiffness: 80 }, durationInFrames: 18 });
@@ -40,6 +41,16 @@ export const BridgeScene: React.FC<{
   const chunkTimes = wt.slice(active * CHUNK, active * CHUNK + CHUNK);
   const font = chunkCount > 1 ? 132 : 120;
 
+  // Sentence-end tick: a 2-frame white flash right as a chunk cuts in, but
+  // only when the previous chunk ended on a sentence boundary (cls "end") —
+  // a punctuation beat for the cut, not every chunk change.
+  const prevChunkLastWordCls =
+    active > 0 ? wt[active * CHUNK - 1]?.cls : undefined;
+  const showEndTick =
+    active > 0 &&
+    prevChunkLastWordCls === "end" &&
+    frame - chunkStart(active) < 2;
+
   return (
     <div style={{ position: "absolute", inset: 0, opacity: outFade, transform: `scale(${enterScale})` }}>
       <AnimatedText
@@ -48,7 +59,13 @@ export const BridgeScene: React.FC<{
         fontSize={font}
         stagger={0.06}
         wordTimes={chunkTimes}
+        animSeed={animSeed}
       />
+      {showEndTick ? (
+        <AbsoluteFill
+          style={{ background: "rgba(255,255,255,0.25)", pointerEvents: "none" }}
+        />
+      ) : null}
     </div>
   );
 };
