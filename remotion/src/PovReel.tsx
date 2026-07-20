@@ -12,11 +12,13 @@ import { GradientBg } from "./components/GradientBg";
 import { ParticleField } from "./components/ParticleField";
 import { PulsingBg } from "./components/PulsingBg";
 import { BackgroundPhoto } from "./components/BackgroundPhoto";
+import { BackgroundReel } from "./components/BackgroundReel";
 import { HookScene } from "./components/HookScene";
 import { BridgeScene } from "./components/BridgeScene";
 import { QuoteScene } from "./components/QuoteScene";
 import { CtaScene } from "./components/CtaScene";
 import { ColorGrade } from "./components/ColorGrade";
+import { FilmGrade } from "./components/FilmGrade";
 import { getPalette, getGrade } from "./styles/theme";
 import { duckVolume, DuckSpan } from "./lib/duckVolume";
 import { sceneFrames } from "./lib/sceneFrames";
@@ -45,13 +47,20 @@ export type PovReelProps = {
   voices?: { hook?: string; bridge?: string; quote?: string; cta?: string };
   music?: string;
   voiceDurations?: { hook?: number; bridge?: number; quote?: number; cta?: number };
-  sfx?: { whoosh?: string; impact?: string };
+  sfx?: { whoosh?: string; impact?: string; riser?: string; sub_impact?: string };
   wordTimes?: { hook?: WordTime[]; bridge?: WordTime[]; quote?: WordTime[]; cta?: WordTime[] };
   /** OPTIONAL fal.ai FLUX photo background (staticFile name). When set, it
    *  replaces the gradient base; the particle field renders over it. */
   background?: string;
   /** Duration of a video background in seconds (for looping). */
   backgroundDurationSec?: number;
+  /** OPTIONAL multi-clip background reel — takes over from `background` when
+   *  it has 2+ entries; each clip owns a segment cut at scene/stress bounds. */
+  backgrounds?: string[];
+  backgroundDurationsSec?: number[];
+  /** OPTIONAL: seconds of leading silence trimmed from the Quote VO clip —
+   *  the audio Sequence starts this much later than the visual Quote scene. */
+  silenceDropSec?: number;
 }
 
 export const povReelDefaultProps: PovReelProps = {
@@ -71,6 +80,9 @@ export const povReelDefaultProps: PovReelProps = {
   wordTimes: {},
   background: undefined,
   backgroundDurationSec: undefined,
+  backgrounds: undefined,
+  backgroundDurationsSec: undefined,
+  silenceDropSec: undefined,
 };
 
 /** Fades its children in across the loop-preview window. */
@@ -114,6 +126,9 @@ export const PovReel: React.FC<PovReelProps> = ({
   wordTimes = {},
   background,
   backgroundDurationSec,
+  backgrounds,
+  backgroundDurationsSec,
+  silenceDropSec,
 }) => {
   const { durationInFrames, fps } = useVideoConfig();
   const palette = getPalette(mood);
@@ -133,6 +148,42 @@ export const PovReel: React.FC<PovReelProps> = ({
   // once a Bridge is inserted) — not a fixed hookF.
   const beatFrames = beats.map((t) => Math.round(t * fps) + quoteStart);
   const scale = cameraScale(frame, durationInFrames, beatFrames);
+  // Speed ramp: a quick punch-in right before the Quote lands (only when the
+  // Quote isn't already at frame 0 — nothing to ramp into on a cold open).
+  const speedRamp =
+    quoteStart > 0
+      ? interpolate(frame, [quoteStart - 12, quoteStart], [1, 1.08], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })
+      : 1;
+  const finalScale = scale * speedRamp;
+
+  // Multi-clip background cut points: scene starts, plus mid-bridge stress
+  // cuts (7-word chunk starts from wordTimes.bridge) spaced >=3s apart,
+  // clamped to one cut per clip.
+  const cutFrames = React.useMemo(() => {
+    if (!backgrounds || backgrounds.length < 2) return [0];
+    const sceneStarts = [0, hookF, quoteStart, quoteEnd];
+    const minGap = Math.round(3 * fps);
+    const stressCuts: number[] = [];
+    if (bridge && wordTimes.bridge && wordTimes.bridge.length) {
+      const wt = wordTimes.bridge;
+      let lastKept = hookF;
+      for (let ci = 1; ci * 7 < wt.length; ci++) {
+        const wi = ci * 7;
+        const f = hookF + Math.round(wt[wi].start * fps);
+        if (f - lastKept >= minGap) {
+          stressCuts.push(f);
+          lastKept = f;
+        }
+      }
+    }
+    const all = Array.from(new Set([...sceneStarts, ...stressCuts])).sort(
+      (a, b) => a - b
+    );
+    return all.slice(0, backgrounds.length);
+  }, [backgrounds, hookF, quoteStart, quoteEnd, bridge, wordTimes.bridge, fps]);
 
   const spanFor = (
     start: number,
@@ -149,13 +200,40 @@ export const PovReel: React.FC<PovReelProps> = ({
     spanFor(quoteEnd, voiceDurations.cta, durationInFrames - quoteEnd),
   ];
 
+  // Silence drop: the Quote VO clip has its leading silence trimmed, so its
+  // Sequence starts `dropFrames` after the visual Quote scene begins. Music
+  // is forced near-silent across that gap (a beat of true silence reads as
+  // more dramatic than a duck), and an optional riser/sub-impact sell the cut.
+  const dropFrames =
+    silenceDropSec && silenceDropSec > 0 ? Math.round(silenceDropSec * fps) : 0;
+  const musicVolume = (f: number) => {
+    if (dropFrames > 0 && f >= quoteStart && f <= quoteStart + dropFrames) {
+      return 0.02;
+    }
+    return duckVolume(f, duckSpans);
+  };
+  const firstQuoteBeat = beatFrames.find((bf) => bf >= quoteStart);
+  const subImpactFrame =
+    firstQuoteBeat !== undefined ? firstQuoteBeat : quoteStart + dropFrames;
+
   return (
     <AbsoluteFill style={{ background: palette.bg[0] }}>
       <ColorGrade grade={getGrade(mood)}>
-        <AbsoluteFill style={{ transform: `scale(${scale})` }}>
-          {/* Continuous background across the whole reel. A FLUX photo replaces
-              the gradient base when supplied; particles ride over either. */}
-          {background ? (
+        <FilmGrade>
+        <AbsoluteFill style={{ transform: `scale(${finalScale})` }}>
+          {/* Continuous background across the whole reel. A multi-clip reel
+              (2+ backgrounds) cuts on scene/stress bounds; a single FLUX photo
+              replaces the gradient base; particles ride over any of them. */}
+          {backgrounds && backgrounds.length >= 2 ? (
+            <>
+              <BackgroundReel
+                clips={backgrounds}
+                clipDurationsSec={backgroundDurationsSec ?? []}
+                cutFrames={cutFrames}
+              />
+              <ParticleField palette={palette} />
+            </>
+          ) : background ? (
             <>
               <BackgroundPhoto src={background} videoDurationSec={backgroundDurationSec} />
               <ParticleField palette={palette} />
@@ -223,6 +301,7 @@ export const PovReel: React.FC<PovReelProps> = ({
             </Sequence>
           ) : null}
         </AbsoluteFill>
+        </FilmGrade>
       </ColorGrade>
 
       {hook && voices.hook ? (
@@ -236,7 +315,7 @@ export const PovReel: React.FC<PovReelProps> = ({
         </Sequence>
       ) : null}
       {voices.quote ? (
-        <Sequence from={quoteStart} durationInFrames={quoteF} name="QuoteVO">
+        <Sequence from={quoteStart + dropFrames} durationInFrames={quoteF} name="QuoteVO">
           <Audio src={staticFile(voices.quote)} />
         </Sequence>
       ) : null}
@@ -250,10 +329,21 @@ export const PovReel: React.FC<PovReelProps> = ({
         </Sequence>
       ) : null}
       {music ? (
-        <Audio
-          src={staticFile(music)}
-          volume={(f: number) => duckVolume(f, duckSpans)}
-        />
+        <Audio src={staticFile(music)} volume={musicVolume} />
+      ) : null}
+      {sfx.riser && silenceDropSec ? (
+        <Sequence
+          from={Math.max(0, quoteStart - 36)}
+          durationInFrames={36}
+          name="Riser"
+        >
+          <Audio src={staticFile(sfx.riser)} volume={0.3} />
+        </Sequence>
+      ) : null}
+      {sfx.sub_impact ? (
+        <Sequence from={subImpactFrame} durationInFrames={12} name="SubImpact">
+          <Audio src={staticFile(sfx.sub_impact)} volume={0.4} />
+        </Sequence>
       ) : null}
       {sfx.whoosh ? (
         <>

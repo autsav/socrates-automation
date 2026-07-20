@@ -10,7 +10,7 @@ export function cameraScale(
   const base = interpolate(frame, [0, durationInFrames], [1.0, 1.06], {
     extrapolateRight: "clamp",
   });
-  const KICK = 0.02;
+  const KICK = 0.05;
   const WIN = 6;
   let kick = 0;
   for (const bf of beatFrames) {
