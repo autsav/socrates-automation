@@ -86,3 +86,30 @@ def test_prompt_embeds_formula_and_exemplars():
     assert EXEMPLAR_WEIRD["beat_hook"] in _ROLE_DEFAULT
     assert EXEMPLAR_DEBATE["beat_hook"] in _ROLE_DEFAULT
     assert '"lesson"' in t or "the word 'lesson' is banned" in t or "banned" in t
+
+
+def test_quote_leak_rejected():
+    from studio.story_writer import write_story
+
+    calls = []
+
+    class LeakClient:
+        def call(self, role, prefix, role_system, user, schema):
+            calls.append(user)
+            leak = ("You count it at night. Your savings. Your stuff. "
+                    "Now meet a man on a boat. A storm hit hard. "
+                    "And nobody expected what he did next. He smiled at the sand. "
+                    "He walked inland owning nothing but his mind. He said he who "
+                    "is not satisfied with a little is satisfied with nothing at all. "
+                    * 3)[:900]
+            return {"beat_hook": "You'd lose everything and you know exactly what first.",
+                    "beat_reframe": leak,
+                    "quote_row": 1,
+                    "beat_cta": "Send this to the friend who would start over smiling.",
+                    "topic_query": "man beach storm",
+                    "caption_first_line": "He lost the boat. Kept everything."}
+
+    out = write_story(LeakClient(), "weird", {"hook_fact": "x"},
+                      [{"row_number": 1, "quote": "He who is not satisfied with a little, is satisfied with nothing."}])
+    # Both drafts + retry all leak -> rejected entirely.
+    assert out is None and len(calls) == 3

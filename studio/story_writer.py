@@ -13,6 +13,7 @@ Length contract: total spoken words 145-185 → a ~60-75s reel (the scenes are
 VO-sized, so narration length IS reel length).
 """
 import json
+import re
 
 from studio.types import _obj
 from studio import playbooks
@@ -134,6 +135,8 @@ _ROLE_DEFAULT = (
     "- Never resolve a loop before the payoff phase.\n"
     "- The word 'lesson' is banned.\n"
     "- The viewer's life is the story — the ancient is the twist.\n"
+    "- Never include the quote's own words inside beat_reframe — the quote "
+    "scene delivers it. End the reframe one breath BEFORE the quote.\n"
     f"{_EXEMPLAR_WEIRD_BLOCK}\n\n"
     f"{_EXEMPLAR_DEBATE_BLOCK}\n\n"
     "Style rules (non-negotiable):\n"
@@ -253,6 +256,19 @@ def write_story(client, mode: str, material: dict, pool: list,
     """Two persona drafts -> rubric picks the winner (spec 1.2 B-lite).
     Returns validated dict or None (never raises)."""
     from studio.rubric import score_story
+
+    def _quote_leak(d: dict) -> bool:
+        """True when the chosen quote's words appear inside the reframe — the
+        quote scene delivers the quote; the story must stop one breath before."""
+        try:
+            row = d.get("quote_row")
+            q = next((p["quote"] for p in pool if p["row_number"] == row), "")
+            _norm = lambda s: re.sub(r"[^a-z ]", "", (s or "").lower())
+            head = " ".join(_norm(q).split()[:6])
+            return bool(head) and head in _norm(d.get("beat_reframe") or "")
+        except Exception:  # noqa: BLE001
+            return False
+
     try:
         role_tmpl = prompt_store.get("prompt.story_writer.role", _ROLE_DEFAULT)
         role = role_tmpl.format(
@@ -271,6 +287,8 @@ def write_story(client, mode: str, material: dict, pool: list,
                 ok, reason = validate_story(d or {}, mode=mode)
                 if ok and mode != "punch":
                     ok, reason = validate_formula(d or {})
+                if ok and mode != "punch" and _quote_leak(d or {}):
+                    ok, reason = False, "quote text leaked into the reframe"
                 drafts.append((d, ok, reason))
             except Exception as e:  # noqa: BLE001 - one dead draft is fine
                 drafts.append((None, False, str(e)))
@@ -288,6 +306,8 @@ def write_story(client, mode: str, material: dict, pool: list,
         ok, reason = validate_story(d or {}, mode=mode)
         if ok and mode != "punch":
             ok, reason = validate_formula(d or {})
+        if ok and mode != "punch" and _quote_leak(d or {}):
+            ok, reason = False, "quote text leaked into the reframe"
         if not ok:
             print(f"  [story_writer] rejected ({reason})")
             return None
