@@ -113,3 +113,46 @@ def test_quote_leak_rejected():
                       [{"row_number": 1, "quote": "He who is not satisfied with a little, is satisfied with nothing."}])
     # Both drafts + retry all leak -> rejected entirely.
     assert out is None and len(calls) == 3
+
+
+def test_quote_row_out_of_pool_rejected():
+    from studio.story_writer import write_story
+
+    calls = []
+
+    class OutOfPoolClient:
+        def call(self, role, prefix, role_system, user, schema):
+            calls.append(user)
+            return {"beat_hook": "You'd lose everything and you know exactly what first.",
+                    "beat_reframe": GOOD_REFRAME,
+                    "quote_row": 7,  # not in the offered pool (only row 3 below)
+                    "beat_cta": "Send this to the friend who would start over smiling.",
+                    "topic_query": "man beach storm",
+                    "caption_first_line": "He lost the boat. Kept everything."}
+
+    out = write_story(OutOfPoolClient(), "weird", {"hook_fact": "x"},
+                      [{"row_number": 3, "quote": "Some other quote entirely."}])
+    # Both drafts + retry all use an out-of-pool row -> rejected entirely.
+    assert out is None and len(calls) == 3
+
+
+def test_hook_accepts_contraction_with_glued_punctuation():
+    ok, r = validate_formula(_script(
+        "Comfort is quietly killing you.", GOOD_REFRAME))
+    assert ok, r
+
+
+def test_stakes_accepts_contraction_first_word():
+    stakes_variant = GOOD_REFRAME.replace(
+        "You know that thing you replay at 2am. The loss you never talk about. ",
+        "Yourself first, they said, and you believed it. ")
+    ok, r = validate_formula(_script(
+        "You lost something this year you're still pretending doesn't hurt.",
+        stakes_variant))
+    assert ok, r
+
+
+def test_hook_without_second_person_still_fails():
+    ok, r = validate_formula(_script(
+        "Losing everything overnight destroys a young man's plans.", GOOD_REFRAME))
+    assert not ok and "viewer" in r

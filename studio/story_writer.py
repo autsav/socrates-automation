@@ -214,6 +214,9 @@ _RESOLUTION_PHRASES = ("that's why", "the answer", "here's how", "the lesson",
 _CLIFFHANGER_STARTS = ("then ", "until ", "but ", "and nobody", "and no one")
 
 
+_SECOND_PERSON = {"you", "your", "you're", "you've", "you'll", "you'd", "yourself"}
+
+
 def validate_formula(d: dict) -> tuple[bool, str]:
     """The 6-phase viral formula, deterministically (spec 2). Runs AFTER
     validate_story; story/weird/debate modes only."""
@@ -221,8 +224,7 @@ def validate_formula(d: dict) -> tuple[bool, str]:
         hook = (d.get("beat_hook") or "").strip()
         reframe = (d.get("beat_reframe") or "").strip()
         hl = hook.lower()
-        if not ("you" in hl.split() or "your" in hl.split() or
-                "you're" in hl.split() or "you've" in hl.split()):
+        if not (set(re.findall(r"[a-z']+", hl)) & _SECOND_PERSON):
             return False, "hook must address the viewer (you/your)"
         if any(p in hl for p in _RESOLUTION_PHRASES):
             return False, "hook resolves its own loop"
@@ -230,8 +232,7 @@ def validate_formula(d: dict) -> tuple[bool, str]:
         if not words:
             return False, "empty reframe"
         first25 = " ".join(words[:25]).lower()
-        if not any(t in first25.split() or t in first25
-                   for t in ("you", "your", "you're", "you've")):
+        if not (set(re.findall(r"[a-z']+", first25)) & _SECOND_PERSON):
             return False, "stakes phase needs second person in the first 25 words"
         two_thirds = " ".join(words[: (2 * len(words)) // 3]).lower()
         if any(p in two_thirds for p in _RESOLUTION_PHRASES):
@@ -289,6 +290,9 @@ def write_story(client, mode: str, material: dict, pool: list,
                     ok, reason = validate_formula(d or {})
                 if ok and mode != "punch" and _quote_leak(d or {}):
                     ok, reason = False, "quote text leaked into the reframe"
+                if (ok and d and
+                        not any(p["row_number"] == d.get("quote_row") for p in pool)):
+                    ok, reason = False, "quote_row not in the offered pool"
                 drafts.append((d, ok, reason))
             except Exception as e:  # noqa: BLE001 - one dead draft is fine
                 drafts.append((None, False, str(e)))
@@ -298,7 +302,7 @@ def write_story(client, mode: str, material: dict, pool: list,
             return valid[0][1]
         # Neither validated: corrective retry on draft A's failure reason.
         d0, _, reason = drafts[0]
-        print(f"  [story_writer] both drafts rejected ({reason}) — retrying once")
+        print(f"  [story_writer] formula-reject mode={mode} reason={reason} — retrying once")
         d = client.call("story_writer", _PREFIX, role,
                         f"Your last draft was rejected: {reason}. "
                         f"Write the four beats again, fixing exactly that.{ctx}",
@@ -308,8 +312,11 @@ def write_story(client, mode: str, material: dict, pool: list,
             ok, reason = validate_formula(d or {})
         if ok and mode != "punch" and _quote_leak(d or {}):
             ok, reason = False, "quote text leaked into the reframe"
+        if (ok and d and
+                not any(p["row_number"] == d.get("quote_row") for p in pool)):
+            ok, reason = False, "quote_row not in the offered pool"
         if not ok:
-            print(f"  [story_writer] rejected ({reason})")
+            print(f"  [story_writer] formula-reject mode={mode} reason={reason}")
             return None
         return d
     except Exception as e:  # noqa: BLE001 - never crash a reel
