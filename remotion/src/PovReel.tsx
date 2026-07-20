@@ -143,10 +143,15 @@ export const PovReel: React.FC<PovReelProps> = ({
   const quoteEnd = quoteStart + quoteF;
 
   const frame = useCurrentFrame();
-  // Beats are word/beat timings relative to the Quote scene's own start, so the
-  // offset must track wherever Quote actually begins (hookF, or hookF+bridgeF
-  // once a Bridge is inserted) — not a fixed hookF.
-  const beatFrames = beats.map((t) => Math.round(t * fps) + quoteStart);
+
+  // Silence drop: the Quote VO clip has its leading silence trimmed, so its
+  // Sequence starts `dropFrames` after the visual Quote scene begins.
+  const dropFrames =
+    silenceDropSec && silenceDropSec > 0 ? Math.round(silenceDropSec * fps) : 0;
+
+  // Beats are word/beat timings relative to the Quote VO's actual start (after
+  // silence drop). Offset must track the adjusted audio start: quoteStart + dropFrames.
+  const beatFrames = beats.map((t) => Math.round(t * fps) + quoteStart + dropFrames);
   const scale = cameraScale(frame, durationInFrames, beatFrames);
   // Speed ramp: a quick punch-in right before the Quote lands (only when the
   // Quote isn't already at frame 0 — nothing to ramp into on a cold open).
@@ -200,12 +205,8 @@ export const PovReel: React.FC<PovReelProps> = ({
     spanFor(quoteEnd, voiceDurations.cta, durationInFrames - quoteEnd),
   ];
 
-  // Silence drop: the Quote VO clip has its leading silence trimmed, so its
-  // Sequence starts `dropFrames` after the visual Quote scene begins. Music
-  // is forced near-silent across that gap (a beat of true silence reads as
-  // more dramatic than a duck), and an optional riser/sub-impact sell the cut.
-  const dropFrames =
-    silenceDropSec && silenceDropSec > 0 ? Math.round(silenceDropSec * fps) : 0;
+  // Music is forced near-silent across the silence-drop gap (a beat of true
+  // silence reads as more dramatic than a duck), and an optional riser/sub-impact sell the cut.
   const musicVolume = (f: number) => {
     if (dropFrames > 0 && f >= quoteStart && f <= quoteStart + dropFrames) {
       return 0.02;
@@ -264,8 +265,20 @@ export const PovReel: React.FC<PovReelProps> = ({
               quote={quote}
               attribution={attribution}
               palette={palette}
-              beats={beats}
-              wordTimes={wordTimes.quote}
+              beats={
+                dropFrames > 0 && beats.length > 0
+                  ? beats.map((t) => t + (silenceDropSec ?? 0))
+                  : beats
+              }
+              wordTimes={
+                dropFrames > 0 && wordTimes.quote && wordTimes.quote.length > 0
+                  ? wordTimes.quote.map((wt) => ({
+                      ...wt,
+                      start: wt.start + (silenceDropSec ?? 0),
+                      end: wt.end + (silenceDropSec ?? 0),
+                    }))
+                  : wordTimes.quote
+              }
               staticFirstFrames={quoteStart === 0 ? 3 : 0}
             />
           </Sequence>
