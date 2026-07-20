@@ -84,6 +84,7 @@ def test_write_bridge_file_roundtrip(tmp_path, monkeypatch):
         "mood": "epic_warrior",
         "duration": 10.5,
         "fps": 30,
+        "animSeed": 0,
         "beats": [],
         "voices": {"hook": None, "quote": None, "cta": None},
         "voiceDurations": {"hook": None, "quote": None, "cta": None},
@@ -185,7 +186,10 @@ def test_bridge_includes_wordtimes(tmp_path):
     hw = [{"w": "Hi", "start": 0.0, "end": 0.3}]
     rr.write_bridge_file("h", "q", "a", "c", "calm_stoic", 10.0, 30, bridge_path=p, hook_words=hw)
     data = json.loads(p.read_text())
-    assert data["wordTimes"]["hook"] == hw
+    # Word times are classified, so check the structure includes cls
+    assert len(data["wordTimes"]["hook"]) == 1
+    assert data["wordTimes"]["hook"][0]["w"] == "Hi"
+    assert data["wordTimes"]["hook"][0]["cls"] == "stress"
     assert data["wordTimes"]["quote"] == [] and data["wordTimes"]["cta"] == []
 
 

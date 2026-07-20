@@ -34,6 +34,7 @@ import subprocess
 from pathlib import Path
 
 from src.video import beat_sync
+from src.video.word_classes import classify_words
 
 # Repo root: src/video/remotion_reel.py -> src -> <repo>
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -242,6 +243,7 @@ def write_bridge_file(
     background: Path | None = None,
     backgrounds: list | None = None,
     silence_drop_sec: float = 0.0,
+    anim_seed: int = 0,
 ) -> Path:
     """Write the reel-data.json bridge file the Remotion composition reads.
 
@@ -366,6 +368,9 @@ def write_bridge_file(
     if bridge_words:
         word_times["bridge"] = bridge_words
 
+    # Apply word classification to all wordTimes lists
+    word_times = {k: classify_words(v) for k, v in word_times.items()}
+
     payload = {
         "hook": hook or "",
         "quote": quote or "",
@@ -374,6 +379,7 @@ def write_bridge_file(
         "mood": mood,
         "duration": round(float(duration), 3),
         "fps": int(fps),
+        "animSeed": int(anim_seed),
         "beats": beats,
         "voices": voices,
         "voiceDurations": voice_durations,
@@ -425,6 +431,7 @@ def generate_remotion_reel(
     background: Path | None = None,
     backgrounds: list | None = None,
     silence_drop_sec: float = 0.0,
+    anim_seed: int = 0,
 ) -> Path | None:
     """
     Render a POV Reel via Remotion (React-based, headless-browser rendering).
@@ -470,6 +477,7 @@ def generate_remotion_reel(
         background=background,
         backgrounds=backgrounds,
         silence_drop_sec=silence_drop_sec,
+        anim_seed=anim_seed,
     )
 
     # 2. Invoke the Remotion CLI. --props takes a path to the JSON bridge file.

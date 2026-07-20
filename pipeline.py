@@ -1147,6 +1147,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     background=bg_path,
                     backgrounds=bg_clips,
                     silence_drop_sec=silence_drop,
+                    anim_seed=row_n or 0,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
