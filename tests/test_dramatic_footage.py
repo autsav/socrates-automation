@@ -16,6 +16,7 @@ def test_pools_cover_all_moods_with_six_plus_safe_queries():
         for q in pool:
             assert not is_unsafe(q), q
             assert not sf._is_scenery(q), q
+            assert set(q.split()) & sf._HUMAN_WORDS, q
 
 
 def test_scenery_heuristic():

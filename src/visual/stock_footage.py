@@ -215,19 +215,19 @@ DRAMATIC_POOLS = {
     "dramatic_ancient": [
         "blacksmith forging fire sparks", "man carrying heavy stone",
         "warrior training sword silhouette", "hands working clay pottery",
-        "man rowing boat storm", "torch flame dark corridor"],
+        "man rowing boat storm", "man carrying torch dark corridor"],
     "epic_warrior": [
         "boxer heavy bag slow motion", "sprinter starting blocks explosive",
         "man flipping tire gym", "wrestler training takedown",
         "martial artist kick training", "athlete screaming effort barbell"],
     "mystical_greek": [
         "man walking ancient ruins alone", "hand touching marble statue",
-        "figure in fog walking", "candle flame dark library",
+        "figure in fog walking", "figure holding candle dark library",
         "man reading old book candlelight", "silhouette columns moonlight"],
     "stark_minimal": [
         "man alone empty room window", "single figure crossing bridge fog",
         "hands clenched fist close up", "man staring mirror intense",
-        "footsteps empty corridor", "man standing rooftop city night"],
+        "man walking empty corridor", "man standing rooftop city night"],
 }
 
 _SCENERY_WORDS = {
@@ -237,7 +237,7 @@ _SCENERY_WORDS = {
 }
 _HUMAN_WORDS = {
     "man", "woman", "boxer", "runner", "athlete", "climber", "swimmer",
-    "warrior", "monk", "hands", "figure", "silhouette", "person", "wrestler",
+    "warrior", "monk", "hands", "hand", "figure", "silhouette", "person", "wrestler",
     "sprinter", "blacksmith", "martial",
 }
 
