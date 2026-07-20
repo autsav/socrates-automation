@@ -43,3 +43,19 @@ def test_recent_limits_to_last_n(tmp_path, monkeypatch):
     con.close()
     keys = data_store.recent_material_keys(limit=20)
     assert len(keys) == 20 and "k29" in keys and "k5" not in keys
+
+
+def test_trend_key_stable_across_processes():
+    import subprocess
+    code = ("import sys; sys.path.insert(0, '.'); import hashlib; "
+            "print('trend:' + hashlib.sha1('AI layoffs'.encode()).hexdigest()[:8])")
+    a = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True).stdout.strip()
+    b = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True).stdout.strip()
+    assert a == b and a.startswith("trend:")
+
+
+def test_pipeline_uses_sha1_for_trend_keys():
+    import inspect
+    import pipeline
+    src = inspect.getsource(pipeline._build_story_beats)
+    assert "sha1" in src

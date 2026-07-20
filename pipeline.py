@@ -11,6 +11,7 @@ Scheduler:       GitHub Actions (free)
 Total: ~£0.17/month
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -380,7 +381,7 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
             material, mode = pick_debate(row, exclude=exclude), "debate"
 
         if mode == "trend":
-            material_key = f"trend:{hash(quote_data.get('trend_topic', '')) & 0xffffffff:08x}"
+            material_key = "trend:" + hashlib.sha1(quote_data.get("trend_topic", "").encode("utf-8")).hexdigest()[:8]
         else:
             material_key = material.get("key")
 
