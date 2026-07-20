@@ -228,8 +228,16 @@ def prepare_reel_voiceover(
     output_dir: str | Path,
     timestamp: str,
     api_key: str,
+    scene_settings: dict[str, dict] | None = None,
 ) -> dict:
     """Generate all 3 voiceover tracks for a Reel using ElevenLabs.
+
+    Args:
+        scene_settings: optional per-scene voice_settings overrides, e.g.
+            {"hook": {...}, "quote": {...}, "cta": {...}} (see
+            voice_director.delivery_profile). Merged over DEFAULT_SETTINGS by
+            generate_voiceover, same as generate_scene_voiceover's own
+            `settings` arg. None (default) = current behavior, no overrides.
 
     Returns the same dict shape as edge_tts_engine.prepare_reel_voiceover_edge_tts
     so it's a drop-in replacement.
@@ -242,14 +250,18 @@ def prepare_reel_voiceover(
     voice = REEL_VOICE
     print(f"  [elevenlabs] Using voice '{voice}' for mood '{mood}'")
 
+    scene_settings = scene_settings or {}
     hook_path = out_dir / f"voice_hook_{timestamp}.mp3"
     quote_path = out_dir / f"voice_quote_{timestamp}.mp3"
     cta_path = out_dir / f"voice_cta_{timestamp}.mp3"
 
     # A cold-open arc has no hook — skip its synthesis (and its API cost).
-    hook_ok = bool(hook_text) and generate_scene_voiceover(hook_text, voice, hook_path, api_key)
-    quote_ok = generate_scene_voiceover(quote_text, voice, quote_path, api_key)
-    cta_ok = generate_scene_voiceover(cta_text, voice, cta_path, api_key)
+    hook_ok = bool(hook_text) and generate_scene_voiceover(
+        hook_text, voice, hook_path, api_key, settings=scene_settings.get("hook"))
+    quote_ok = generate_scene_voiceover(
+        quote_text, voice, quote_path, api_key, settings=scene_settings.get("quote"))
+    cta_ok = generate_scene_voiceover(
+        cta_text, voice, cta_path, api_key, settings=scene_settings.get("cta"))
 
     # Parse the SRTs we generated
     hook_words = parse_word_srt(hook_path.with_suffix(".srt")) if hook_ok else []

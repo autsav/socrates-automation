@@ -6,6 +6,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.video.remotion_reel import write_bridge_file
+from src.audio.elevenlabs_engine import prepare_reel_voiceover
+from src.audio.voice_director import delivery_profile
 
 
 def _write(tmp_path, **kw):
@@ -38,3 +40,73 @@ def test_sfx_set_includes_riser_and_sub_impact(tmp_path):
     d = _write(tmp_path)
     if d.get("sfx"):                      # ffmpeg present in env
         assert "riser" in d["sfx"] and "sub_impact" in d["sfx"]
+
+
+def test_reel_voiceover_applies_per_scene_delivery_profiles(tmp_path, monkeypatch):
+    """hook/quote/cta must each get their own voice_settings — not one flat
+    read for the whole reel (Important review finding: only bridge got
+    per-scene direction; combined prepare_reel_voiceover ignored it)."""
+    captured = []
+
+    def _fake_generate_voiceover(text, api_key, voice, output_path, settings=None):
+        from src.audio.elevenlabs_engine import DEFAULT_SETTINGS
+        captured.append({**DEFAULT_SETTINGS, **(settings or {})})
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"x")
+        return output_path
+
+    import src.audio.elevenlabs_engine as el_engine
+    monkeypatch.setattr(el_engine, "generate_voiceover", _fake_generate_voiceover)
+    monkeypatch.setattr(el_engine, "_get_audio_duration", lambda p: 1.0)
+
+    prepare_reel_voiceover(
+        hook_text="Hook line.",
+        quote_text="Quote line.",
+        cta_text="CTA line.",
+        mood="dark_philosophical",
+        output_dir=tmp_path,
+        timestamp="20260101_000000",
+        api_key="fake-key",
+        scene_settings={
+            "hook": delivery_profile("hook"),
+            "quote": delivery_profile("quote"),
+            "cta": delivery_profile("cta"),
+        },
+    )
+
+    assert len(captured) == 3
+    hook_settings, quote_settings, cta_settings = captured
+    assert hook_settings["stability"] == 0.22
+    assert quote_settings["stability"] == 0.70
+    assert hook_settings["stability"] != quote_settings["stability"]
+
+
+def test_reel_voiceover_scene_settings_default_none_is_unchanged(tmp_path, monkeypatch):
+    """scene_settings=None (omitted) must reproduce current behavior exactly —
+    no overrides, plain DEFAULT_SETTINGS for every scene."""
+    captured = []
+
+    def _fake_generate_voiceover(text, api_key, voice, output_path, settings=None):
+        from src.audio.elevenlabs_engine import DEFAULT_SETTINGS
+        captured.append(settings)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"x")
+        return output_path
+
+    import src.audio.elevenlabs_engine as el_engine
+    monkeypatch.setattr(el_engine, "generate_voiceover", _fake_generate_voiceover)
+    monkeypatch.setattr(el_engine, "_get_audio_duration", lambda p: 1.0)
+
+    prepare_reel_voiceover(
+        hook_text="Hook line.",
+        quote_text="Quote line.",
+        cta_text="CTA line.",
+        mood="dark_philosophical",
+        output_dir=tmp_path,
+        timestamp="20260101_000001",
+        api_key="fake-key",
+    )
+
+    assert captured == [None, None, None]

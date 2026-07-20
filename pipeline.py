@@ -994,6 +994,11 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     output_dir=OUTPUT_DIR,
                     timestamp=ts,
                     api_key=el_api_key,
+                    scene_settings={
+                        "hook": delivery_profile("hook"),
+                        "quote": delivery_profile("quote"),
+                        "cta": delivery_profile("cta"),
+                    },
                 )
             elif edge_tts_available():
                 log.info("  [voiceover] ElevenLabs unavailable — using edge-tts fallback")
