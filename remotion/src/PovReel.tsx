@@ -302,12 +302,19 @@ export const PovReel: React.FC<PovReelProps> = ({
               }}
             >
               <Sequence from={quoteStart - 12} durationInFrames={12} name="QuoteGhost">
+                {/* Ghost echoes QuoteScene's own opening frames (local 0-12).
+                    It must use the RAW (pre-silence-drop) beats/wordTimes —
+                    the shifted `quoteBeats`/`quoteWordTimes` used by the real
+                    Quote scene below push word starts to ~dropFrames, which
+                    would land outside this 12-frame local window and render
+                    an empty echo. Raw values keep glyphs visible here while
+                    silenceDropSec=0 behavior (raw === shifted) is unchanged. */}
                 <QuoteScene
                   quote={quote}
                   attribution={attribution}
                   palette={palette}
-                  beats={quoteBeats}
-                  wordTimes={quoteWordTimes}
+                  beats={beats}
+                  wordTimes={wordTimes.quote}
                   staticFirstFrames={0}
                 />
               </Sequence>

@@ -37,6 +37,11 @@ def test_stress_is_longest_word_per_sentence():
     assert {w["w"]: w["cls"] for w in out}["rehearsed"] == "stress"
 
 
+def test_curly_apostrophe_negation():
+    out = classify_words(_words("Why don’t you understand"))
+    assert {w["w"]: w["cls"] for w in out}["don’t"] == "neg"
+
+
 def test_garbage_never_raises():
     assert classify_words([]) == []
     out = classify_words([{"w": None, "start": 0, "end": 1}])

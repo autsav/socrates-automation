@@ -15,7 +15,8 @@ _HAS_DIGIT = re.compile(r"\d")
 
 
 def _bare(w) -> str:
-    return re.sub(r"[^\w']", "", str(w or "")).lower()
+    s = str(w or "").replace("’", "'").replace("‘", "'")
+    return re.sub(r"[^\w']", "", s).lower()
 
 
 def classify_words(words: list) -> list:
