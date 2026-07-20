@@ -36,18 +36,84 @@ _PREFIX = (
     "\"I\" and \"you\"."
 )
 
+EXEMPLAR_WEIRD = {
+    "beat_hook": "You lost something this year you're still pretending doesn't hurt.",
+    "beat_reframe": (
+        "You know that thing you replay at 2am. The loss you never talk about. "
+        "Now meet a merchant named Zeno. Everything he owned sat in one ship's hold. "
+        "Purple dye. A fortune. One storm took all of it to the bottom of the sea. "
+        "He washed up in Athens with nothing. Forty years old. Ruined. "
+        "And nobody expected what he did next. He walked into a bookshop, dripping "
+        "wet, and started reading. Then he stopped leaving. He gave up rebuilding "
+        "the fortune. He sat in a painted porch and started talking about what "
+        "storms cannot take. Strangers gathered. Kings sent letters. The porch "
+        "became a school. The school became Stoicism. Twenty-three centuries later "
+        "you are still hearing about it. His shipwreck built more than his ships "
+        "ever carried."),
+    "quote_row": 7,
+    "beat_cta": "Send this to the friend who lost something this year.",
+    "topic_query": "man walking storm harbor",
+    "caption_first_line": "The storm did him a favor.",
+}
+
+EXEMPLAR_DEBATE = {
+    "beat_hook": "Your grind is the most expensive thing you own.",
+    "beat_reframe": (
+        "You wear the exhaustion like a badge. Booked every hour. Answered every "
+        "ping. And you tell yourself it is temporary. Two thousand years ago Rome "
+        "had men like you. Senators sprinting between banquets and battles, "
+        "collecting titles like you collect tabs. One philosopher watched them "
+        "run. He was busy too. Tutor to an emperor. Richest man in the city. "
+        "Then he wrote something in a letter that stopped his friend cold. "
+        "He said the busiest men he knew were the poorest. Not in coin. In hours "
+        "they actually owned. They rented every minute to someone else's urgency. "
+        "Until the day ran out and none of it was theirs. He started guarding his "
+        "mornings like a miser. Refusing meetings. Saying no to Caesar's circle. "
+        "The city called it arrogance. He called it the only wealth that counts."),
+    "quote_row": 7,
+    "beat_cta": "Agree or disagree: busy is just broke with better branding.",
+    "topic_query": "man rushing city crowd",
+    "caption_first_line": "Busy is not the flex you think.",
+}
+
+_EXEMPLAR_WEIRD_BLOCK = (
+    "EXEMPLAR (weird mode):\n"
+    f"{EXEMPLAR_WEIRD['beat_hook']}\n"
+    f"{EXEMPLAR_WEIRD['beat_reframe']}\n"
+    f"{EXEMPLAR_WEIRD['beat_cta']}"
+)
+
+_EXEMPLAR_DEBATE_BLOCK = (
+    "EXEMPLAR (debate mode):\n"
+    f"{EXEMPLAR_DEBATE['beat_hook']}\n"
+    f"{EXEMPLAR_DEBATE['beat_reframe']}\n"
+    f"{EXEMPLAR_DEBATE['beat_cta']}"
+)
+
 _ROLE_DEFAULT = (
     "Mode: {mode}\n"
     "Material:\n{material}\n"
     "Available quotes (choose the one that lands as the TWIST — the payoff the "
     "story was secretly building to; set quote_row to its row_number):\n{pool}\n\n"
-    "Write the reel as four beats:\n"
-    "- beat_hook: <=15 words. A STATEMENT, not a question (statements hold "
-    "3-second retention; questions don't). 'No way this is real' energy.\n"
-    "- beat_reframe: 120-155 words. THE STORY ITSELF, told as 5-7 short "
-    "chapters: setup -> escalation -> weirder escalation -> consequence -> "
-    "the turn that sets up the quote. Short punchy sentences (a new mini-"
-    "revelation every ~8 seconds keeps retention). "
+    "Write the reel as four beats, following the 6-PHASE VIRAL FORMULA:\n"
+    "- beat_hook (0-3s): <=15 words. A STATEMENT, not a question (statements "
+    "hold 3-second retention; questions don't). It MUST address the viewer "
+    "directly ('you'/'your') and open a loop about THEIR life — never resolve "
+    "it, never name the historical figure. 'No way this is real' energy.\n"
+    "- beat_reframe: 120-155 words, built in three phases inside one field:\n"
+    "  * STAKES (3-10s, the first ~25 words): second person ('you'/'your'), "
+    "naming the exact private thing the viewer recognizes in themselves — no "
+    "resolution vocabulary here.\n"
+    "  * STORY ENTRY (10-25s): pivot to the historical figure, set up the "
+    "situation, and end this stretch on an open loop / CLIFFHANGER — a "
+    "sentence starting with a marker like 'Then', 'Until', 'But', or 'And "
+    "nobody expected what he did next' / 'And no one saw it coming'.\n"
+    "  * ESCALATION (25-40s): raise the stakes or the strangeness with short "
+    "punchy sentences (a new mini-revelation every ~8 seconds) — still no "
+    "resolution words ('that's why', 'the answer', 'here's how', the word "
+    "'lesson', 'this means', 'the secret is') before the payoff.\n"
+    "  * PAYOFF (40-50s): both loops — the viewer's stakes and the figure's "
+    "story — close together, landing on the quote as the twist.\n"
     "For weird mode: use ONLY the facts given in the material — never invent "
     "or exaggerate historical claims; if the material is flagged hypothetical, "
     "keep it clearly framed as imagination ('Imagine...', 'Suppose...'). "
@@ -63,6 +129,13 @@ _ROLE_DEFAULT = (
     "VISUAL world (e.g. 'ancient greek ruins', 'crowded city night').\n"
     "- caption_first_line: <=8 words, curiosity gap, no hashtags.\n"
     "- trend_tag: one hashtag (no #) matching the topic, or empty string.\n"
+    "ANTI-RULES (non-negotiable):\n"
+    "- Never open with the historical figure.\n"
+    "- Never resolve a loop before the payoff phase.\n"
+    "- The word 'lesson' is banned.\n"
+    "- The viewer's life is the story — the ancient is the twist.\n"
+    f"{_EXEMPLAR_WEIRD_BLOCK}\n\n"
+    f"{_EXEMPLAR_DEBATE_BLOCK}\n\n"
     "Style rules (non-negotiable):\n"
     "- Write for ONE specific person, not an audience — the viewer must think "
     "'this is so my friend' and hit send.\n"
@@ -133,6 +206,48 @@ def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS,
         return False, f"malformed: {e}"
 
 
+_RESOLUTION_PHRASES = ("that's why", "the answer", "here's how", "the lesson",
+                       "this means", "the secret is")
+_CLIFFHANGER_STARTS = ("then ", "until ", "but ", "and nobody", "and no one")
+
+
+def validate_formula(d: dict) -> tuple[bool, str]:
+    """The 6-phase viral formula, deterministically (spec 2). Runs AFTER
+    validate_story; story/weird/debate modes only."""
+    try:
+        hook = (d.get("beat_hook") or "").strip()
+        reframe = (d.get("beat_reframe") or "").strip()
+        hl = hook.lower()
+        if not ("you" in hl.split() or "your" in hl.split() or
+                "you're" in hl.split() or "you've" in hl.split()):
+            return False, "hook must address the viewer (you/your)"
+        if any(p in hl for p in _RESOLUTION_PHRASES):
+            return False, "hook resolves its own loop"
+        words = reframe.split()
+        if not words:
+            return False, "empty reframe"
+        first25 = " ".join(words[:25]).lower()
+        if not any(t in first25.split() or t in first25
+                   for t in ("you", "your", "you're", "you've")):
+            return False, "stakes phase needs second person in the first 25 words"
+        two_thirds = " ".join(words[: (2 * len(words)) // 3]).lower()
+        if any(p in two_thirds for p in _RESOLUTION_PHRASES):
+            return False, "resolution vocabulary before the payoff phase"
+        third = len(words) // 3
+        middle = " ".join(words[third: 2 * third]).lower()
+        sentences = [s.strip() for s in middle.replace("!", ".").replace("?", ".").split(".")]
+        # A sentence STARTING with an unresolved-turn marker; also accept the
+        # marker appearing right after a sentence break anywhere mid-text.
+        has_cliff = any(s.startswith(_CLIFFHANGER_STARTS) or
+                        s.startswith(("and nobody", "and no one"))
+                        for s in sentences if s)
+        if not has_cliff:
+            return False, "cliffhanger marker missing from the middle third"
+        return True, "ok"
+    except Exception as e:  # noqa: BLE001
+        return False, f"malformed: {e}"
+
+
 def write_story(client, mode: str, material: dict, pool: list,
                 extra_context: str = "") -> dict | None:
     """Two persona drafts -> rubric picks the winner (spec 1.2 B-lite).
@@ -154,6 +269,8 @@ def write_story(client, mode: str, material: dict, pool: list,
                                 f"Write the four beats now. {persona}{ctx}",
                                 STORY_SCHEMA)
                 ok, reason = validate_story(d or {}, mode=mode)
+                if ok and mode != "punch":
+                    ok, reason = validate_formula(d or {})
                 drafts.append((d, ok, reason))
             except Exception as e:  # noqa: BLE001 - one dead draft is fine
                 drafts.append((None, False, str(e)))
@@ -169,6 +286,8 @@ def write_story(client, mode: str, material: dict, pool: list,
                         f"Write the four beats again, fixing exactly that.{ctx}",
                         STORY_SCHEMA)
         ok, reason = validate_story(d or {}, mode=mode)
+        if ok and mode != "punch":
+            ok, reason = validate_formula(d or {})
         if not ok:
             print(f"  [story_writer] rejected ({reason})")
             return None
