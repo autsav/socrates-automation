@@ -16,6 +16,8 @@ Voice choice: "pNIncy4yVsqPhqIdc4Kc" (Adam) — deep, authoritative narrator.
 Alternative: "TxGEqnHWrfWFTfWB9MjX" (Josh) — younger, intense delivery.
 Alternative: "ErXw8Y8QH8n2Zn2l5J8h" (Sam) — contemplative, philosophical.
 """
+import base64
+import re
 import requests
 import json
 import tempfile
@@ -110,6 +112,47 @@ def _estimate_word_timings(text: str, total_duration: float) -> list[dict]:
     return timings
 
 
+_BREAK_TAG = re.compile(r"<break\b[^>]*/>")
+
+
+def _alignment_to_words(text: str, alignment: dict | None) -> list[dict]:
+    """Group ElevenLabs character alignment into word timings. The characters
+    ARE the spoken text (incl. any break tags); words inside break tags are
+    silence markup, not display words. Returns [] on any malformed input."""
+    try:
+        chars = alignment["characters"]
+        starts = alignment["character_start_times_seconds"]
+        ends = alignment["character_end_times_seconds"]
+        if not chars or len(chars) != len(starts) or len(chars) != len(ends):
+            return []
+        # Mark index ranges covered by break tags so their chars are skipped.
+        joined = "".join(chars)
+        skip = [False] * len(chars)
+        for m in _BREAK_TAG.finditer(joined):
+            for i in range(m.start(), m.end()):
+                skip[i] = True
+        words, cur, w_start, w_end = [], "", None, None
+        for i, ch in enumerate(chars):
+            if skip[i]:
+                continue
+            if ch.isspace():
+                if cur:
+                    words.append({"w": cur, "start": round(w_start, 3),
+                                  "end": round(w_end, 3)})
+                    cur, w_start = "", None
+                continue
+            if not cur:
+                w_start = starts[i]
+            cur += ch
+            w_end = ends[i]
+        if cur:
+            words.append({"w": cur, "start": round(w_start, 3),
+                          "end": round(w_end, 3)})
+        return words
+    except Exception:  # noqa: BLE001 - timing extras must never kill VO
+        return []
+
+
 def _get_audio_duration(path: Path) -> float:
     """Get audio duration in seconds using ffprobe (best-effort)."""
     import subprocess
@@ -143,6 +186,10 @@ def generate_voiceover(
     Returns:
         Path to the MP3 file, or None on failure.
     """
+    # Reset first so a fallback run (or an early return) never inherits a
+    # previous call's words.
+    generate_voiceover.last_words = []
+
     if not api_key:
         return None
 
@@ -157,36 +204,48 @@ def generate_voiceover(
     if len(text) > 1500:
         text = text[:1497] + "..."
 
+    body = {
+        "text": text,
+        "model_id": "eleven_turbo_v2_5",  # Fast, high-quality, multilingual
+        "voice_settings": settings,
+    }
+    headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
+    words: list[dict] = []
+
     try:
         response = requests.post(
-            f"{ELEVENLABS_API}/text-to-speech/{voice_id}",
-            headers={
-                "xi-api-key": api_key,
-                "Content-Type": "application/json",
-                "Accept": "audio/mpeg",
-            },
-            json={
-                "text": text,
-                "model_id": "eleven_turbo_v2_5",  # Fast, high-quality, multilingual
-                "voice_settings": settings,
-            },
-            timeout=30,
-        )
+            f"{ELEVENLABS_API}/text-to-speech/{voice_id}/with-timestamps",
+            headers=headers, json=body, timeout=30)
         response.raise_for_status()
-
+        j = response.json()
+        audio = base64.b64decode(j["audio_base64"])
+        words = _alignment_to_words(text, j.get("alignment"))
         with open(output_path, "wb") as f:
-            f.write(response.content)
-
-        if not output_path.exists() or output_path.stat().st_size == 0:
+            f.write(audio)
+    except Exception as e:  # noqa: BLE001 - fall back to the plain endpoint
+        print(f"  [elevenlabs] with-timestamps unavailable ({e}) — plain endpoint")
+        words = []
+        try:
+            response = requests.post(
+                f"{ELEVENLABS_API}/text-to-speech/{voice_id}",
+                headers={**headers, "Accept": "audio/mpeg"}, json=body, timeout=30)
+            response.raise_for_status()
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+        except Exception as e2:
+            print(f"  [elevenlabs] Error: {e2}")
             return None
 
-        size_kb = output_path.stat().st_size / 1024
-        print(f"  [elevenlabs] Saved {output_path.name} ({size_kb:.0f} KB)")
-        return output_path
-
-    except Exception as e:
-        print(f"  [elevenlabs] Error: {e}")
+    if not output_path.exists() or output_path.stat().st_size == 0:
         return None
+
+    size_kb = output_path.stat().st_size / 1024
+    print(f"  [elevenlabs] Saved {output_path.name} ({size_kb:.0f} KB)")
+    generate_voiceover.last_words = words
+    return output_path
+
+
+generate_voiceover.last_words = []
 
 
 def generate_scene_voiceover(
@@ -204,9 +263,11 @@ def generate_scene_voiceover(
     if result is None:
         return False
 
-    # Generate estimated word timings for animation sync
+    # Prefer real ElevenLabs alignment timings; fall back to estimation when
+    # unavailable (fallback endpoint used, or malformed alignment).
+    real = getattr(generate_voiceover, "last_words", []) or []
     duration = _get_audio_duration(result)
-    words = _estimate_word_timings(text, duration)
+    words = real if real else _estimate_word_timings(text, duration)
 
     srt_path = result.with_suffix(".srt")
     lines = []
