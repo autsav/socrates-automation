@@ -112,6 +112,12 @@ def init_db() -> None:
         if "arc" not in post_columns:
             cursor.execute("ALTER TABLE posts ADD COLUMN arc TEXT DEFAULT NULL")
 
+        # Migration: material_key — which weird-story capsule / debate topic /
+        # trend fed this reel, so we can exclude the last N from re-selection
+        # and stop the same anecdote from repeating (spec 3).
+        if "material_key" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN material_key TEXT DEFAULT NULL")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -188,6 +194,41 @@ def record_arc(row_id: int, arc: str | None) -> None:
         conn.commit()
     except Exception:
         pass
+    finally:
+        conn.close()
+
+
+def record_material(row_id: int, key: str | None) -> None:
+    """Record which weird-story capsule / debate topic / trend fed this post
+    (material_key), so recent_material_keys() can exclude it from re-selection.
+    Best-effort; never raises."""
+    if not key:
+        return
+    conn = _get_connection()
+    try:
+        conn.execute("UPDATE posts SET material_key = ? WHERE id = ?", (key, row_id))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def recent_material_keys(limit: int = 20) -> set[str]:
+    """Return the last `limit` non-null material_keys used, most-recent posts
+    first (by rowid). Used to exclude recently-used material from re-selection
+    (spec 3). Best-effort; returns an empty set on any failure."""
+    conn = _get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT material_key FROM posts WHERE material_key IS NOT NULL "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return {row[0] for row in cursor.fetchall()}
+    except Exception:
+        return set()
     finally:
         conn.close()
 

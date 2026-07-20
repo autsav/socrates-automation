@@ -25,7 +25,7 @@ from src.visual.carousel_composer import compose_carousel
 from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram, post_carousel_to_instagram
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword, record_arc
+from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword, record_arc, record_material
 from studio.reconcile import reconcile_token
 from studio.client import StudioClient
 from studio import music_director
@@ -363,15 +363,26 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
         from src.content.weird_stories import pick_weird
 
         row = quote_data.get("row_number")
+        try:
+            from src.core.data_store import recent_material_keys
+            exclude = frozenset(recent_material_keys(20))
+        except Exception:  # noqa: BLE001
+            exclude = frozenset()
+
         if arc == "punch":
-            material, mode = pick_debate(row), "punch"
+            material, mode = pick_debate(row, exclude=exclude), "punch"
         elif arc == "weird":
-            material, mode = pick_weird(row), "weird"
+            material, mode = pick_weird(row, exclude=exclude), "weird"
         elif quote_data.get("trend_topic"):
             material, mode = {"trend_topic": quote_data["trend_topic"],
                               "angle": "contrarian about the culture around this topic"}, "trend"
         else:
-            material, mode = pick_debate(row), "debate"
+            material, mode = pick_debate(row, exclude=exclude), "debate"
+
+        if mode == "trend":
+            material_key = f"trend:{hash(quote_data.get('trend_topic', '')) & 0xffffffff:08x}"
+        else:
+            material_key = material.get("key")
 
         client = StudioClient(cfg.ANTHROPIC_API_KEY)
         pool = [{"row_number": row or 0, "quote": quote_data.get("quote", "")}]
@@ -394,6 +405,7 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
         if mode == "punch":
             story["beat_reframe"] = ""   # format guarantee: punch has NO bridge scene
         story["mode"] = mode
+        story["material_key"] = material_key
         return story
     except Exception as e:  # noqa: BLE001 - never crash a reel
         log.warning(f"  [story] beat generation unavailable ({e}) — falling back")
@@ -953,6 +965,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
             quote_data.get("audience", ""), row_n)
         quote_data["bridge"] = arc_bridge
     quote_data["arc"] = arc
+    quote_data["material_key"] = story.get("material_key") if story else None
     log.info(f"  [pov] Arc: {arc} | Hook: {hook_text[:50] or '(cold open)'}...")
 
     # Discovery levers (recipes #6/#7/#9): curiosity-gap first line, caption
@@ -1181,6 +1194,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     if post_row_id is not None:
         record_trigger_keyword(post_row_id, _extract_trigger_keyword(cta_text))
         record_arc(post_row_id, quote_data.get("arc"))
+        record_material(post_row_id, quote_data.get("material_key"))
 
     if post_row_id is None:
         log.warning(
