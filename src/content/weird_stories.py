@@ -386,10 +386,17 @@ WEIRD_HYPOTHETICALS = [
 ]
 
 
-def pick_weird(row_number: int | None) -> dict:
-    """Deterministic weird pick: 3 true capsules to every 1 hypothetical."""
+def pick_weird(row_number: int | None, exclude: frozenset = frozenset()) -> dict:
+    """Deterministic weird pick; skips recently-used keys (spec 3)."""
     n = row_number or 0
     if n % 4 == 3:
-        return WEIRD_HYPOTHETICALS[(n // 4) % len(WEIRD_HYPOTHETICALS)]
-    idx = (n - n // 4) % len(WEIRD_CAPSULES)
-    return WEIRD_CAPSULES[idx]
+        pool = WEIRD_HYPOTHETICALS
+        base = (n // 4) % len(pool)
+    else:
+        pool = WEIRD_CAPSULES
+        base = (n - n // 4) % len(pool)
+    for step in range(len(pool)):
+        cand = pool[(base + step) % len(pool)]
+        if cand.get("key") not in exclude:
+            return cand
+    return pool[base]
