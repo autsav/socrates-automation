@@ -18,7 +18,7 @@ def test_rotation_without_trend_mixes_weird_and_debate_story():
     arcs = [pipeline._pick_arc(i, has_trend=False) for i in range(10)]
     assert arcs.count("weird") == 3
     assert arcs.count("story") == 2          # debate-fed
-    assert arcs.count("classic") + arcs.count("question") + arcs.count("cold_open") == 5
+    assert arcs.count("punch") + arcs.count("question") + arcs.count("cold_open") == 5
 
 
 def test_fallback_arc_never_story():

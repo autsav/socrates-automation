@@ -20,6 +20,7 @@ _DRAFT_ROLE_DEFAULT = (
     + playbooks.COPY_CRAFT
     + "\nBefore answering: draft internally, critique against the copy craft "
     "rules, fix every weakness, output ONLY the improved final JSON.\n"
+    "\nWrite captions in first person — a mentor speaking to one reader.\n"
 )
 _REVISE_ROLE_DEFAULT = (
     "You are the Copywriter. Brief:\n{brief}\nConcept to revise:\n{concept}\n"

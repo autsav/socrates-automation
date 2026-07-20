@@ -32,6 +32,8 @@ _PREFIX = (
     "to a friend. Contrarian about culture and behavior — never about named "
     "living individuals. No politics, religion, tragedy, or medical/financial "
     "advice."
+    " Write in first person — a mentor speaking directly to one reader as "
+    "\"I\" and \"you\"."
 )
 
 _ROLE_DEFAULT = (
@@ -55,6 +57,8 @@ _ROLE_DEFAULT = (
     "- beat_cta: one line. For weird mode this MUST be a send-CTA telling the "
     "viewer to send the reel to a specific kind of friend. For debate mode it "
     "MUST be a binary agree/disagree ask.\n"
+    "For punch mode: beat_hook is ONE brutal line (<=10 words), beat_reframe "
+    "MUST be an empty string, total spoken words 25-60 — a 7-15 second reel.\n"
     "- topic_query: 2-4 words for stock-footage search matching the story's "
     "VISUAL world (e.g. 'ancient greek ruins', 'crowded city night').\n"
     "- caption_first_line: <=8 words, curiosity gap, no hashtags.\n"
@@ -93,27 +97,35 @@ STORY_SCHEMA = _obj({
 # Scenes are VO-sized, so the word budget IS the runtime budget.
 MIN_SPOKEN_WORDS = 140
 MAX_SPOKEN_WORDS = 215
+PUNCH_MIN, PUNCH_MAX = 25, 60
 
 
-def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS) -> tuple[bool, str]:
+def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS,
+                   mode: str = "story") -> tuple[bool, str]:
     """Hard limits the prompt promises — enforced deterministically."""
     try:
         hook = (d.get("beat_hook") or "").strip()
         reframe = (d.get("beat_reframe") or "").strip()
         cta = (d.get("beat_cta") or "").strip()
-        if not hook or not reframe or not cta:
+        if not hook or not cta:
+            return False, "empty beat"
+        if mode != "punch" and not reframe:
             return False, "empty beat"
         if len(hook.split()) > 15:
             return False, f"hook too long ({len(hook.split())} words)"
         if hook.rstrip().endswith("?"):
             return False, "hook must be a statement, not a question"
-        if len(reframe.split()) > 185:
-            return False, f"reframe too long ({len(reframe.split())} words)"
         total = len(hook.split()) + len(reframe.split()) + len(cta.split())
-        if total < min_total:
-            return False, f"total spoken words {total} < {min_total} (needs a ~60s story)"
-        if total > MAX_SPOKEN_WORDS:
-            return False, f"total spoken words {total} > {MAX_SPOKEN_WORDS}"
+        if mode == "punch":
+            if not (PUNCH_MIN <= total <= PUNCH_MAX):
+                return False, f"punch total {total} outside {PUNCH_MIN}-{PUNCH_MAX}"
+        else:
+            if len(reframe.split()) > 185:
+                return False, f"reframe too long ({len(reframe.split())} words)"
+            if total < min_total:
+                return False, f"total spoken words {total} < {min_total} (needs a ~60s story)"
+            if total > MAX_SPOKEN_WORDS:
+                return False, f"total spoken words {total} > {MAX_SPOKEN_WORDS}"
         if not isinstance(d.get("quote_row"), int):
             return False, "quote_row must be an integer"
         return True, "ok"
@@ -141,7 +153,7 @@ def write_story(client, mode: str, material: dict, pool: list,
                 d = client.call("story_writer", _PREFIX, role,
                                 f"Write the four beats now. {persona}{ctx}",
                                 STORY_SCHEMA)
-                ok, reason = validate_story(d or {})
+                ok, reason = validate_story(d or {}, mode=mode)
                 drafts.append((d, ok, reason))
             except Exception as e:  # noqa: BLE001 - one dead draft is fine
                 drafts.append((None, False, str(e)))
@@ -156,7 +168,7 @@ def write_story(client, mode: str, material: dict, pool: list,
                         f"Your last draft was rejected: {reason}. "
                         f"Write the four beats again, fixing exactly that.{ctx}",
                         STORY_SCHEMA)
-        ok, reason = validate_story(d or {})
+        ok, reason = validate_story(d or {}, mode=mode)
         if not ok:
             print(f"  [story_writer] rejected ({reason})")
             return None

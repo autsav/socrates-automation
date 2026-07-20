@@ -283,9 +283,21 @@ _CTA_VARIANTS = [
 # Rotations are availability-aware: story needs a trend or debate topic (always
 # available via the debate pool), weird is always available. Sends/watch-time
 # engineered arcs get the larger share; the bandit re-weights once data lands.
-_ARC_ROTATION_TREND = ("story", "story", "weird", "classic", "question", "story", "cold_open", "weird", "story", "classic")
-_ARC_ROTATION_NO_TREND = ("weird", "classic", "story", "question", "weird", "cold_open", "story", "classic", "weird", "question")
+_ARC_ROTATION_TREND = ("story", "story", "weird", "punch", "question", "story", "cold_open", "weird", "story", "punch")
+_ARC_ROTATION_NO_TREND = ("weird", "punch", "story", "question", "weird", "cold_open", "story", "punch", "weird", "question")
 _ARC_ROTATION = ("classic", "classic", "question", "cold_open")  # legacy (non-story fallback)
+
+_SIGNOFF = "— The Stoic Reset"
+
+
+def _append_signoff(caption: str) -> str:
+    """Persona sign-off (spec 5) above the hashtag block; idempotent."""
+    if _SIGNOFF in (caption or ""):
+        return caption
+    lines = (caption or "").split("\n")
+    tag_start = next((i for i, l in enumerate(lines) if l.strip().startswith("#")),
+                     len(lines))
+    return "\n".join(lines[:tag_start] + [_SIGNOFF] + lines[tag_start:])
 
 _QUESTION_HOOKS = [
     "What if the problem was never out there?",
@@ -348,7 +360,9 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
         from src.content.weird_stories import pick_weird
 
         row = quote_data.get("row_number")
-        if arc == "weird":
+        if arc == "punch":
+            material, mode = pick_debate(row), "punch"
+        elif arc == "weird":
             material, mode = pick_weird(row), "weird"
         elif quote_data.get("trend_topic"):
             material, mode = {"trend_topic": quote_data["trend_topic"],
@@ -418,7 +432,7 @@ def _bridge_for_vo(quote_data: dict) -> str:
     sentence trim would collapse a story to its opening line ('Meet Cato.').
     Every other arc keeps the one-sentence pivot cap."""
     bridge = quote_data.get("bridge", "")
-    if quote_data.get("arc") in ("story", "weird"):
+    if quote_data.get("arc") in ("story", "weird", "punch"):
         return bridge
     return _enforce_bridge_len(bridge)
 
@@ -898,7 +912,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     row_n = quote_data.get("row_number")
     arc = _pick_arc(row_n, has_trend=bool(quote_data.get("trend_topic")))
     story = None
-    if arc in ("story", "weird"):
+    if arc in ("story", "weird", "punch"):
         story = _build_story_beats(cfg, arc, quote_data)
         if story is None:
             arc = _fallback_arc(row_n)
@@ -930,6 +944,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         tag = (quote_data.get("trend_tag") or "").strip().lstrip("#")
         if tag and f"#{tag}" not in cap and cap.count("#") < 5:
             cap = f"{cap} #{tag}"
+        cap = _append_signoff(cap)
         quote_data["caption"] = cap
     except Exception as e:  # noqa: BLE001
         log.warning(f"  [caption] levers skipped ({e})")
