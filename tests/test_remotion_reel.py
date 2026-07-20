@@ -373,8 +373,10 @@ def test_synth_sfx_creates_files(tmp_path, monkeypatch):
 
     monkeypatch.setattr(rr.subprocess, "run", fake_run)
     out = rr._synth_sfx(tmp_path)
-    assert out == {"whoosh": "sfx-whoosh.wav", "impact": "sfx-impact.wav"}
+    assert out == {"whoosh": "sfx-whoosh.wav", "impact": "sfx-impact.wav",
+                   "riser": "sfx-riser.wav", "sub_impact": "sfx-sub.wav"}
     assert (tmp_path / "sfx-whoosh.wav").exists() and (tmp_path / "sfx-impact.wav").exists()
+    assert (tmp_path / "sfx-riser.wav").exists() and (tmp_path / "sfx-sub.wav").exists()
 
 
 def test_synth_sfx_none_without_ffmpeg(tmp_path, monkeypatch):

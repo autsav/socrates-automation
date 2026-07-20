@@ -14,6 +14,7 @@ Total: ~£0.17/month
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -54,6 +55,8 @@ from src.audio.elevenlabs_engine import (
     prepare_reel_voiceover as prepare_reel_voiceover_elevenlabs,
     elevenlabs_available,
 )
+from src.audio.voice_director import delivery_profile, insert_chapter_breaks, apply_gravitas
+from src.visual.stock_footage import fetch_reel_clips
 
 # ── Viral Growth: POV text Reels (zero-cost — ffmpeg + Pillow only) ───────────
 from src.video.pov_reel_generator import generate_pov_reel
@@ -437,6 +440,23 @@ def _bridge_for_vo(quote_data: dict) -> str:
     if quote_data.get("arc") in ("story", "weird", "punch"):
         return bridge
     return _enforce_bridge_len(bridge)
+
+
+_BREAK_TAG_WORD_RE = re.compile(r'^</?break\b|^time="|^/>$', re.IGNORECASE)
+
+
+def _strip_break_artifacts(words: list) -> list:
+    """Drop <break time="0.4s" /> tag fragments from estimated word timings.
+
+    insert_chapter_breaks() tags the ElevenLabs-bound narration text for
+    pacing only; the whitespace-split word-timing estimator
+    (elevenlabs_engine._estimate_word_timings) has no SSML awareness and turns
+    each tag into three bogus "words" (`<break`, `time="0.4s"`, `/>`). Filtering
+    them here keeps bridge_words in sync with the spoken (untagged) text
+    without touching the shared VO engine — a documented, accepted timing
+    skew (word boundaries around a break shift slightly) rather than exact
+    resync, per task-4-brief.md."""
+    return [w for w in (words or []) if not _BREAK_TAG_WORD_RE.match(str(w.get("w", "")))]
 
 
 def _extract_trigger_keyword(cta: str) -> str | None:
@@ -1009,6 +1029,13 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     hook_words = vo.get("hook_words") or []
                     quote_words = vo.get("quote_words") or []
                     cta_words = vo.get("cta_words") or []
+                    # ~5% pitch-down on the quote VO — the payoff line, worth
+                    # the extra AI-vs-human narrowing (spec 1). Best-effort.
+                    if quote_voice:
+                        try:
+                            apply_gravitas(quote_voice)
+                        except Exception as e:  # noqa: BLE001
+                            log.warning(f"  [voiceover] gravitas skipped ({e})")
         except Exception as e:
             log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
 
@@ -1033,14 +1060,23 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                         generate_scene_voiceover as _el_scene,
                         REEL_VOICE as _EL_REEL_VOICE,
                     )
-                    bridge_ok = _el_scene(bridge_text, _EL_REEL_VOICE, bridge_path, el_key)
+                    # Chapter-break tags direct ElevenLabs' pacing/urgency arc
+                    # only — the on-screen bridge_text (payload + animation
+                    # timing) must stay untagged, so we tag a local copy here.
+                    tagged_bridge = insert_chapter_breaks(bridge_text)
+                    bridge_ok = _el_scene(tagged_bridge, _EL_REEL_VOICE, bridge_path,
+                                           el_key, settings=delivery_profile("bridge"))
                 if not bridge_ok and edge_tts_available():
                     from src.audio.edge_tts_engine import SCENE_PROSODY
                     bridge_ok = generate_scene_voiceover_edge_tts(
                         bridge_text, REEL_VOICE, bridge_path, *SCENE_PROSODY["bridge"])
                 if bridge_ok:
                     bridge_voice = bridge_path
-                    bridge_words = parse_word_srt(bridge_path.with_suffix(".srt"))
+                    # Word timings were estimated from the tagged text when
+                    # ElevenLabs produced them — strip the <break> fragments
+                    # so word-by-word animation stays synced to bridge_text.
+                    bridge_words = _strip_break_artifacts(
+                        parse_word_srt(bridge_path.with_suffix(".srt")))
             except Exception as e:
                 log.warning(f"  [remotion] bridge voiceover unavailable ({e}) — bridge silent")
 
@@ -1060,7 +1096,32 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
             counter = 1
             while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
                 counter += 1
-            bg_path = _reel_background(cfg, quote_data, mood)
+            # Cinematic multi-clip background (spec 2): several dramatic Pexels
+            # clips cut between instead of one static loop. Best-effort — any
+            # failure (or <2 usable clips) falls back to the existing
+            # single-background path (_reel_background: stock photo -> FLUX).
+            bg_path = None
+            bg_clips = None
+            try:
+                pexels_key = getattr(cfg, "PEXELS_API_KEY", "") or os.getenv("PEXELS_API_KEY", "")
+                if pexels_key:
+                    clips = fetch_reel_clips(
+                        mood, pexels_key, OUTPUT_DIR,
+                        topic_query=quote_data.get("topic_query") or None)
+                    if len(clips) >= 2:
+                        bg_clips = clips
+                        log.info(f"  [reel] multi-clip cinematic background: {len(clips)} clips")
+                    elif len(clips) == 1:
+                        bg_path = clips[0]
+                        log.info(f"  [reel] single stock clip background: {_rel_path(bg_path)}")
+            except Exception as e:  # noqa: BLE001 - footage is best-effort
+                log.warning(f"  [reel] multi-clip fetch failed ({e}) — falling back")
+            if bg_clips is None and bg_path is None:
+                bg_path = _reel_background(cfg, quote_data, mood)
+            # Silence-drop (spec 1): a beat of near-silence right before the
+            # quote lands — only meaningful when there's a quote VO to cut
+            # against.
+            silence_drop = 0.8 if quote_voice else 0.0
             reel_path = generate_remotion_reel(
                     hook=hook_text,
                     quote=quote_data["quote"],
@@ -1079,6 +1140,8 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     bridge_voice=bridge_voice,
                     bridge_words=bridge_words,
                     background=bg_path,
+                    backgrounds=bg_clips,
+                    silence_drop_sec=silence_drop,
             )
         except Exception as e:
             log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")

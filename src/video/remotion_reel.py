@@ -168,8 +168,9 @@ def _emphasis_beats(words: list | None, max_beats: int = 2, min_gap: float = 1.2
 
 
 def _synth_sfx(dest_dir: Path) -> dict | None:
-    """Synthesize whoosh + impact SFX with ffmpeg into dest_dir. Best-effort;
-    returns {'whoosh':name,'impact':name} for the ones produced, else None."""
+    """Synthesize whoosh + impact + riser + sub_impact SFX with ffmpeg into
+    dest_dir. Best-effort; returns the entries produced (a subset of
+    {'whoosh','impact','riser','sub_impact'}), else None."""
     if not shutil.which("ffmpeg"):
         return None
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -195,6 +196,27 @@ def _synth_sfx(dest_dir: Path) -> dict | None:
             result["impact"] = impact.name
     except Exception:  # pragma: no cover - defensive
         pass
+    riser = dest_dir / "sfx-riser.wav"
+    sub = dest_dir / "sfx-sub.wav"
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", "anoisesrc=d=1.2:c=pink:a=0.30",
+             "-af", "lowpass=f=900,afade=t=in:d=1.05,afade=t=out:st=1.05:d=0.15",
+             "-ac", "1", str(riser)],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and riser.exists():
+            result["riser"] = riser.name
+    except Exception:  # pragma: no cover - defensive
+        pass
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=55:duration=0.5",
+             "-af", "afade=t=out:st=0.08:d=0.42,volume=1.6", "-ac", "1", str(sub)],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode == 0 and sub.exists():
+            result["sub_impact"] = sub.name
+    except Exception:  # pragma: no cover - defensive
+        pass
     return result or None
 
 
@@ -218,6 +240,8 @@ def write_bridge_file(
     bridge_voice: Path | None = None,
     bridge_words: list | None = None,
     background: Path | None = None,
+    backgrounds: list | None = None,
+    silence_drop_sec: float = 0.0,
 ) -> Path:
     """Write the reel-data.json bridge file the Remotion composition reads.
 
@@ -291,6 +315,21 @@ def write_bridge_file(
         if bp.suffix.lower() in (".mp4", ".webm", ".mov", ".m4v"):
             bg_duration = _probe_duration(bp)         # lets Remotion <Loop> it
 
+    # Multi-clip cinematic background: ≥2 usable clips replace the single
+    # `background` key with `backgrounds`/`backgroundDurationsSec` lists so
+    # Remotion can cut between them. 0-1 clips leaves the legacy single-clip
+    # payload above untouched.
+    bg_names, bg_durs = [], []
+    if backgrounds and len([b for b in backgrounds if b and Path(b).exists()]) >= 2:
+        for i, b in enumerate(backgrounds):
+            b = Path(b)
+            if not b.exists():
+                continue
+            nm = _copy_audio(b, f"bg{i}{b.suffix}")
+            if nm:
+                bg_names.append(nm)
+                bg_durs.append(_probe_duration(b) or 0.0)
+
     beats: list[float] = []
     if quote_voice and Path(quote_voice).exists():
         try:
@@ -338,6 +377,13 @@ def write_bridge_file(
         payload["background"] = bg_name
         if bg_duration:
             payload["backgroundDurationSec"] = bg_duration
+    if bg_names:
+        payload["backgrounds"] = bg_names
+        payload["backgroundDurationsSec"] = bg_durs
+        payload.pop("background", None)
+        payload.pop("backgroundDurationSec", None)
+    if silence_drop_sec > 0:
+        payload["silenceDropSec"] = round(float(silence_drop_sec), 3)
     if sfx:
         payload["sfx"] = sfx
 
@@ -367,6 +413,8 @@ def generate_remotion_reel(
     bridge_voice: Path | None = None,
     bridge_words: list | None = None,
     background: Path | None = None,
+    backgrounds: list | None = None,
+    silence_drop_sec: float = 0.0,
 ) -> Path | None:
     """
     Render a POV Reel via Remotion (React-based, headless-browser rendering).
@@ -410,6 +458,8 @@ def generate_remotion_reel(
         bridge_voice=bridge_voice,
         bridge_words=bridge_words,
         background=background,
+        backgrounds=backgrounds,
+        silence_drop_sec=silence_drop_sec,
     )
 
     # 2. Invoke the Remotion CLI. --props takes a path to the JSON bridge file.
