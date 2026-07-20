@@ -194,3 +194,83 @@ def fetch_stock_background(
 def pexels_available(api_key: str = "") -> bool:
     """Check if Pexels API is available."""
     return bool(api_key)
+
+
+# Human-struggle queries per mood (spec 2): motion + conflict + a person.
+# Winning accounts borrow emotional charge from movie/anime clips; a licensed
+# pipeline borrows it from footage of humans STRUGGLING, never scenery.
+DRAMATIC_POOLS = {
+    "calm_stoic": [
+        "man meditating dark room candle", "swimmer cold water winter lake",
+        "monk walking temple rain", "man breathing heavy eyes closed",
+        "hands in prayer dark", "man sitting alone empty gym"],
+    "cinematic_hopeful": [
+        "runner sunrise city street", "climber reaching summit exhausted",
+        "man opening curtains morning light", "athlete training dawn stairs",
+        "woman running uphill determined", "boxer victory arms raised"],
+    "dark_philosophical": [
+        "man walking into storm rain", "boxer wrapping hands dark gym",
+        "silhouette training night city", "man staring window rain night",
+        "hands gripping rope struggle", "runner collapsing exhausted track"],
+    "dramatic_ancient": [
+        "blacksmith forging fire sparks", "man carrying heavy stone",
+        "warrior training sword silhouette", "hands working clay pottery",
+        "man rowing boat storm", "torch flame dark corridor"],
+    "epic_warrior": [
+        "boxer heavy bag slow motion", "sprinter starting blocks explosive",
+        "man flipping tire gym", "wrestler training takedown",
+        "martial artist kick training", "athlete screaming effort barbell"],
+    "mystical_greek": [
+        "man walking ancient ruins alone", "hand touching marble statue",
+        "figure in fog walking", "candle flame dark library",
+        "man reading old book candlelight", "silhouette columns moonlight"],
+    "stark_minimal": [
+        "man alone empty room window", "single figure crossing bridge fog",
+        "hands clenched fist close up", "man staring mirror intense",
+        "footsteps empty corridor", "man standing rooftop city night"],
+}
+
+_SCENERY_WORDS = {
+    "sunset", "sunrise", "ocean", "beach", "landscape", "mountain", "clouds",
+    "sky", "forest", "waterfall", "flowers", "nature", "scenery", "aerial",
+    "drone", "lake", "waves",
+}
+_HUMAN_WORDS = {
+    "man", "woman", "boxer", "runner", "athlete", "climber", "swimmer",
+    "warrior", "monk", "hands", "figure", "silhouette", "person", "wrestler",
+    "sprinter", "blacksmith", "martial",
+}
+
+
+def _is_scenery(query: str) -> bool:
+    """True when a query is passive scenery with no human in frame — the
+    look of every low-effort quote account (spec 2)."""
+    words = set((query or "").lower().split())
+    return bool(words & _SCENERY_WORDS) and not (words & _HUMAN_WORDS)
+
+
+def fetch_reel_clips(mood, api_key, output_dir, topic_query=None, n=4):
+    """Up to n distinct dramatic clips: topic_query first (when it depicts a
+    human), then dramatic-pool picks. Deduped by Pexels video id. Returns []
+    on total failure — callers fall back to the single-clip path."""
+    queries = []
+    if topic_query and not _is_scenery(topic_query):
+        queries.append(topic_query)
+    queries += DRAMATIC_POOLS.get(mood, DRAMATIC_POOLS["dark_philosophical"])
+    clips, seen_ids = [], set()
+    for i, q in enumerate(queries):
+        if len(clips) >= n:
+            break
+        try:
+            videos = search_stock_video(mood, api_key, query=q)
+            video = pick_best_video(videos) if videos else None
+            if not video or video.get("id") in seen_ids:
+                continue
+            seen_ids.add(video.get("id"))
+            dest = Path(output_dir) / f"reel_clip_{len(clips)}_{video.get('id')}.mp4"
+            got = download_stock_video(video, dest)
+            if got:
+                clips.append(Path(got))
+        except Exception as e:  # noqa: BLE001 - one dead query never stops the fetch
+            print(f"  [stock] clip query failed ({e}) — continuing")
+    return clips
