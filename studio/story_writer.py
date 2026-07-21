@@ -285,6 +285,8 @@ def _maybe_revise(client, role, winner, mode, pool, ctx):
     trouble."""
     from studio.rubric import score_story_detailed
 
+    if mode == "punch":
+        return winner
     try:
         detail = score_story_detailed(winner)
         if not detail["weaknesses"] and detail["total"] >= REVISION_THRESHOLD:

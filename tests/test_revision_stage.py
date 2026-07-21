@@ -67,3 +67,22 @@ def test_strong_draft_skips_revision(monkeypatch):
 
     out = write_story(C(), "weird", {"hook_fact": "x"}, POOL)
     assert out is not None and len(calls) == 2   # no revision call
+
+
+def test_punch_mode_skips_revision():
+    """Punch mode should never trigger revision, even with low scores."""
+    calls = []
+
+    class C:
+        def call(self, role, prefix, role_system, user, schema):
+            calls.append(user)
+            return {"beat_hook": "Nobody is coming to rescue you from that worn couch tonight now.",
+                    "beat_reframe": "",
+                    "quote_row": 1,
+                    "beat_cta": "Send this to the friend still waiting for a sign to start living.",
+                    "topic_query": "man rooftop night", "caption_first_line": "Read it twice."}
+
+    out = write_story(C(), "punch", {"topic": "procrastination"},
+                      [{"row_number": 1, "quote": "He who has a why can bear any how."}])
+    assert out is not None
+    assert len(calls) == 2   # 2 drafts, NO revision call
