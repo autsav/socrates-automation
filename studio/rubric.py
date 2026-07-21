@@ -71,3 +71,69 @@ def score_concept(hook: str, caption: str) -> float:
         return round(score, 4)
     except Exception:  # noqa: BLE001
         return 0.0
+
+
+_WEAKNESS = {
+    "hook": "hook lacks a concrete image or number",
+    "escalation": "escalation sentences run long — cut them shorter",
+    "cta": "cta names no specific friend-type",
+    "simplicity": "too many long words",
+}
+
+
+def _clamp10(x: float) -> float:
+    return max(0.0, min(10.0, x))
+
+
+def score_story_detailed(d: dict) -> dict:
+    """Subscore decomposition of score_story's signals (spec 1). 0-10 each;
+    weaknesses listed for any subscore <= 4. Never raises."""
+    empty = {"hook": 0.0, "escalation": 0.0, "cta": 0.0, "simplicity": 0.0,
+             "total": 0.0, "weaknesses": []}
+    try:
+        hook = d.get("beat_hook") or ""
+        reframe = d.get("beat_reframe") or ""
+        cta = d.get("beat_cta") or ""
+        if not (hook and reframe and cta):
+            return empty
+        h = 5.0 + 2.0 * len(_CONCRETE_HINTS.findall(hook.lower())) \
+            - 2.0 * sum(w.lower() in _ABSTRACTIONS for w in _words(hook)) \
+            + (1.0 if not hook.rstrip().endswith("?") else -2.0)
+        lens = _sentence_lengths(reframe)
+        mean = sum(lens) / len(lens)
+        e = 10.0 - max(0.0, (mean - 6.0)) * 1.2
+        if _SPECIFIC_CTA.search(cta):
+            c = 9.0
+        elif "send" in cta.lower() or "agree" in cta.lower():
+            c = 6.0
+        else:
+            c = 3.0
+        all_words = _words(hook) + _words(reframe) + _words(cta)
+        long_frac = (sum(len(w) > 8 for w in all_words) / len(all_words)) if all_words else 1.0
+        s = 10.0 - 40.0 * long_frac
+        subs = {"hook": _clamp10(h), "escalation": _clamp10(e),
+                "cta": _clamp10(c), "simplicity": _clamp10(s)}
+        weaknesses = [_WEAKNESS[k] for k in ("hook", "escalation", "cta", "simplicity")
+                      if subs[k] <= 4.0]
+        total = round(subs["hook"] * 0.4 + subs["escalation"] * 0.25
+                      + subs["cta"] * 0.2 + subs["simplicity"] * 0.15, 4)
+        return {**subs, "total": total, "weaknesses": weaknesses}
+    except Exception:  # noqa: BLE001 - judge never crashes
+        return empty
+
+
+def score_hook(hook: str) -> float:
+    """Hook-variant scoring for the specialist pass (spec 4)."""
+    try:
+        hl = (hook or "").lower()
+        score = 5.0
+        score += 2.0 * len(_CONCRETE_HINTS.findall(hl))
+        score -= 2.0 * sum(w in _ABSTRACTIONS for w in _words(hl))
+        if hook.rstrip().endswith("?"):
+            score -= 3.0
+        for phrase in ("that's why", "the answer", "here's how", "the lesson"):
+            if phrase in hl:
+                score -= 3.0
+        return max(0.0, round(score, 4))
+    except Exception:  # noqa: BLE001
+        return 0.0
