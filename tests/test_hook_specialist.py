@@ -41,3 +41,11 @@ def test_pick_hook_validates_and_scores():
 def test_pick_hook_all_invalid_falls_back():
     assert pick_hook(["No viewer here at all."], "You still matter tonight.") == \
         "You still matter tonight."
+
+
+def test_resolution_set_matches_formula_gate():
+    from studio.rubric import RESOLUTION_PHRASES
+    assert "this means" in RESOLUTION_PHRASES and "the secret is" in RESOLUTION_PHRASES
+    from studio.hook_specialist import pick_hook
+    assert pick_hook(["You think this means you are safe now."],
+                     "You still matter tonight.") == "You still matter tonight."

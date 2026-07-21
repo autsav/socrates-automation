@@ -3,7 +3,7 @@ single hook attempt becomes 8 psychological angles with a coded judge."""
 import re
 
 from studio.types import _obj
-from studio.rubric import score_hook
+from studio.rubric import score_hook, RESOLUTION_PHRASES
 
 HOOK_ANGLES = ("fear", "curiosity", "status", "absurdity", "loss",
                "time-urgency", "secret", "challenge")
@@ -11,7 +11,6 @@ HOOK_ANGLES = ("fear", "curiosity", "status", "absurdity", "loss",
 _HOOKS_SCHEMA = _obj({"hooks": {"type": "array", "items": {"type": "string"}}},
                      ["hooks"])
 _VIEWER = {"you", "your", "you're", "you've", "you'll", "you'd", "yourself"}
-_RESOLUTION = ("that's why", "the answer", "here's how", "the lesson")
 
 _PREFIX = (
     "You write scroll-stopping first lines for 60-second Stoic story reels. "
@@ -44,7 +43,7 @@ def _valid(hook: str) -> bool:
         return False
     if len(hook.split()) > 15 or hook.rstrip().endswith("?"):
         return False
-    return not any(p in hl for p in _RESOLUTION)
+    return not any(p in hl for p in RESOLUTION_PHRASES)
 
 
 def pick_hook(candidates: list[str], fallback: str) -> str:

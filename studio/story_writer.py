@@ -17,6 +17,7 @@ import re
 
 from studio.types import _obj
 from studio import playbooks
+from studio.rubric import RESOLUTION_PHRASES
 from src.optimizer import prompt_store
 
 _PERSONAS = (
@@ -209,8 +210,6 @@ def validate_story(d: dict, min_total: int = MIN_SPOKEN_WORDS,
         return False, f"malformed: {e}"
 
 
-_RESOLUTION_PHRASES = ("that's why", "the answer", "here's how", "the lesson",
-                       "this means", "the secret is")
 _CLIFFHANGER_STARTS = ("then ", "until ", "but ", "and nobody", "and no one")
 
 
@@ -226,7 +225,7 @@ def validate_formula(d: dict) -> tuple[bool, str]:
         hl = hook.lower()
         if not (set(re.findall(r"[a-z']+", hl)) & _SECOND_PERSON):
             return False, "hook must address the viewer (you/your)"
-        if any(p in hl for p in _RESOLUTION_PHRASES):
+        if any(p in hl for p in RESOLUTION_PHRASES):
             return False, "hook resolves its own loop"
         words = reframe.split()
         if not words:
@@ -235,7 +234,7 @@ def validate_formula(d: dict) -> tuple[bool, str]:
         if not (set(re.findall(r"[a-z']+", first25)) & _SECOND_PERSON):
             return False, "stakes phase needs second person in the first 25 words"
         two_thirds = " ".join(words[: (2 * len(words)) // 3]).lower()
-        if any(p in two_thirds for p in _RESOLUTION_PHRASES):
+        if any(p in two_thirds for p in RESOLUTION_PHRASES):
             return False, "resolution vocabulary before the payoff phase"
         third = len(words) // 3
         middle = " ".join(words[third: 2 * third]).lower()

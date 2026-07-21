@@ -2,6 +2,9 @@
 Pure functions; higher is better; malformed input scores 0.0, never raises."""
 import re
 
+RESOLUTION_PHRASES = ("that's why", "the answer", "here's how", "the lesson",
+                      "this means", "the secret is")
+
 _ABSTRACTIONS = {
     "success", "mindset", "growth", "potential", "journey", "purpose",
     "greatness", "value", "energy", "abundance", "transformation",
@@ -131,7 +134,7 @@ def score_hook(hook: str) -> float:
         score -= 2.0 * sum(w in _ABSTRACTIONS for w in _words(hl))
         if hook.rstrip().endswith("?"):
             score -= 3.0
-        for phrase in ("that's why", "the answer", "here's how", "the lesson"):
+        for phrase in RESOLUTION_PHRASES:
             if phrase in hl:
                 score -= 3.0
         return max(0.0, round(score, 4))
