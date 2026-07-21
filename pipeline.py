@@ -1001,7 +1001,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         quote_data["topic_query"] = story.get("topic_query", "")
         quote_data["caption_first_line"] = story.get("caption_first_line", "")
         quote_data["trend_tag"] = story.get("trend_tag", "")
-        quote_data["script"] = {"hook": hook_text, "reframe": story["beat_reframe"], "cta": cta_text}
+        quote_data["script"] = {"hook": _enforce_hook_len(hook_text), "reframe": story["beat_reframe"], "cta": cta_text}
     else:
         hook_text, arc_bridge = _apply_arc(
             arc, hook_text, quote_data.get("bridge", ""),

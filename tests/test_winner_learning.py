@@ -53,3 +53,17 @@ def test_record_script_roundtrip(tmp_path, monkeypatch):
     row = con.execute("SELECT script_json FROM posts WHERE id = 1").fetchone()
     con.close()
     assert json.loads(row[0]) == {"hook": "h"}
+
+
+def test_empty_reframe_scripts_excluded(tmp_path):
+    db = tmp_path / "t.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE posts (id INTEGER PRIMARY KEY, post_id TEXT, dry_run INT, script_json TEXT)")
+    con.execute("CREATE TABLE post_metrics (post_id TEXT PRIMARY KEY, shares INT, reach INT)")
+    for i in range(4):
+        s = json.dumps({"hook": f"h{i}", "reframe": "" if i == 3 else "words " * 40, "cta": "c"})
+        con.execute("INSERT INTO posts VALUES (?, ?, 0, ?)", (i + 1, f"p{i}", s))
+        con.execute("INSERT INTO post_metrics VALUES (?, ?, 300)", (f"p{i}", i * 5))
+    con.commit(); con.close()
+    w = winning_scripts(n=2, db_path=db)
+    assert all(x["hook"] != "h3" for x in w)   # top scorer but empty reframe -> excluded

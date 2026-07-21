@@ -79,6 +79,8 @@ def winning_scripts(n=2, db_path=DEFAULT_DB) -> list[dict]:
         for sj, shares, reach in rows:
             try:
                 s = _json.loads(sj)
+                if not (s.get("reframe") or "").strip():
+                    continue
                 scored.append({**{k: s.get(k, "") for k in ("hook", "reframe", "cta")},
                                "sends_per_reach": round((shares or 0) / reach, 4)})
             except Exception:  # noqa: BLE001
