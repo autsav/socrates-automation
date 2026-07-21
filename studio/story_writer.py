@@ -255,6 +255,21 @@ def validate_formula(d: dict) -> tuple[bool, str]:
 REVISION_THRESHOLD = 6.5
 
 
+def _hook_pass(client, story: dict, mode: str) -> dict:
+    """8-angle hook variant pass (spec 4): swap in the best-scoring valid
+    candidate, or keep the existing hook on any trouble. Skipped for punch
+    mode (its single-line hook IS the whole beat)."""
+    if mode == "punch":
+        return story
+    try:
+        from studio.hook_specialist import generate_hooks, pick_hook
+        story["beat_hook"] = pick_hook(
+            generate_hooks(client, story), story["beat_hook"])
+    except Exception:  # noqa: BLE001
+        pass
+    return story
+
+
 def _quote_leak(d: dict, pool: list) -> bool:
     """True when the chosen quote's words appear inside the reframe — the
     quote scene delivers the quote; the story must stop one breath before."""
@@ -353,7 +368,7 @@ def write_story(client, mode: str, material: dict, pool: list,
             valid.sort(key=lambda t: t[0], reverse=True)
             winner = valid[0][1]
             winner = _maybe_revise(client, role, winner, mode, pool, ctx)
-            return winner
+            return _hook_pass(client, winner, mode)
         # Neither validated: corrective retry on draft A's failure reason.
         d0, _, reason = drafts[0]
         print(f"  [story_writer] formula-reject mode={mode} reason={reason} — retrying once")
@@ -372,7 +387,7 @@ def write_story(client, mode: str, material: dict, pool: list,
         if not ok:
             print(f"  [story_writer] formula-reject mode={mode} reason={reason}")
             return None
-        return d
+        return _hook_pass(client, d, mode)
     except Exception as e:  # noqa: BLE001 - never crash a reel
         print(f"  [story_writer] unavailable ({e})")
         return None

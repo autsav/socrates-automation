@@ -22,6 +22,7 @@ ROLE_MODELS = {
     "trend_scout":            "claude-sonnet-4-6",
     "prompt_critic":          "claude-sonnet-4-6",
     "story_writer":           "claude-opus-4-8",
+    "hook_specialist":        "claude-sonnet-4-6",
 }
 ROLE_EFFORT = {
     "analyst":    "medium",
@@ -40,6 +41,7 @@ ROLE_EFFORT = {
     "trend_scout":            "medium",
     "prompt_critic":          "medium",
     "story_writer":           "high",
+    "hook_specialist":        "medium",
 }
 N_CONCEPTS = 4
 DAILY_SPEND_CEILING_USD = 5.0  # raised for 2-draft + critique passes (spec 1.5)

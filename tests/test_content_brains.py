@@ -124,7 +124,7 @@ def test_write_story_two_drafts_rubric_picks_winner():
                       [{"row_number": 7, "quote": "q"}])
     assert out is not None
     assert out["beat_hook"].startswith("He slept")     # concrete draft won
-    assert len(calls) == 2                              # exactly two drafts
+    assert len(calls) == 3                              # 2 drafts + 1 hook pass
     assert calls[0] != calls[1]                         # different personas
 
 

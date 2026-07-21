@@ -37,7 +37,7 @@ def test_revision_fires_and_ships_better(monkeypatch):
 
     out = write_story(C(), "weird", {"hook_fact": "x"}, POOL)
     assert out is not None and out["beat_hook"].startswith("You checked")
-    assert len(calls) == 3                       # 2 drafts + 1 revision
+    assert len(calls) == 4                       # 2 drafts + 1 revision + 1 hook pass
     assert "fixing EXACTLY" in calls[2] or "weakness" in calls[2].lower()
 
 
@@ -66,7 +66,7 @@ def test_strong_draft_skips_revision(monkeypatch):
             return dict(STRONG)
 
     out = write_story(C(), "weird", {"hook_fact": "x"}, POOL)
-    assert out is not None and len(calls) == 2   # no revision call
+    assert out is not None and len(calls) == 3   # no revision call, +1 hook pass
 
 
 def test_punch_mode_skips_revision():
