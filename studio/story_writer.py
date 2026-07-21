@@ -252,23 +252,73 @@ def validate_formula(d: dict) -> tuple[bool, str]:
         return False, f"malformed: {e}"
 
 
+REVISION_THRESHOLD = 6.5
+
+
+def _quote_leak(d: dict, pool: list) -> bool:
+    """True when the chosen quote's words appear inside the reframe — the
+    quote scene delivers the quote; the story must stop one breath before."""
+    try:
+        row = d.get("quote_row")
+        q = next((p["quote"] for p in pool if p["row_number"] == row), "")
+        _norm = lambda s: re.sub(r"[^a-z ]", "", (s or "").lower())
+        head = " ".join(_norm(q).split()[:6])
+        return bool(head) and head in _norm(d.get("beat_reframe") or "")
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _passes_all_gates(d, mode, pool):
+    """Same gates the draft loop enforces, shared with the revision path."""
+    ok, _ = validate_story(d or {}, mode=mode)
+    if ok and mode != "punch":
+        ok, _ = validate_formula(d or {})
+    if ok and d and not any(p["row_number"] == d.get("quote_row") for p in pool):
+        ok = False
+    return ok
+
+
+def _maybe_revise(client, role, winner, mode, pool, ctx):
+    """One conditional revision pass (spec 3): subscore report in, the
+    revised draft ships only if it passes every gate and scores no worse
+    than the winner it's replacing. Never raises — winner ships on any
+    trouble."""
+    from studio.rubric import score_story_detailed
+
+    try:
+        detail = score_story_detailed(winner)
+        if not detail["weaknesses"] and detail["total"] >= REVISION_THRESHOLD:
+            return winner
+        subscore_lines = "\n".join(
+            f"- {k}: {v}/10" for k, v in detail.items()
+            if k not in ("total", "weaknesses"))
+        weakness_lines = "\n".join(f"- {w}" for w in detail["weaknesses"]) or "- (none named)"
+        report = (
+            "Quality report on your last draft:\n"
+            f"{subscore_lines}\n- total: {detail['total']}/10\n"
+            f"Weaknesses:\n{weakness_lines}\n\n"
+            "Rewrite the four beats fixing EXACTLY the named weaknesses. "
+            "Keep every phrase that already works.\n"
+            f"{json.dumps(winner, ensure_ascii=False)}"
+        )
+        revised = client.call("story_writer", _PREFIX, role, f"{report}{ctx}",
+                              STORY_SCHEMA)
+        if not _passes_all_gates(revised, mode, pool):
+            return winner
+        if mode != "punch" and _quote_leak(revised or {}, pool):
+            return winner
+        if score_story_detailed(revised)["total"] < detail["total"]:
+            return winner
+        return revised
+    except Exception:  # noqa: BLE001 - revision must never crash a reel
+        return winner
+
+
 def write_story(client, mode: str, material: dict, pool: list,
                 extra_context: str = "") -> dict | None:
     """Two persona drafts -> rubric picks the winner (spec 1.2 B-lite).
     Returns validated dict or None (never raises)."""
     from studio.rubric import score_story
-
-    def _quote_leak(d: dict) -> bool:
-        """True when the chosen quote's words appear inside the reframe — the
-        quote scene delivers the quote; the story must stop one breath before."""
-        try:
-            row = d.get("quote_row")
-            q = next((p["quote"] for p in pool if p["row_number"] == row), "")
-            _norm = lambda s: re.sub(r"[^a-z ]", "", (s or "").lower())
-            head = " ".join(_norm(q).split()[:6])
-            return bool(head) and head in _norm(d.get("beat_reframe") or "")
-        except Exception:  # noqa: BLE001
-            return False
 
     try:
         role_tmpl = prompt_store.get("prompt.story_writer.role", _ROLE_DEFAULT)
@@ -288,7 +338,7 @@ def write_story(client, mode: str, material: dict, pool: list,
                 ok, reason = validate_story(d or {}, mode=mode)
                 if ok and mode != "punch":
                     ok, reason = validate_formula(d or {})
-                if ok and mode != "punch" and _quote_leak(d or {}):
+                if ok and mode != "punch" and _quote_leak(d or {}, pool):
                     ok, reason = False, "quote text leaked into the reframe"
                 if (ok and d and
                         not any(p["row_number"] == d.get("quote_row") for p in pool)):
@@ -299,7 +349,9 @@ def write_story(client, mode: str, material: dict, pool: list,
         valid = [(score_story(d), d) for d, ok, _ in drafts if ok]
         if valid:
             valid.sort(key=lambda t: t[0], reverse=True)
-            return valid[0][1]
+            winner = valid[0][1]
+            winner = _maybe_revise(client, role, winner, mode, pool, ctx)
+            return winner
         # Neither validated: corrective retry on draft A's failure reason.
         d0, _, reason = drafts[0]
         print(f"  [story_writer] formula-reject mode={mode} reason={reason} — retrying once")
@@ -310,7 +362,7 @@ def write_story(client, mode: str, material: dict, pool: list,
         ok, reason = validate_story(d or {}, mode=mode)
         if ok and mode != "punch":
             ok, reason = validate_formula(d or {})
-        if ok and mode != "punch" and _quote_leak(d or {}):
+        if ok and mode != "punch" and _quote_leak(d or {}, pool):
             ok, reason = False, "quote text leaked into the reframe"
         if (ok and d and
                 not any(p["row_number"] == d.get("quote_row") for p in pool)):
