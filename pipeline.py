@@ -352,6 +352,28 @@ def _apply_arc(arc: str, hook_text: str, bridge_text: str, audience: str,
     return hook_text, bridge_text
 
 
+def _quote_pool(quote_data: dict) -> list[dict]:
+    """Real quote pool for the writer's earned-twist choice (spec 2): today's
+    row first, then up to 19 more unposted rows. Failure -> single-row pool."""
+    today = {"row_number": quote_data.get("row_number"),
+             "quote": quote_data.get("quote", ""),
+             "attribution": quote_data.get("attribution", "— Socrates")}
+    try:
+        from studio.run import _build_pool
+        rows = _build_pool(str(EXCEL_PATH))
+        pool = [today]
+        for r in rows:
+            if r["row_number"] == today["row_number"]:
+                continue
+            pool.append({"row_number": r["row_number"], "quote": r["quote"],
+                         "attribution": r.get("attribution", "— Socrates")})
+            if len(pool) >= 20:
+                break
+        return pool
+    except Exception:  # noqa: BLE001 - pool is an upgrade, not a dependency
+        return [today]
+
+
 def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
     """Generate story/weird beats via the story_writer agent. Returns the beat
     dict (safety-checked) or None so the caller can fall back to a plain arc."""
@@ -386,7 +408,7 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
             material_key = material.get("key")
 
         client = StudioClient(cfg.ANTHROPIC_API_KEY)
-        pool = [{"row_number": row or 0, "quote": quote_data.get("quote", "")}]
+        pool = _quote_pool(quote_data)
         try:
             from src.analytics.performance_digest import digest_text
             extra = digest_text("story_writer")
@@ -407,6 +429,14 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
             story["beat_reframe"] = ""   # format guarantee: punch has NO bridge scene
         story["mode"] = mode
         story["material_key"] = material_key
+
+        chosen = next((p for p in pool
+                       if p["row_number"] == story.get("quote_row")), None)
+        if chosen and chosen["row_number"] != quote_data.get("row_number"):
+            quote_data["quote"] = chosen["quote"]
+            quote_data["attribution"] = chosen.get("attribution", "— Socrates")
+            quote_data["row_number"] = chosen["row_number"]
+
         return story
     except Exception as e:  # noqa: BLE001 - never crash a reel
         log.warning(f"  [story] beat generation unavailable ({e}) — falling back")
