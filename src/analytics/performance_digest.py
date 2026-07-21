@@ -62,6 +62,35 @@ def build_digest(db_path=DEFAULT_DB) -> dict:
         return {}
 
 
+def winning_scripts(n=2, db_path=DEFAULT_DB) -> list[dict]:
+    """Top real scripts by sends-per-reach (spec 5). [] until >=3 scored."""
+    import json as _json
+    try:
+        con = sqlite3.connect(str(db_path))
+        try:
+            rows = con.execute(
+                "SELECT p.script_json, m.shares, m.reach FROM posts p "
+                "JOIN post_metrics m ON p.post_id = m.post_id "
+                "WHERE p.dry_run=0 AND p.script_json IS NOT NULL "
+                "AND m.reach >= 100").fetchall()
+        finally:
+            con.close()
+        scored = []
+        for sj, shares, reach in rows:
+            try:
+                s = _json.loads(sj)
+                scored.append({**{k: s.get(k, "") for k in ("hook", "reframe", "cta")},
+                               "sends_per_reach": round((shares or 0) / reach, 4)})
+            except Exception:  # noqa: BLE001
+                continue
+        if len(scored) < 3:
+            return []
+        scored.sort(key=lambda e: e["sends_per_reach"], reverse=True)
+        return scored[:n]
+    except Exception:  # noqa: BLE001 - learning is optional
+        return []
+
+
 def digest_text(view: str, db_path=DEFAULT_DB) -> str:
     d = build_digest(db_path).get(view) or []
     if not d:

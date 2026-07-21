@@ -118,6 +118,12 @@ def init_db() -> None:
         if "material_key" not in post_columns:
             cursor.execute("ALTER TABLE posts ADD COLUMN material_key TEXT DEFAULT NULL")
 
+        # Migration: script_json — the hook/reframe/cta text that actually
+        # shipped for this post, so winning_scripts() can rank real scripts
+        # by performance and feed them back into the story writer (spec 5).
+        if "script_json" not in post_columns:
+            cursor.execute("ALTER TABLE posts ADD COLUMN script_json TEXT DEFAULT NULL")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS post_metrics (
                 post_id TEXT PRIMARY KEY,
@@ -207,6 +213,25 @@ def record_material(row_id: int, key: str | None) -> None:
     conn = _get_connection()
     try:
         conn.execute("UPDATE posts SET material_key = ? WHERE id = ?", (key, row_id))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def record_script(row_id: int, script: dict | None) -> None:
+    """Record the hook/reframe/cta text that actually shipped for this post
+    (script_json), so winning_scripts() can rank real scripts by performance
+    and feed the top ones back into the story writer (spec 5).
+    Best-effort; never raises."""
+    if not script:
+        return
+    import json as _json
+    conn = _get_connection()
+    try:
+        conn.execute("UPDATE posts SET script_json = ? WHERE id = ?",
+                     (_json.dumps(script), row_id))
         conn.commit()
     except Exception:
         pass

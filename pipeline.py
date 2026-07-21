@@ -26,7 +26,7 @@ from src.visual.carousel_composer import compose_carousel
 from src.core.instagram_poster import post_to_instagram, post_reel_to_instagram, post_carousel_to_instagram
 from src.video.reel_composer import generate_reel, ffmpeg_available
 from config import Config
-from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword, record_arc, record_material
+from src.core.data_store import init_db, save_post, mark_posted, release_post, get_ab_results, has_posted_today, save_proposal, record_trigger_keyword, record_arc, record_material, record_script
 from studio.reconcile import reconcile_token
 from studio.client import StudioClient
 from studio import music_director
@@ -414,6 +414,17 @@ def _build_story_beats(cfg, arc: str, quote_data: dict) -> dict | None:
             extra = digest_text("story_writer")
         except Exception:  # noqa: BLE001
             extra = ""
+        try:
+            from src.analytics.performance_digest import winning_scripts
+            winners = winning_scripts(2)
+            if winners:
+                block = "\nREAL WINNERS FROM THIS ACCOUNT (study what worked):\n"
+                for w in winners:
+                    block += (f"- HOOK: {w['hook']}\n  STORY OPENING: "
+                              f"{' '.join(w['reframe'].split()[:60])}\n  CTA: {w['cta']}\n")
+                extra = (extra + block) if extra else block
+        except Exception:  # noqa: BLE001
+            pass
         story = write_story(client, mode, material, pool, extra_context=extra)
         if not story:
             return None
@@ -990,6 +1001,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         quote_data["topic_query"] = story.get("topic_query", "")
         quote_data["caption_first_line"] = story.get("caption_first_line", "")
         quote_data["trend_tag"] = story.get("trend_tag", "")
+        quote_data["script"] = {"hook": hook_text, "reframe": story["beat_reframe"], "cta": cta_text}
     else:
         hook_text, arc_bridge = _apply_arc(
             arc, hook_text, quote_data.get("bridge", ""),
@@ -1226,6 +1238,7 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         record_trigger_keyword(post_row_id, _extract_trigger_keyword(cta_text))
         record_arc(post_row_id, quote_data.get("arc"))
         record_material(post_row_id, quote_data.get("material_key"))
+        record_script(post_row_id, quote_data.get("script"))
 
     if post_row_id is None:
         log.warning(
