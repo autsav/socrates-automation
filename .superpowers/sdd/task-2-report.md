@@ -1,106 +1,89 @@
-# Task B report — expert system prompts for team agents
+# Task 2: Quote pool + chosen-row swap — Self-Review Report
 
-## Files created
+## Status: GREEN
 
-All 8 required files under `team/prompts/` (new directory):
+## Commit
 
-| File | Lines |
-|---|---|
-| `team/prompts/analytics_analyst.md` | 56 |
-| `team/prompts/planner.md` | 67 |
-| `team/prompts/reviewer.md` | 59 |
-| `team/prompts/content_writer.md` | 59 |
-| `team/prompts/visual_designer.md` | 72 |
-| `team/prompts/audio_engineer.md` | 64 |
-| `team/prompts/video_editor.md` | 60 |
-| `team/prompts/engagement_strategist.md` | 60 |
+- `cb39cb1` — `feat(script): real quote pool — the writer picks the earned twist (spec 2)`
+  (files: `pipeline.py`, `tests/test_quote_pool.py`)
 
-All 8 within the requested 40-80 line range.
+## What changed
 
-## Ground-truth check
+- `pipeline.py`: added `_quote_pool(quote_data) -> list[dict]` — today's row first
+  (from `quote_data`), then up to 19 more unposted rows pulled via
+  `studio.run._build_pool(str(EXCEL_PATH))`, each entry `{row_number, quote,
+  attribution}`. Any exception (bad excel, missing file, etc.) → single-row
+  fallback `[today]`. Never raises.
+- `_build_story_beats`: pool construction replaced —
+  `pool = [{"row_number": row or 0, "quote": quote_data.get("quote", "")}]`
+  → `pool = _quote_pool(quote_data)`.
+- After the story passes safety checks (`is_unsafe`, `mentions_named_person`)
+  and `story["mode"]`/`story["material_key"]` are stamped, added the
+  chosen-row swap: look up `story.get("quote_row")` in `pool`; if found and
+  different from `quote_data`'s current row, overwrite `quote_data["quote"]`,
+  `["attribution"]`, `["row_number"]` with the chosen entry's values. This is
+  the intentional redirect the brief calls out — downstream excel marking
+  keys off `quote_data["row_number"]`, so the swap makes the *chosen* row the
+  one that gets marked posted, not the day's assigned row.
 
-Read `src/core/excel_reader.py`'s `AUDIENCE_TO_MOOD` before writing (per brief instruction) — the
-authoritative segment→mood set is: `procrastinator`→`dark_philosophical`,
-`doomscroller`→`dramatic_ancient`, `stuck`→`cinematic_hopeful`, `lazy`→`stark_minimal`,
-`quitter`→`epic_warrior`, `lost`→`mystical_greek`, `overwhelmed`→`calm_stoic`. This differs from
-the segment names listed in the brief's own context section (`overthinker`, `burnt_out`,
-`heartbroken`, `ambitious` do not exist in code). Per the brief's explicit instruction to match the
-code's exact names, all 8 prompts use only the 7 real segment names above — none of the brief's
-placeholder names were used.
+## Attribution column check
 
-Also cross-referenced `team/models.py` (the actual `PostPlan`/`CopySpec`/`VisualSpec`/`AudioSpec`/
-`VideoSpec`/`EngagementSpec`/`AnalyticsReport` dataclasses + JSON schemas used by this pipeline) so
-every "Output" section names the exact schema fields the calling code expects, and
-`src/visual/brand_design.py`'s `MOOD_PALETTES` (real hex/RGB values per mood) and
-`src/audio/voiceover_engine.py`'s prosody configs (real mood→emotion/pace mappings) so the visual
-designer and audio engineer prompts cite this codebase's actual palette/prosody data rather than
-invented values. Confirmed `src/visual/motion_effects.py` exposes exactly 15 named xfade
-transition types and listed all 15 by name in `video_editor.md`.
+Read `src/core/excel_reader.py`'s column mapping (cols A-I: `#`, Quote,
+Audience, Caption, Caption Variant B, [F unused], Status, Posted Date, Post
+ID) and `studio/run.py:_build_pool` (reads cols A/B/C only: row_number, quote,
+audience). **No attribution column exists in the sheet.** Per the brief,
+"otherwise the '— Socrates' default stands" — so `studio/run.py` was left
+untouched; `_quote_pool` supplies `attribution.get("attribution", "—
+Socrates")` as the default for every pool entry (both `today` and rows from
+`_build_pool`, via `r.get("attribution", "— Socrates")` since `_build_pool`'s
+dicts never carry that key).
 
-## Deviation
+## Test Summary
 
-The brief asked the video editor prompt to reference "target duration (15-22s per item in the
-existing dataclass spec)." I could not find a 15-22s constant anywhere in the codebase — the
-legacy `src/video/reel_composer.py` hardcodes a 3-scene, ~14-15s Reel (`SCENE_DURATIONS = [4, 8,
-3]`), and `team/models.py`'s `VideoSpec.total_duration` is an unconstrained float with no bounds
-in code. I used the brief's explicit 15-22s figure verbatim (the brief is the authoritative task
-spec) but flag that this number doesn't correspond to a literal dataclass constant I could locate;
-it reads as a deliberate widening of the legacy single-format 15s Reel for this new multi-format
-pipeline's videos, consistent with the shorter-is-better completion-rate framing already in the
-codebase's docstring.
+- **Written first, confirmed FAIL**: `AttributeError: module 'pipeline' has
+  no attribute '_quote_pool'` on all 3 tests before implementation.
+- **Targeted** (`tests/test_quote_pool.py`): 3 passed
+  - `test_quote_pool_today_first_and_capped` — today's row is `pool[0]`, size
+    capped at ≤20.
+  - `test_quote_pool_failure_falls_back` — `_build_pool` raising → single-row
+    fallback pool.
+  - `test_chosen_row_swaps_into_quote_data` — fake `write_story` returns
+    `quote_row: 12`; monkeypatched `pipeline._quote_pool` supplies row 12 in
+    the pool; after `_build_story_beats` runs, `quote_data` is mutated in
+    place to row 12's quote/attribution/row_number.
+- `tests/test_viral_arcs.py`: 8 passed
+- `tests/test_material_tracking.py`: 4 passed
+- **Full suite**: 768 passed, 1 pre-existing warning (unrelated
+  httpx/starlette deprecation).
 
-## Self-review against style requirements
+## Self-review
 
-- Second person throughout: every file opens "You are a ..." and uses imperative instructions,
-  no third-person agent descriptions.
-- Every file ends with a `## Output` section naming its exact schema and reiterating
-  structured-JSON-only, no prose.
-- No code written; markdown prose only.
-- Filler check: grepped all 8 files for "leverage synerg", "circle back", "synergy", "move the
-  needle", "low-hanging fruit", "game-chang" — zero hits.
-- Concrete numbers/thresholds/named techniques: every file contains well over 3 (posting-time
-  windows, hold-rate percentages, mood/emotion mappings, hex color values, transition-type names,
-  duration targets, score thresholds, etc.) — verified by grepping numeric tokens per file.
+- Diff matches the brief's snippets verbatim (`_quote_pool` body, pool
+  assignment, swap block placed after safety checks + `mode`/`material_key`
+  stamping, before `return story`).
+- Verified the pool-membership gate in `studio/story_writer.py` (lines
+  ~294-317: `not any(p["row_number"] == d.get("quote_row") for p in pool)` →
+  reject) keys off `row_number`, which every `_quote_pool` entry carries —
+  chosen rows validate correctly.
+- Verified the swap comparison order: `chosen["row_number"] !=
+  quote_data.get("row_number")` is evaluated *before* `quote_data` is
+  mutated, so same-row picks (writer keeps today's quote) correctly skip the
+  swap — no self-overwrite, no stale comparison.
+- `git add` staged only `pipeline.py` + `tests/test_quote_pool.py`
+  (`studio/run.py` untouched, correctly excluded since no attribution column
+  was added there). Confirmed via `git status --short` before commit that no
+  other modified/untracked files (`quotes.xlsx`, `data/pipeline.db`,
+  `.hermes/`, `remotion/public/bg*.mp4`, other `.superpowers/sdd/*` reports
+  from concurrent task runs, etc.) were swept in.
+- No `Co-Authored-By` trailer in the commit (confirmed via `git show`).
+- `data/pipeline.db` never touched, never staged.
 
-## Follow-up fix — mood/duration guidance corrections (post-review)
+## Concerns
 
-Task review flagged two inaccuracies in `team/prompts/` files vs. actual code behavior. Both fixed
-directly, no tests added (prose-only files).
-
-### 1. `team/prompts/audio_engineer.md` — voiceover emotion per mood
-
-Original text asserted `dramatic_ancient`, `stark_minimal`, and `mystical_greek` all default to a
-"balanced" style with whispered reserved for confessional posts only. Re-read
-`src/audio/voiceover_engine.py`'s `_scene_configs` `mood_configs` dict (the mapping used when style
-isn't explicitly `intense`/`calm`/`whispered`) and found:
-
-- `mystical_greek` has an explicit entry with `hook`/`cta` emotion = `whispered` (medium pace) —
-  whispered is this mood's own default, not a confessional-only override.
-- `dramatic_ancient` and `stark_minimal` have **no entry** in `mood_configs` at all; the code's
-  `.get(mood, mood_configs["dark_philosophical"])` fallback means both silently inherit the
-  `dark_philosophical` arc (urgent/medium hook+cta, intense/slow quote) by default.
-
-Rewrote the section to state each of these three moods' true default explicitly, kept the
-intense/calm/whispered override styles as optional overrides, and narrowed the
-"reserve-whispered-for-confessional" guidance to apply outside `mystical_greek`'s own default.
-
-### 2. `team/prompts/video_editor.md` — duration and structure
-
-Original text presented 15-22s as a target range to fill. Re-read `src/video/reel_composer.py`:
-its module docstring and inline comments state the research finding directly — "7-15s Reels get
-5-10x more reach than longer ones" — and `SCENE_DURATIONS = [4, 8, 3]` / `TOTAL_DURATION` (14s) was
-deliberately shortened from a prior 21s total for that reason.
-
-Kept 15-22s as the plan's stated outer ceiling (per instruction — this number traces to the source
-plan doc's dataclass comment and should not be silently dropped), but added a sentence citing
-`reel_composer.py`'s finding and its 21s→14s shortening, and instructed the video editor to default
-toward the lower end (nearer 14-15s) rather than treating the full range as a target, reserving the
-higher end for content that genuinely needs the extra runtime.
-
-### Re-verification
-
-Re-read both source files after writing the new prose and confirmed: `mood_configs` dict in
-`voiceover_engine.py` has exactly 5 explicit entries (`dark_philosophical`, `cinematic_hopeful`,
-`epic_warrior`, `calm_stoic`, `mystical_greek`) — `dramatic_ancient`/`stark_minimal` are absent and
-fall back to `dark_philosophical` as stated; `reel_composer.py`'s `TOTAL_DURATION` comment and
-docstring confirm the 14s current total / 21s prior total / 7-15s research figure as written.
+- None blocking. Note for future work: since no attribution column exists in
+  `quotes.xlsx`, every non-today pool entry silently defaults to "— Socrates"
+  attribution even if the underlying quote is from a different Stoic (e.g.
+  Marcus Aurelius, Seneca). This is spec-compliant per the brief's fallback
+  instruction, but if quotes.xlsx later gains a real attribution column, both
+  `studio/run.py:_build_pool` and `pipeline._quote_pool`'s `r.get(...)` calls
+  should be revisited to read it.

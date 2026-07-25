@@ -1,70 +1,67 @@
-# Task G report — team/visual_designer.py + team/audio_engineer.py
+# Task 7: Insights re-poll window — Report
 
-## What was built
+## Summary
+Added `ingest_window(access_token, ig_account_id, db_path, days=7, dry_run=False)` to
+`src/analytics/metrics.py`, exactly as specified in the brief. It re-polls every live
+(`dry_run=0`) post whose `posted_at` is between 1 and `days` days ago, fetches metrics
+via the existing `fetch_post_metrics`, and `INSERT OR REPLACE`s into `post_metrics`
+(explicit column list, so it works against both the test's minimal fixture and the real
+schema). Existing `ingest_all_pending` (24h single-fetch poller) untouched.
 
-- `team/visual_designer.py` — mirrors `team/content_writer.py`:
-  - Module-level `_PREFIX` template + `build_prompt(plan: ContentPlan, copy_specs:
-    list[CopySpec]) -> str`, embedding `json.dumps(plan.to_dict(), indent=2)` and
-    `json.dumps([c.to_dict() for c in copy_specs], indent=2)` so each post's `mood`,
-    `visual_style`, `format` (from the plan) sit alongside every `CopySpec` (including its
-    `hook` text) — the model matches them by `post_number` itself rather than the code
-    pre-joining the two lists.
-  - Module-level `parse_response(d: dict) -> list[VisualSpec]`, mapping `d["items"]` through
-    `VisualSpec.from_dict`, preserving response order.
-  - `VisualDesignerAgent.__init__(self, client)` — loads `system_prompt =
-    load_prompt("visual_designer")`.
-  - `VisualDesignerAgent.run(self, plan, copy_specs) -> list[VisualSpec]` — builds the
-    prompt, calls `self.client.call("visual_designer", shared_prefix, self.system_prompt,
-    "Design the visuals for all 7 posts now.", VISUAL_SPECS_SCHEMA)`, returns
-    `parse_response(data)`.
+## Schema check
+`src/core/data_store.py` `post_metrics` (line ~116) has an extra `fetched_at TIMESTAMP
+DEFAULT CURRENT_TIMESTAMP` column beyond the test fixture's 7 columns. Because it has a
+default and isn't in the explicit `INSERT OR REPLACE` column list, no adaptation was
+needed — sqlite fills it in automatically on insert. `posts` table already has
+`post_id`, `posted_at`, `dry_run` matching the brief's query as-is.
 
-- `team/audio_engineer.py` — same structure:
-  - `build_prompt(plan, copy_specs)` embeds each post's `mood`, `audio_strategy`, `format`
-    (plan) alongside each `CopySpec`'s `hook`/`caption` (the audio engineer needs the actual
-    words to script/time a voiceover).
-  - `parse_response(d) -> list[AudioSpec]` via `AudioSpec.from_dict`, order preserved.
-  - `AudioEngineerAgent.run(self, plan, copy_specs) -> list[AudioSpec]` calls
-    `self.client.call("audio_engineer", shared_prefix, self.system_prompt, "Design the audio
-    for all 7 posts now.", AUDIO_SPECS_SCHEMA)`.
+## Workflow change
+`.github/workflows/analytics.yml`: added a "Re-poll 7-day window" step immediately after
+the existing "Run analytics (dry-run on PRs)" step, with an env block mirroring that
+step's exactly (same 9 secret names, including `META_APP_ID`/`META_APP_SECRET`).
 
-- `tests/test_team_visual_designer.py`, `tests/test_team_audio_engineer.py` — same
-  `_FakeClient` mocking convention as `tests/test_team_content_writer.py`. Each covers:
-  - `build_prompt` embeds identifying content from both `plan` (mood/visual_style or
-    mood/audio_strategy) and `copy_specs` (hook, and caption for audio).
-  - `parse_response` returns 7 specs of the correct dataclass type, `post_number` order
-    preserved 1..7.
-  - `run()` builds the correct spec list from a mocked `{"items": [...]}` payload (count,
-    field values, ordering).
-  - `role == "visual_designer"` / `role == "audio_engineer"` passed to `client.call`.
-  - The shared prefix passed to `client.call` contains plan-identifying content (`mood`,
-    `visual_style`/`audio_strategy`) and copy-identifying content (`hook`, `caption`) —
-    confirms both inputs actually reach the model.
+One deliberate deviation from the brief's literal step: added
+`if: github.event_name != 'pull_request'`, matching the guard already used on the
+sibling "Reconcile manual posts" and "Self-improving loop" steps. The brief's raw
+`python -c "...ingest_window(...)"` command takes no `--dry-run`/PR branch, and PRs from
+the same repo (non-fork) do get real secrets — running it unconditionally would fire a
+live Meta Graph API call and mutate `data/pipeline.db` on every PR. Gating it off for
+`pull_request` events keeps behavior consistent with the rest of the job's safety
+posture. Everything else matches the brief verbatim.
 
-## Test results
+## Tests
+- `tests/test_metrics_window.py` written per brief verbatim.
+- Confirmed RED first: `AttributeError: module 'src.analytics.metrics' has no attribute
+  'ingest_window'`.
+- After implementation: `.venv/bin/python -m pytest tests/test_metrics_window.py -q` →
+  1 passed.
+- Full suite: `.venv/bin/python -m pytest -q` → 679 passed, 1 warning (pre-existing
+  fastapi/httpx deprecation warning, unrelated).
+- Verified `.github/workflows/analytics.yml` still parses as valid YAML after the edit.
+
+## Commit
+`git checkout -- data/pipeline.db` run immediately before staging (a concurrent dry-run
+process had dirtied it; confirmed clean via `git status --short` post-checkout).
 
 ```
-cd "/Users/utsab1/Documents/socrates automation" && source .venv/bin/activate && \
-  python -m pytest tests/test_team_visual_designer.py tests/test_team_audio_engineer.py -q
-..........
-10 passed in 0.02s
+git add src/analytics/metrics.py .github/workflows/analytics.yml tests/test_metrics_window.py
+git commit -m "feat(loop): 7-day insights re-poll window (spec 2.1)"
 ```
+Commit `e32cd88`, 3 files changed, 87 insertions(+), no `Co-Authored-By` trailer.
+Other unrelated dirty files in the working tree (task-*-report.md, quotes.xlsx,
+landing.html, logs/notifications.jsonl, .hermes/, remotion/public/bg.mp4) — from other
+concurrent processes/tasks — were left untouched and unstaged, as instructed.
 
-Full `team`-scoped suite (`tests/test_team_*.py`, 53 tests) also passes with no regressions.
-
-Note: a full unscoped `pytest -q` from repo root pre-existingly errors during collection
-(`import file mismatch` for `test_ab_test.py`, `test_analytics.py`, `test_config.py`,
-`test_data_store.py`, `test_excel_reader.py`, `test_excel_reader_extended.py`,
-`test_image_generator.py`, `test_imports.py`, `test_quote_generator.py`,
-`test_reel_composer.py`, `test_scene_composer.py`, `test_token_manager.py`) because
-`socrates_pipeline/tests/` has same-named modules as `tests/` and neither package uses
-`__init__.py`-qualified imports. Verified via `git stash` that this predates this task's
-changes entirely — unrelated to `team/`, out of scope (`pipeline.py`/`src/` untouched per
-instructions).
-
-## Deviations from the brief
-
-None. Dependencies (Task A `team/models.py` — `VisualSpec`/`AudioSpec`/
-`VISUAL_SPECS_SCHEMA`/`AUDIO_SPECS_SCHEMA`, `team/prompt_loader.load_prompt`; Task B
-`team/prompts/visual_designer.md`/`team/prompts/audio_engineer.md`; `studio/settings.py`
-role registration for both roles) were all already present in the repo from prior tasks.
-`pipeline.py` and `src/` were not touched.
+## Self-review
+- `ingest_window` matches brief's implementation verbatim (sqlite3 direct connect via
+  `db_path` param, not `data_store._get_connection()` — intentional per spec, keeps it
+  testable/parameterizable independent of the global DB path).
+- Per-post `try/except` around `fetch_post_metrics` means one dead post never aborts the
+  sweep (matches `ingest_all_pending`'s resilience style, satisfies the brief's own
+  comment about it).
+- `dry_run=True` path never touches the DB or network — just logs and continues; unlike
+  `ingest_all_pending` (which counts dry-run items as "updated"), `ingest_window` does
+  not increment `updated` in dry-run — matches the test's expectation of counting only
+  real upserts, and matches the brief's own reference implementation.
+- No changes to `ingest_all_pending`, `calculate_save_rate`, `get_save_rate_report`, or
+  `print_save_rate_report`.

@@ -1,78 +1,112 @@
-# Task H report — team/video_editor.py + team/engagement_strategist.py
+# Task 8 report — Performance digest
 
-## What was built
+## Status: done, all tests green, committed.
 
-- `team/video_editor.py` — mirrors `team/visual_designer.py`/`team/audio_engineer.py`:
-  - Module-level `_PREFIX` template + `build_prompt(plan: ContentPlan, visual_specs:
-    list[VisualSpec], audio_specs: list[AudioSpec]) -> str`, embedding
-    `json.dumps(plan.to_dict(), indent=2)`, `json.dumps([v.to_dict() for v in
-    visual_specs], indent=2)`, and `json.dumps([a.to_dict() for a in audio_specs],
-    indent=2)` so each post's `format` (from the plan) sits alongside every `VisualSpec`
-    (`flux_prompt`/`wallpaper_design` — what's on screen) and `AudioSpec`
-    (`beat_markers`/`voiceover_text` — what the video must sync to). The prompt tells the
-    model explicitly that only reel-format posts need real scene/transition/motion-effect
-    detail and that carousel/single posts should get a minimal/trivial `VideoSpec` (empty
-    `scenes`, `total_duration: 0.0`) — the "distinction lives in the prompt, not new code
-    paths" rule from Task F/G, so `VideoEditorAgent.run` contains no `"reel"`/`"carousel"`/
-    `"single"` string literals.
-  - Module-level `parse_response(d: dict) -> list[VideoSpec]`, mapping `d["items"]`
-    through `VideoSpec.from_dict`, preserving response order.
-  - `VideoEditorAgent.__init__(self, client)` — loads `system_prompt =
-    load_prompt("video_editor")`.
-  - `VideoEditorAgent.run(self, plan, visual_specs, audio_specs) -> list[VideoSpec]` —
-    builds the prompt, calls `self.client.call("video_editor", shared_prefix,
-    self.system_prompt, "Edit the video plan for all 7 posts now.", VIDEO_SPECS_SCHEMA)`,
-    returns `parse_response(data)`.
+## Real `posts` schema (verified in `src/core/data_store.py:60-113`, `init_db`)
 
-- `team/engagement_strategist.py` — same structure:
-  - `build_prompt(plan, copy_specs)` embeds each post's `controversy_question`/
-    `engagement_strategy`/`audience` (plan) alongside each `CopySpec`'s
-    `controversy_question`/`caption` (the actual copy text seed comments must reference,
-    not just the plan's abstract strategy field).
-  - `parse_response(d) -> list[EngagementSpec]` via `EngagementSpec.from_dict`, order
-    preserved.
-  - `EngagementStrategistAgent.run(self, plan, copy_specs) -> list[EngagementSpec]` calls
-    `self.client.call("engagement_strategist", shared_prefix, self.system_prompt, "Plan
-    engagement tactics for all 7 posts now.", ENGAGEMENT_SPECS_SCHEMA)`.
+Columns: `id, quote_text, audience, mood, caption_variant, posting_slot, posted_at,
+post_id, image_path, reel_path, dry_run, hook_id, post_date, seed,
+opt_versions_json, trigger_keyword, arc`.
 
-- `tests/test_team_video_editor.py`, `tests/test_team_engagement_strategist.py` — same
-  `_FakeClient` mocking convention as prior team agent tests. Each covers:
-  - `build_prompt` embeds identifying content from all inputs (video editor: `format`,
-    `flux_prompt`, `voiceover_text`; engagement strategist: plan's
-    `controversy_question`/`engagement_strategy`, `CopySpec`'s `controversy_question`/
-    `caption`).
-  - `parse_response` returns 7 specs of the correct dataclass type, `post_number` order
-    preserved 1..7.
-  - `run()` builds the correct spec list from a mocked `{"items": [...]}` payload (count,
-    field values, ordering).
-  - `role == "video_editor"` / `role == "engagement_strategist"` passed to `client.call`.
-  - The shared prefix passed to `client.call` contains identifying content from every
-    input, confirming all inputs actually reach the model.
-  - A mixed-format-post test (`reel`/`carousel`/`single`) confirms the prompt carries the
-    `carousel` format string while `inspect.getsource` on each `run()` method confirms no
-    `"reel"`/`"carousel"`/`"single"` literal branch was added in code — same check style as
-    Task G's `test_run_handles_carousel_format_post_without_special_code_path`.
+Key finding: **no `hook` or `caption` column exists.**
 
-## Test results
+- `hook_id` (added by migration, `data_store.py:81-82`) is only an opaque
+  template-key string (e.g. `"confrontation_2"`), chosen by
+  `pick_best_hook()` in `src/analytics/hook_tracker.py`. The actual hook copy
+  lives only in the in-code Python dict `HOOK_TEMPLATES`
+  (`hook_tracker.py:19-100`) — never written to SQLite. Resolving `hook_id`
+  → readable text requires a Python-side dict lookup, not a SQL join, so it
+  was not usable inside `_rows`'s single query.
+- The only sqlite table with "hook" in its name is `hook_performance`
+  (`hook_tracker.py:249-256`) — metrics only (`hook_id, posted_at, saved,
+  comments, reach`), no text column.
+- Caption text is **never persisted to sqlite at all**. It's built in-memory
+  (`quote_data["caption"]` / `_build_caption()` in
+  `src/content/generate_quotes_excel.py`) and flows transiently through the
+  pipeline to the poster/notifier, then dropped. The one place it does land
+  on disk is `data/approvals.json` (a flat JSON file, not a DB table, and not
+  joinable by `post_id` in SQL against `posts`/`post_metrics`).
 
+### Adaptation
+
+Per the brief's fallback instruction ("if hook text is genuinely unavailable,
+use the caption's first line as the hook surrogate") — since caption isn't in
+the schema either, I used the closest available equivalent: **`quote_text`**,
+the only `NOT NULL`, always-populated, human-readable column on `posts`. I
+take its first line (`_hook_surrogate()`) in case a quote spans multiple
+lines, mirroring the "first line" spirit of the brief's fallback.
+
+`_rows` query became:
+```sql
+SELECT p.arc, p.quote_text, m.shares, m.reach FROM posts p
+JOIN post_metrics m ON p.post_id = m.post_id
+WHERE p.dry_run=0 AND m.reach >= ?
 ```
-cd "/Users/utsab1/Documents/socrates automation" && source .venv/bin/activate && \
-  python -m pytest tests/test_team_video_editor.py tests/test_team_engagement_strategist.py -q
-............
-12 passed in 0.04s
-```
+(column `p.hook` → `p.quote_text`; everything else — `arc`, floor filter,
+join shape — matched the brief as written since `arc` and `dry_run` do exist
+on the real table).
 
-Full `tests/` suite: 224 passed, 2 pre-existing failures unrelated to this task
-(`tests/test_reel_composer.py::test_generate_reel_success` and
-`::test_generate_reel_silent_fallback` — both fail with an `ffmpeg`/`libx264` encoder
-error, `RuntimeError: ffmpeg video pass failed: ... Could not open encoder`, an
-environment issue in `src/video/reel_composer.py` unrelated to `team/`). `pipeline.py` and
-`src/` were not touched.
+Test fixture (`tests/test_performance_digest.py`) schema was adapted the same
+way: `posts(post_id, arc, quote_text, dry_run)` instead of
+`posts(post_id, arc, hook, dry_run)`, reusing the brief's same 4 sample rows
+(values unchanged — they read fine as quote text, e.g.
+`"Barefoot senator."`).
 
-## Deviations from the brief
+## Files
 
-None. Dependencies (Task A `team/models.py` — `VideoSpec`/`EngagementSpec`/
-`VIDEO_SPECS_SCHEMA`/`ENGAGEMENT_SPECS_SCHEMA`, `team/prompt_loader.load_prompt`; Task B
-`team/prompts/video_editor.md`/`team/prompts/engagement_strategist.md`;
-`studio/settings.py` role registration for both roles) were all already present in the
-repo from prior tasks.
+- `/Users/utsab1/Documents/socrates automation/src/analytics/performance_digest.py` — new
+- `/Users/utsab1/Documents/socrates automation/tests/test_performance_digest.py` — new
+- `/Users/utsab1/Documents/socrates automation/.gitignore` — added explicit
+  `data/perf_digest.json` line (redundant with existing `data/*` blanket
+  ignore + allowlist, but added per task instruction for explicitness/intent
+  clarity)
+
+## Safety / cold-start
+
+- `build_digest` and `digest_text` wrap their entire body in try/except,
+  including the `sqlite3.connect` + query against a DB file with no tables
+  at all (e.g. a freshly created empty file) — confirmed via
+  `test_build_digest_missing_tables_returns_empty` and
+  `test_digest_text_cold_start_missing_db`, both added beyond the brief's
+  original 2 tests to explicitly cover the "no tables yet" cold-start case
+  the task description called out.
+- Cache write to `data/perf_digest.json` wrapped in its own try/except
+  (best-effort, never fails the digest).
+
+## Test summary
+
+- `tests/test_performance_digest.py`: 5 passed (2 from brief + 3 added:
+  missing-db-file cold start, missing-tables cold start, all-3-views-present
+  sanity check).
+- Full suite: `685 passed, 1 warning` (pre-existing fastapi/httpx deprecation
+  warning, unrelated).
+
+## Git hygiene
+
+- `data/pipeline.db` was dirtied by a concurrent process during the test
+  run (per the brief's warning) — ran `git checkout -- data/pipeline.db`
+  before staging, never added it.
+- Committed exactly: `src/analytics/performance_digest.py`,
+  `tests/test_performance_digest.py`, `.gitignore` — commit
+  `12065ec`, message `feat(loop): per-agent performance digest (spec 2.2)`,
+  no Co-Authored-By trailer.
+- Other pre-existing unrelated working-tree modifications
+  (`.superpowers/sdd/task-*-report.md`, `logs/notifications.jsonl`,
+  `output/product/landing.html`, `quotes.xlsx`, untracked `.hermes/`,
+  `remotion/public/bg.mp4`) were left untouched — out of scope for this task.
+
+## Self-review
+
+- Logic (ranking, TOP_N, reach floor, top/bottom dedup, cache write) is
+  unchanged from the brief's reference implementation — only the hook-text
+  source and query column changed.
+- `_hook_surrogate` guards `None`/empty `quote_text` (returns `""`), so a
+  post with an empty quote can't crash `.splitlines()`.
+- No concerns. Ready for downstream tasks that consume `build_digest`/
+  `digest_text`.
+
+## Note
+
+This file previously held a stale report from an unrelated prior task
+("Task H — team/video_editor.py + team/engagement_strategist.py"); it has
+been overwritten with the actual Task 8 report above.

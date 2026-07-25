@@ -1,29 +1,1269 @@
 {
-  "hook": "Test hook line here.",
-  "quote": "The unexamined life is not worth living.",
+  "hook": "The face you keep erasing is the only one you will ever…",
+  "quote": "He who is not contented with what he has, would not be contented with what he would like to have.",
   "attribution": "— Socrates",
-  "cta": "Save this.",
+  "cta": "Send this to the friend who thinks the next appointment will finally be enough —",
   "mood": "dark_philosophical",
-  "duration": 8.0,
+  "duration": 9.078,
   "fps": 30,
-  "beats": [],
+  "animSeed": 265,
+  "beats": [
+    0.72,
+    4.772
+  ],
   "voices": {
-    "hook": null,
-    "quote": null,
-    "cta": null
+    "hook": "vo-hook.mp3",
+    "quote": "vo-quote.mp3",
+    "cta": "vo-cta.mp3",
+    "bridge": "vo-bridge.mp3"
   },
   "voiceDurations": {
-    "hook": null,
-    "quote": null,
-    "cta": null
+    "hook": 3.762,
+    "quote": 6.338,
+    "cta": 3.944,
+    "bridge": 62.276
   },
   "wordTimes": {
-    "hook": [],
-    "quote": [],
-    "cta": []
+    "hook": [
+      {
+        "w": "The",
+        "start": 0.0,
+        "end": 0.163,
+        "cls": "plain"
+      },
+      {
+        "w": "face",
+        "start": 0.209,
+        "end": 0.499,
+        "cls": "plain"
+      },
+      {
+        "w": "you",
+        "start": 0.534,
+        "end": 0.65,
+        "cls": "plain"
+      },
+      {
+        "w": "keep",
+        "start": 0.72,
+        "end": 0.906,
+        "cls": "plain"
+      },
+      {
+        "w": "erasing",
+        "start": 0.975,
+        "end": 1.44,
+        "cls": "stress"
+      },
+      {
+        "w": "is",
+        "start": 1.498,
+        "end": 1.579,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 1.637,
+        "end": 1.73,
+        "cls": "plain"
+      },
+      {
+        "w": "only",
+        "start": 1.811,
+        "end": 2.09,
+        "cls": "plain"
+      },
+      {
+        "w": "one",
+        "start": 2.171,
+        "end": 2.368,
+        "cls": "num"
+      },
+      {
+        "w": "you",
+        "start": 2.403,
+        "end": 2.496,
+        "cls": "plain"
+      },
+      {
+        "w": "will",
+        "start": 2.531,
+        "end": 2.682,
+        "cls": "plain"
+      },
+      {
+        "w": "ever",
+        "start": 2.74,
+        "end": 2.926,
+        "cls": "plain"
+      },
+      {
+        "w": "own.",
+        "start": 2.995,
+        "end": 3.715,
+        "cls": "end"
+      }
+    ],
+    "quote": [
+      {
+        "w": "He",
+        "start": 0.0,
+        "end": 0.163,
+        "cls": "plain"
+      },
+      {
+        "w": "who",
+        "start": 0.221,
+        "end": 0.325,
+        "cls": "plain"
+      },
+      {
+        "w": "is",
+        "start": 0.383,
+        "end": 0.464,
+        "cls": "plain"
+      },
+      {
+        "w": "not",
+        "start": 0.522,
+        "end": 0.662,
+        "cls": "neg"
+      },
+      {
+        "w": "contented",
+        "start": 0.72,
+        "end": 1.231,
+        "cls": "stress"
+      },
+      {
+        "w": "with",
+        "start": 1.277,
+        "end": 1.416,
+        "cls": "plain"
+      },
+      {
+        "w": "what",
+        "start": 1.451,
+        "end": 1.602,
+        "cls": "plain"
+      },
+      {
+        "w": "he",
+        "start": 1.66,
+        "end": 1.73,
+        "cls": "plain"
+      },
+      {
+        "w": "has,",
+        "start": 1.811,
+        "end": 2.31,
+        "cls": "plain"
+      },
+      {
+        "w": "would",
+        "start": 2.485,
+        "end": 2.694,
+        "cls": "plain"
+      },
+      {
+        "w": "not",
+        "start": 2.74,
+        "end": 2.879,
+        "cls": "neg"
+      },
+      {
+        "w": "be",
+        "start": 2.937,
+        "end": 3.03,
+        "cls": "plain"
+      },
+      {
+        "w": "contented",
+        "start": 3.077,
+        "end": 3.541,
+        "cls": "plain"
+      },
+      {
+        "w": "with",
+        "start": 3.587,
+        "end": 3.727,
+        "cls": "plain"
+      },
+      {
+        "w": "what",
+        "start": 3.773,
+        "end": 3.936,
+        "cls": "plain"
+      },
+      {
+        "w": "he",
+        "start": 3.994,
+        "end": 4.052,
+        "cls": "plain"
+      },
+      {
+        "w": "would",
+        "start": 4.11,
+        "end": 4.284,
+        "cls": "plain"
+      },
+      {
+        "w": "like",
+        "start": 4.354,
+        "end": 4.586,
+        "cls": "plain"
+      },
+      {
+        "w": "to",
+        "start": 4.621,
+        "end": 4.69,
+        "cls": "plain"
+      },
+      {
+        "w": "have.",
+        "start": 4.772,
+        "end": 5.48,
+        "cls": "end"
+      }
+    ],
+    "cta": [
+      {
+        "w": "Send",
+        "start": 0.0,
+        "end": 0.279,
+        "cls": "plain"
+      },
+      {
+        "w": "this",
+        "start": 0.325,
+        "end": 0.499,
+        "cls": "plain"
+      },
+      {
+        "w": "to",
+        "start": 0.557,
+        "end": 0.615,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 0.673,
+        "end": 0.743,
+        "cls": "plain"
+      },
+      {
+        "w": "friend",
+        "start": 0.801,
+        "end": 1.057,
+        "cls": "plain"
+      },
+      {
+        "w": "who",
+        "start": 1.103,
+        "end": 1.207,
+        "cls": "plain"
+      },
+      {
+        "w": "thinks",
+        "start": 1.277,
+        "end": 1.509,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 1.567,
+        "end": 1.637,
+        "cls": "plain"
+      },
+      {
+        "w": "next",
+        "start": 1.683,
+        "end": 1.881,
+        "cls": "plain"
+      },
+      {
+        "w": "appointment",
+        "start": 1.916,
+        "end": 2.368,
+        "cls": "stress"
+      },
+      {
+        "w": "will",
+        "start": 2.403,
+        "end": 2.554,
+        "cls": "plain"
+      },
+      {
+        "w": "finally",
+        "start": 2.601,
+        "end": 2.972,
+        "cls": "plain"
+      },
+      {
+        "w": "be",
+        "start": 3.03,
+        "end": 3.135,
+        "cls": "plain"
+      },
+      {
+        "w": "enough.",
+        "start": 3.193,
+        "end": 3.901,
+        "cls": "end"
+      }
+    ],
+    "bridge": [
+      {
+        "w": "You",
+        "start": 0.0,
+        "end": 0.151,
+        "cls": "plain"
+      },
+      {
+        "w": "caught",
+        "start": 0.221,
+        "end": 0.441,
+        "cls": "plain"
+      },
+      {
+        "w": "yourself",
+        "start": 0.488,
+        "end": 0.836,
+        "cls": "stress"
+      },
+      {
+        "w": "in",
+        "start": 0.906,
+        "end": 0.964,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 1.01,
+        "end": 1.08,
+        "cls": "plain"
+      },
+      {
+        "w": "mirror",
+        "start": 1.149,
+        "end": 1.416,
+        "cls": "plain"
+      },
+      {
+        "w": "this",
+        "start": 1.474,
+        "end": 1.614,
+        "cls": "plain"
+      },
+      {
+        "w": "morning,",
+        "start": 1.695,
+        "end": 2.171,
+        "cls": "plain"
+      },
+      {
+        "w": "pulling",
+        "start": 2.345,
+        "end": 2.659,
+        "cls": "plain"
+      },
+      {
+        "w": "your",
+        "start": 2.717,
+        "end": 2.833,
+        "cls": "plain"
+      },
+      {
+        "w": "skin",
+        "start": 2.879,
+        "end": 3.158,
+        "cls": "plain"
+      },
+      {
+        "w": "tight,",
+        "start": 3.239,
+        "end": 3.727,
+        "cls": "plain"
+      },
+      {
+        "w": "counting",
+        "start": 3.971,
+        "end": 4.354,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 4.4,
+        "end": 4.47,
+        "cls": "plain"
+      },
+      {
+        "w": "lines",
+        "start": 4.54,
+        "end": 4.946,
+        "cls": "plain"
+      },
+      {
+        "w": "that",
+        "start": 4.992,
+        "end": 5.108,
+        "cls": "plain"
+      },
+      {
+        "w": "weren't",
+        "start": 5.155,
+        "end": 5.387,
+        "cls": "plain"
+      },
+      {
+        "w": "there",
+        "start": 5.422,
+        "end": 5.631,
+        "cls": "plain"
+      },
+      {
+        "w": "last",
+        "start": 5.7,
+        "end": 5.956,
+        "cls": "plain"
+      },
+      {
+        "w": "year.",
+        "start": 6.026,
+        "end": 6.432,
+        "cls": "end"
+      },
+      {
+        "w": "So",
+        "start": 7.036,
+        "end": 7.187,
+        "cls": "plain"
+      },
+      {
+        "w": "you",
+        "start": 7.256,
+        "end": 7.338,
+        "cls": "plain"
+      },
+      {
+        "w": "booked",
+        "start": 7.407,
+        "end": 7.639,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 7.697,
+        "end": 7.79,
+        "cls": "plain"
+      },
+      {
+        "w": "appointment.",
+        "start": 7.836,
+        "end": 8.556,
+        "cls": "end"
+      },
+      {
+        "w": "A",
+        "start": 8.8,
+        "end": 8.87,
+        "cls": "plain"
+      },
+      {
+        "w": "vial.",
+        "start": 8.951,
+        "end": 9.543,
+        "cls": "end"
+      },
+      {
+        "w": "A",
+        "start": 10.008,
+        "end": 10.066,
+        "cls": "plain"
+      },
+      {
+        "w": "promise.",
+        "start": 10.124,
+        "end": 10.774,
+        "cls": "end"
+      },
+      {
+        "w": "Younger",
+        "start": 11.47,
+        "end": 11.819,
+        "cls": "stress"
+      },
+      {
+        "w": "by",
+        "start": 11.877,
+        "end": 11.981,
+        "cls": "plain"
+      },
+      {
+        "w": "Friday.",
+        "start": 12.039,
+        "end": 12.666,
+        "cls": "end"
+      },
+      {
+        "w": "Two",
+        "start": 13.363,
+        "end": 13.572,
+        "cls": "num"
+      },
+      {
+        "w": "thousand",
+        "start": 13.641,
+        "end": 14.071,
+        "cls": "num"
+      },
+      {
+        "w": "years",
+        "start": 14.129,
+        "end": 14.361,
+        "cls": "plain"
+      },
+      {
+        "w": "ago",
+        "start": 14.396,
+        "end": 14.628,
+        "cls": "plain"
+      },
+      {
+        "w": "Rome",
+        "start": 14.744,
+        "end": 15.104,
+        "cls": "plain"
+      },
+      {
+        "w": "was",
+        "start": 15.139,
+        "end": 15.255,
+        "cls": "plain"
+      },
+      {
+        "w": "doing",
+        "start": 15.313,
+        "end": 15.58,
+        "cls": "plain"
+      },
+      {
+        "w": "this.",
+        "start": 15.627,
+        "end": 16.08,
+        "cls": "end"
+      },
+      {
+        "w": "Rich",
+        "start": 16.521,
+        "end": 16.753,
+        "cls": "power"
+      },
+      {
+        "w": "men",
+        "start": 16.811,
+        "end": 17.032,
+        "cls": "plain"
+      },
+      {
+        "w": "drank",
+        "start": 17.101,
+        "end": 17.38,
+        "cls": "plain"
+      },
+      {
+        "w": "gold,",
+        "start": 17.473,
+        "end": 17.995,
+        "cls": "plain"
+      },
+      {
+        "w": "bathed",
+        "start": 18.042,
+        "end": 18.552,
+        "cls": "plain"
+      },
+      {
+        "w": "in",
+        "start": 18.599,
+        "end": 18.669,
+        "cls": "plain"
+      },
+      {
+        "w": "wine,",
+        "start": 18.738,
+        "end": 19.354,
+        "cls": "plain"
+      },
+      {
+        "w": "paid",
+        "start": 19.563,
+        "end": 19.934,
+        "cls": "plain"
+      },
+      {
+        "w": "for",
+        "start": 19.992,
+        "end": 20.097,
+        "cls": "plain"
+      },
+      {
+        "w": "potions",
+        "start": 20.166,
+        "end": 20.642,
+        "cls": "stress"
+      },
+      {
+        "w": "to",
+        "start": 20.689,
+        "end": 20.747,
+        "cls": "plain"
+      },
+      {
+        "w": "freeze",
+        "start": 20.816,
+        "end": 21.176,
+        "cls": "plain"
+      },
+      {
+        "w": "time.",
+        "start": 21.211,
+        "end": 21.838,
+        "cls": "end"
+      },
+      {
+        "w": "One",
+        "start": 22.535,
+        "end": 22.709,
+        "cls": "num"
+      },
+      {
+        "w": "of",
+        "start": 22.744,
+        "end": 22.802,
+        "cls": "plain"
+      },
+      {
+        "w": "them",
+        "start": 22.837,
+        "end": 22.964,
+        "cls": "plain"
+      },
+      {
+        "w": "was",
+        "start": 23.011,
+        "end": 23.115,
+        "cls": "plain"
+      },
+      {
+        "w": "a",
+        "start": 23.162,
+        "end": 23.196,
+        "cls": "plain"
+      },
+      {
+        "w": "philosopher",
+        "start": 23.231,
+        "end": 23.789,
+        "cls": "stress"
+      },
+      {
+        "w": "named",
+        "start": 23.847,
+        "end": 24.114,
+        "cls": "plain"
+      },
+      {
+        "w": "Seneca,",
+        "start": 24.195,
+        "end": 24.868,
+        "cls": "plain"
+      },
+      {
+        "w": "richer",
+        "start": 25.193,
+        "end": 25.449,
+        "cls": "plain"
+      },
+      {
+        "w": "than",
+        "start": 25.495,
+        "end": 25.611,
+        "cls": "plain"
+      },
+      {
+        "w": "most.",
+        "start": 25.669,
+        "end": 26.192,
+        "cls": "end"
+      },
+      {
+        "w": "Then",
+        "start": 26.888,
+        "end": 27.074,
+        "cls": "plain"
+      },
+      {
+        "w": "a",
+        "start": 27.121,
+        "end": 27.144,
+        "cls": "plain"
+      },
+      {
+        "w": "friend",
+        "start": 27.202,
+        "end": 27.573,
+        "cls": "plain"
+      },
+      {
+        "w": "asked",
+        "start": 27.655,
+        "end": 27.945,
+        "cls": "plain"
+      },
+      {
+        "w": "him",
+        "start": 27.968,
+        "end": 28.049,
+        "cls": "plain"
+      },
+      {
+        "w": "a",
+        "start": 28.084,
+        "end": 28.107,
+        "cls": "plain"
+      },
+      {
+        "w": "question",
+        "start": 28.154,
+        "end": 28.537,
+        "cls": "stress"
+      },
+      {
+        "w": "that",
+        "start": 28.595,
+        "end": 28.699,
+        "cls": "plain"
+      },
+      {
+        "w": "ruined",
+        "start": 28.757,
+        "end": 29.083,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 29.106,
+        "end": 29.175,
+        "cls": "plain"
+      },
+      {
+        "w": "whole",
+        "start": 29.21,
+        "end": 29.419,
+        "cls": "plain"
+      },
+      {
+        "w": "game.",
+        "start": 29.454,
+        "end": 30.035,
+        "cls": "end"
+      },
+      {
+        "w": "How",
+        "start": 30.522,
+        "end": 30.673,
+        "cls": "plain"
+      },
+      {
+        "w": "many",
+        "start": 30.72,
+        "end": 30.871,
+        "cls": "plain"
+      },
+      {
+        "w": "more",
+        "start": 30.929,
+        "end": 31.091,
+        "cls": "plain"
+      },
+      {
+        "w": "years",
+        "start": 31.138,
+        "end": 31.393,
+        "cls": "stress"
+      },
+      {
+        "w": "do",
+        "start": 31.451,
+        "end": 31.521,
+        "cls": "plain"
+      },
+      {
+        "w": "you",
+        "start": 31.579,
+        "end": 31.66,
+        "cls": "plain"
+      },
+      {
+        "w": "want?",
+        "start": 31.73,
+        "end": 32.229,
+        "cls": "end"
+      },
+      {
+        "w": "The",
+        "start": 33.181,
+        "end": 33.32,
+        "cls": "plain"
+      },
+      {
+        "w": "friend",
+        "start": 33.367,
+        "end": 33.692,
+        "cls": "stress"
+      },
+      {
+        "w": "said",
+        "start": 33.808,
+        "end": 34.052,
+        "cls": "plain"
+      },
+      {
+        "w": "more.",
+        "start": 34.121,
+        "end": 34.644,
+        "cls": "end"
+      },
+      {
+        "w": "Always",
+        "start": 34.969,
+        "end": 35.491,
+        "cls": "stress"
+      },
+      {
+        "w": "more.",
+        "start": 35.549,
+        "end": 36.037,
+        "cls": "end"
+      },
+      {
+        "w": "This",
+        "start": 36.513,
+        "end": 36.722,
+        "cls": "plain"
+      },
+      {
+        "w": "man",
+        "start": 36.815,
+        "end": 37.082,
+        "cls": "plain"
+      },
+      {
+        "w": "owned",
+        "start": 37.163,
+        "end": 37.395,
+        "cls": "plain"
+      },
+      {
+        "w": "villas,",
+        "start": 37.465,
+        "end": 38.069,
+        "cls": "plain"
+      },
+      {
+        "w": "slaves,",
+        "start": 38.196,
+        "end": 38.951,
+        "cls": "plain"
+      },
+      {
+        "w": "every",
+        "start": 39.125,
+        "end": 39.381,
+        "cls": "plain"
+      },
+      {
+        "w": "pleasure",
+        "start": 39.439,
+        "end": 39.752,
+        "cls": "stress"
+      },
+      {
+        "w": "coin",
+        "start": 39.799,
+        "end": 40.042,
+        "cls": "plain"
+      },
+      {
+        "w": "can",
+        "start": 40.112,
+        "end": 40.24,
+        "cls": "plain"
+      },
+      {
+        "w": "buy.",
+        "start": 40.298,
+        "end": 40.843,
+        "cls": "end"
+      },
+      {
+        "w": "And",
+        "start": 40.96,
+        "end": 41.11,
+        "cls": "plain"
+      },
+      {
+        "w": "he",
+        "start": 41.157,
+        "end": 41.203,
+        "cls": "plain"
+      },
+      {
+        "w": "still",
+        "start": 41.25,
+        "end": 41.494,
+        "cls": "plain"
+      },
+      {
+        "w": "woke",
+        "start": 41.575,
+        "end": 41.819,
+        "cls": "plain"
+      },
+      {
+        "w": "up",
+        "start": 41.865,
+        "end": 41.981,
+        "cls": "plain"
+      },
+      {
+        "w": "terrified",
+        "start": 42.051,
+        "end": 42.608,
+        "cls": "power"
+      },
+      {
+        "w": "of",
+        "start": 42.643,
+        "end": 42.689,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 42.736,
+        "end": 42.806,
+        "cls": "plain"
+      },
+      {
+        "w": "mirror.",
+        "start": 42.852,
+        "end": 43.444,
+        "cls": "end"
+      },
+      {
+        "w": "He",
+        "start": 43.955,
+        "end": 44.071,
+        "cls": "plain"
+      },
+      {
+        "w": "counted",
+        "start": 44.129,
+        "end": 44.477,
+        "cls": "stress"
+      },
+      {
+        "w": "his",
+        "start": 44.512,
+        "end": 44.605,
+        "cls": "plain"
+      },
+      {
+        "w": "lines.",
+        "start": 44.675,
+        "end": 45.395,
+        "cls": "end"
+      },
+      {
+        "w": "He",
+        "start": 45.847,
+        "end": 45.952,
+        "cls": "plain"
+      },
+      {
+        "w": "was",
+        "start": 46.01,
+        "end": 46.114,
+        "cls": "plain"
+      },
+      {
+        "w": "never",
+        "start": 46.184,
+        "end": 46.381,
+        "cls": "neg"
+      },
+      {
+        "w": "satisfied.",
+        "start": 46.451,
+        "end": 47.403,
+        "cls": "end"
+      },
+      {
+        "w": "Seneca",
+        "start": 48.355,
+        "end": 48.773,
+        "cls": "stress"
+      },
+      {
+        "w": "saw",
+        "start": 48.843,
+        "end": 49.04,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 49.098,
+        "end": 49.168,
+        "cls": "plain"
+      },
+      {
+        "w": "trap.",
+        "start": 49.226,
+        "end": 49.748,
+        "cls": "end"
+      },
+      {
+        "w": "The",
+        "start": 49.922,
+        "end": 50.062,
+        "cls": "plain"
+      },
+      {
+        "w": "chase",
+        "start": 50.12,
+        "end": 50.491,
+        "cls": "plain"
+      },
+      {
+        "w": "had",
+        "start": 50.538,
+        "end": 50.7,
+        "cls": "plain"
+      },
+      {
+        "w": "no",
+        "start": 50.782,
+        "end": 50.921,
+        "cls": "neg"
+      },
+      {
+        "w": "finish",
+        "start": 51.014,
+        "end": 51.316,
+        "cls": "stress"
+      },
+      {
+        "w": "line.",
+        "start": 51.397,
+        "end": 51.896,
+        "cls": "end"
+      },
+      {
+        "w": "The",
+        "start": 52.349,
+        "end": 52.465,
+        "cls": "plain"
+      },
+      {
+        "w": "problem",
+        "start": 52.523,
+        "end": 52.918,
+        "cls": "plain"
+      },
+      {
+        "w": "was",
+        "start": 52.964,
+        "end": 53.08,
+        "cls": "plain"
+      },
+      {
+        "w": "never",
+        "start": 53.15,
+        "end": 53.37,
+        "cls": "neg"
+      },
+      {
+        "w": "the",
+        "start": 53.428,
+        "end": 53.498,
+        "cls": "plain"
+      },
+      {
+        "w": "wrinkles.",
+        "start": 53.556,
+        "end": 54.299,
+        "cls": "end"
+      },
+      {
+        "w": "It",
+        "start": 54.473,
+        "end": 54.601,
+        "cls": "plain"
+      },
+      {
+        "w": "was",
+        "start": 54.647,
+        "end": 54.74,
+        "cls": "plain"
+      },
+      {
+        "w": "a",
+        "start": 54.798,
+        "end": 54.821,
+        "cls": "plain"
+      },
+      {
+        "w": "man",
+        "start": 54.88,
+        "end": 55.077,
+        "cls": "plain"
+      },
+      {
+        "w": "who",
+        "start": 55.112,
+        "end": 55.205,
+        "cls": "plain"
+      },
+      {
+        "w": "could",
+        "start": 55.251,
+        "end": 55.402,
+        "cls": "stress"
+      },
+      {
+        "w": "never",
+        "start": 55.46,
+        "end": 55.669,
+        "cls": "neg"
+      },
+      {
+        "w": "feel",
+        "start": 55.75,
+        "end": 55.994,
+        "cls": "plain"
+      },
+      {
+        "w": "full.",
+        "start": 56.087,
+        "end": 56.737,
+        "cls": "end"
+      },
+      {
+        "w": "Seneca",
+        "start": 57.689,
+        "end": 58.072,
+        "cls": "plain"
+      },
+      {
+        "w": "knew",
+        "start": 58.13,
+        "end": 58.328,
+        "cls": "plain"
+      },
+      {
+        "w": "what",
+        "start": 58.374,
+        "end": 58.525,
+        "cls": "plain"
+      },
+      {
+        "w": "people",
+        "start": 58.583,
+        "end": 58.873,
+        "cls": "plain"
+      },
+      {
+        "w": "like",
+        "start": 58.92,
+        "end": 59.129,
+        "cls": "plain"
+      },
+      {
+        "w": "that,",
+        "start": 59.164,
+        "end": 59.57,
+        "cls": "plain"
+      },
+      {
+        "w": "and",
+        "start": 59.616,
+        "end": 59.779,
+        "cls": "plain"
+      },
+      {
+        "w": "like",
+        "start": 59.837,
+        "end": 60.011,
+        "cls": "plain"
+      },
+      {
+        "w": "the",
+        "start": 60.046,
+        "end": 60.116,
+        "cls": "plain"
+      },
+      {
+        "w": "you",
+        "start": 60.185,
+        "end": 60.383,
+        "cls": "plain"
+      },
+      {
+        "w": "this",
+        "start": 60.476,
+        "end": 60.638,
+        "cls": "plain"
+      },
+      {
+        "w": "morning,",
+        "start": 60.719,
+        "end": 61.102,
+        "cls": "plain"
+      },
+      {
+        "w": "kept",
+        "start": 61.161,
+        "end": 61.37,
+        "cls": "plain"
+      },
+      {
+        "w": "forgetting.",
+        "start": 61.416,
+        "end": 62.229,
+        "cls": "end"
+      }
+    ]
   },
+  "bridge": "You caught yourself in the mirror this morning, pulling your skin tight, counting the lines that weren't there last year. So you booked the appointment. A vial. A promise. Younger by Friday. Two thousand years ago Rome was doing this. Rich men drank gold, bathed in wine, paid for potions to freeze time. One of them was a philosopher named Seneca, richer than most. Then a friend asked him a question that ruined the whole game. How many more years do you want? The friend said more. Always more. This man owned villas, slaves, every pleasure coin can buy. And he still woke up terrified of the mirror. He counted his lines. He was never satisfied. Seneca saw the trap. The chase had no finish line. The problem was never the wrinkles. It was a man who could never feel full. Seneca knew what people like that, and like the you this morning, kept forgetting.",
+  "music": "music.mp3",
+  "backgrounds": [
+    "bg0.mp4",
+    "bg1.mp4",
+    "bg2.mp4",
+    "bg3.mp4"
+  ],
+  "backgroundDurationsSec": [
+    5.005,
+    10.112,
+    9.133,
+    19.217
+  ],
+  "silenceDropSec": 0.8,
   "sfx": {
     "whoosh": "sfx-whoosh.wav",
-    "impact": "sfx-impact.wav"
+    "impact": "sfx-impact.wav",
+    "riser": "sfx-riser.wav",
+    "sub_impact": "sfx-sub.wav"
   }
 }
