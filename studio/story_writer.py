@@ -12,6 +12,10 @@ scene machinery:
 Length contract: total spoken words 145-185 → a ~60-75s reel (the scenes are
 VO-sized, so narration length IS reel length).
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import re
 
@@ -29,13 +33,14 @@ _PERSONAS = (
 
 _PREFIX = (
     "You write scroll-stopping 60-75 second story reels for a viral Stoic-"
-    "philosophy "
-    "Instagram account. Your specialty: stories people feel COMPELLED to send "
-    "to a friend. Contrarian about culture and behavior — never about named "
-    "living individuals. No politics, religion, tragedy, or medical/financial "
-    "advice."
-    " Write in first person — a mentor speaking directly to one reader as "
-    "\"I\" and \"you\"."
+    "philosophy Instagram account. Your specialty: TRUE historical stories "
+    "people feel COMPELLED to send to a friend — your narrator is a historian "
+    "who has read the primary sources, who names dates and places, who never "
+    "exaggerates. Voice: cinematic but never florid. First person — a mentor "
+    "speaking to one reader as \"I\" and \"you\". No politics, religion, "
+    "tragedy, or medical/financial advice.\n"
+    "When the material is flagged hypothetical or uncertain, frame it clearly "
+    "(\"Suppose...\", \"Imagine...\") rather than inventing facts.\n"
 )
 
 EXEMPLAR_WEIRD = {
@@ -94,66 +99,46 @@ _EXEMPLAR_DEBATE_BLOCK = (
 
 _ROLE_DEFAULT = (
     "Mode: {mode}\n"
-    "Material:\n{material}\n"
-    "Available quotes (choose the one that lands as the TWIST — the payoff the "
-    "story was secretly building to; set quote_row to its row_number):\n{pool}\n\n"
-    "Write the reel as four beats, following the 6-PHASE VIRAL FORMULA:\n"
-    "- beat_hook (0-3s): <=15 words. A STATEMENT, not a question (statements "
-    "hold 3-second retention; questions don't). It MUST address the viewer "
-    "directly ('you'/'your') and open a loop about THEIR life — never resolve "
-    "it, never name the historical figure. 'No way this is real' energy.\n"
-    "- beat_reframe: 120-155 words, built in three phases inside one field:\n"
-    "  * STAKES (3-10s, the first ~25 words): second person ('you'/'your'), "
-    "naming the exact private thing the viewer recognizes in themselves — no "
-    "resolution vocabulary here.\n"
-    "  * STORY ENTRY (10-25s): pivot to the historical figure, set up the "
-    "situation, and end this stretch on an open loop / CLIFFHANGER — a "
-    "sentence starting with a marker like 'Then', 'Until', 'But', or 'And "
-    "nobody expected what he did next' / 'And no one saw it coming'.\n"
-    "  * ESCALATION (25-40s): raise the stakes or the strangeness with short "
-    "punchy sentences (a new mini-revelation every ~8 seconds) — still no "
-    "resolution words ('that's why', 'the answer', 'here's how', the word "
-    "'lesson', 'this means', 'the secret is') before the payoff.\n"
-    "  * PAYOFF (40-50s): both loops — the viewer's stakes and the figure's "
-    "story — close together, landing on the quote as the twist.\n"
-    "For weird mode: use ONLY the facts given in the material — never invent "
-    "or exaggerate historical claims; if the material is flagged hypothetical, "
-    "keep it clearly framed as imagination ('Imagine...', 'Suppose...'). "
-    "You may expand with texture (setting, what people around thought, what "
-    "it looked like) but every factual claim must come from the material.\n"
+    "Material (the real historical / literary material to draw from):\n{material}\n"
+    "Available quotes (choose the one that lands as the TWIST — the payoff "
+    "the story was secretly building to; set quote_row to its row_number):\n{pool}\n\n"
+    "Write the reel as four beats, applying the 6-PHASE VIRAL FORMULA "
+    "(stakes / entry / escalation / payoff / close):\n"
+    "- beat_hook (0-3s): <=12 words. A STATEMENT, not a question. Addresses "
+    "the viewer directly ('you'/'your'), opens a loop about THEIR life. "
+    "Never names the historical figure.\n"
+    "- beat_reframe: 145-185 words. Built in three phases inside one field:\n"
+    "  * STAKES (first ~25 words): second person ('you'/'your'), naming the "
+    "exact private thing the viewer recognizes.\n"
+    "  * STORY ENTRY (next ~30-60 words): pivot to the historical figure. "
+    "End on an open loop / cliffhanger — a sentence starting with 'Then', "
+    "'Until', 'But', or 'And nobody expected what he did next'.\n"
+    "  * ESCALATION (next ~30-60 words): short punchy sentences. Mini-"
+    "revelations every ~8 seconds. No resolution vocabulary before the payoff.\n"
+    "  * PAYOFF (final ~30 words): both loops close together. Landing on the "
+    "quote as the twist.\n"
     "- quote_row: the chosen quote's row_number (integer).\n"
-    "- beat_cta: one line. For weird mode this MUST be a send-CTA telling the "
-    "viewer to send the reel to a specific kind of friend. For debate mode it "
-    "MUST be a binary agree/disagree ask.\n"
-    "For punch mode: beat_hook is ONE brutal line (<=10 words), beat_reframe "
-    "MUST be an empty string, total spoken words 25-60 — a 7-15 second reel.\n"
+    "- beat_cta: one line. Weird mode → send-CTA ('Send this to the friend "
+    "who lost something this year'). Debate mode → binary agree/disagree. "
+    "Punch mode → one brutal line, beat_reframe empty, total 25-60 words.\n"
     "- topic_query: 2-4 words for stock-footage search matching the story's "
-    "VISUAL world (e.g. 'ancient greek ruins', 'crowded city night').\n"
+    "VISUAL world.\n"
     "- caption_first_line: <=8 words, curiosity gap, no hashtags.\n"
     "- trend_tag: one hashtag (no #) matching the topic, or empty string.\n"
-    "ANTI-RULES (non-negotiable):\n"
-    "- Never open with the historical figure.\n"
-    "- Never resolve a loop before the payoff phase.\n"
-    "- The word 'lesson' is banned.\n"
-    "- The viewer's life is the story — the ancient is the twist.\n"
-    "- Never include the quote's own words inside beat_reframe — the quote "
-    "scene delivers it. End the reframe one breath BEFORE the quote.\n"
+    "ANTI-RULES: never open with the historical figure. Never resolve a loop "
+    "before the payoff. The word 'lesson' is banned. The viewer's life is "
+    "the story; the ancient is the twist. Never include the quote's own words "
+    "inside beat_reframe — the quote scene delivers it. End the reframe one "
+    "breath BEFORE the quote.\n"
     f"{_EXEMPLAR_WEIRD_BLOCK}\n\n"
     f"{_EXEMPLAR_DEBATE_BLOCK}\n\n"
-    "Style rules (non-negotiable):\n"
-    "- Write for ONE specific person, not an audience — the viewer must think "
-    "'this is so my friend' and hit send.\n"
-    "- Vocabulary so simple a tired 12-year-old instantly gets every word. No "
-    "abstractions where a concrete image will do.\n"
-    "- Extreme specificity beats broad claims: '2am doom-scrolling in bed' not "
-    "'wasting time online'.\n"
+    "Style rules: write for ONE specific person. Vocabulary so simple a tired "
+    "12-year-old instantly gets every word. Concrete images over abstractions. "
+    "'2am doom-scrolling in bed' not 'wasting time online'.\n"
     + playbooks.STORY_CRAFT + "\n"
-    "Before answering: draft internally, critique your draft against the "
-    "craft rules above (hook concreteness, escalation, CTA specificity, "
-    "simplicity), fix every weakness, then output ONLY the improved final "
-    "JSON.\n"
-    "Total spoken words across beats 145-185 (a ~60-80 second reel — this is "
-    "a LONG-form story reel, not a quick quote card). Output JSON only."
+    "Before answering: draft internally, critique against the craft rules, "
+    "fix every weakness, output ONLY the improved final JSON.\n"
+    "Total spoken words 145-185 (~60-80s story reel). Output JSON only."
 )
 
 STORY_SCHEMA = _obj({
@@ -370,7 +355,7 @@ def write_story(client, mode: str, material: dict, pool: list,
             return _hook_pass(client, winner, mode)
         # Neither validated: corrective retry on draft A's failure reason.
         d0, _, reason = drafts[0]
-        print(f"  [story_writer] formula-reject mode={mode} reason={reason} — retrying once")
+        logger.info(f"  [story_writer] formula-reject mode={mode} reason={reason} — retrying once")
         d = client.call("story_writer", _PREFIX, role,
                         f"Your last draft was rejected: {reason}. "
                         f"Write the four beats again, fixing exactly that.{ctx}",
@@ -384,9 +369,9 @@ def write_story(client, mode: str, material: dict, pool: list,
                 not any(p["row_number"] == d.get("quote_row") for p in pool)):
             ok, reason = False, "quote_row not in the offered pool"
         if not ok:
-            print(f"  [story_writer] formula-reject mode={mode} reason={reason}")
+            logger.info(f"  [story_writer] formula-reject mode={mode} reason={reason}")
             return None
         return _hook_pass(client, d, mode)
     except Exception as e:  # noqa: BLE001 - never crash a reel
-        print(f"  [story_writer] unavailable ({e})")
+        logger.info(f"  [story_writer] unavailable ({e})")
         return None

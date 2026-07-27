@@ -4,6 +4,7 @@ Copy .env.example → .env and fill in your keys.
 """
 
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
@@ -40,7 +41,7 @@ class Config:
     def __post_init__(self):
         self.ANTHROPIC_API_KEY     = self._get("ANTHROPIC_API_KEY")
         self.FAL_API_KEY           = self._get("FAL_API_KEY")
-        self.META_ACCESS_TOKEN     = self._get("META_ACCESS_TOKEN")
+        self.META_ACCESS_TOKEN     = self._get_opt("META_ACCESS_TOKEN")
         self.IG_ACCOUNT_ID           = self._get("IG_ACCOUNT_ID")
         self.META_APP_ID             = self._get_opt("META_APP_ID")
         self.META_APP_SECRET         = self._get_opt("META_APP_SECRET")
@@ -55,6 +56,37 @@ class Config:
         self.TELEGRAM_BOT_TOKEN      = self._get_opt("TELEGRAM_BOT_TOKEN")
         self.TELEGRAM_CHAT_ID        = self._get_opt("TELEGRAM_CHAT_ID")
         self.SLACK_WEBHOOK_URL       = self._get_opt("SLACK_WEBHOOK_URL")
+
+        self._validate_meta_token_relationship()
+
+    def _validate_meta_token_relationship(self):
+        has_token = bool(self.META_ACCESS_TOKEN)
+        has_app = bool(self.META_APP_ID) and bool(self.META_APP_SECRET)
+        if has_app and not has_token:
+            raise RuntimeError(
+                "META_APP_ID+META_APP_SECRET set without META_ACCESS_TOKEN. "
+                "Need a starting long-lived token — auto-refresh requires it."
+            )
+        if has_token and not has_app:
+            warnings.warn(
+                "META_ACCESS_TOKEN set without META_APP_ID/SECRET — auto-refresh "
+                "disabled; token will expire after ~60 days.",
+                stacklevel=2,
+            )
+        if has_token and has_app and os.getenv("META_DEBUG_TOKEN_VALIDATE") == "1":
+            try:
+                import requests
+                r = requests.get(
+                    "https://graph.facebook.com/v18.0/debug_token",
+                    params={
+                        "input_token": self.META_ACCESS_TOKEN,
+                        "access_token": f"{self.META_APP_ID}|{self.META_APP_SECRET}",
+                    },
+                    timeout=5,
+                )
+                r.raise_for_status()
+            except Exception as e:
+                warnings.warn(f"Meta /debug_token check failed: {e} — proceeding anyway", stacklevel=2)
 
     def _get(self, key: str) -> str:
         val = os.getenv(key, "")

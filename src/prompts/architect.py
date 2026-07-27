@@ -18,6 +18,16 @@ import random
 import re
 from typing import Literal
 
+try:
+    import anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
+
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class PromptArchitect:
     """
@@ -91,6 +101,95 @@ class PromptArchitect:
         "winter": "frost on marble surfaces, bare branches, pale blue light",
     }
 
+    # ── Digital Monumentalism (dark/marble/Roman/historical) ──────────────────
+    MONUMENTALISM_COMPOSITIONS = [
+        "low-angle view looking up at weathered marble columns, monumental scale",
+        "extreme wide shot of crumbling stone amphitheater at twilight",
+        "foreground silhouette of a single robed figure against a vast temple facade",
+        "tight crop on a cracked marble inscription, lichen growing between carved letters",
+        "centered symmetrical frame of a broken statue, negative space above",
+        "depth-layered receding arches into mist, lone figure at vanishing point",
+    ]
+    MONUMENTALISM_LIGHTING = [
+        "single hard shaft of light falling across carved stone, deep shadows elsewhere",
+        "overcast cold blue with a warm glow escaping from a distant archway",
+        "firelight flickering on a stone wall, specular highlights on worn marble",
+        "low-key chiaroscuro, side-lit subject emerging from darkness",
+    ]
+    MONUMENTALISM_TEXTURES = [
+        "weathered travertine marble, mineral staining, real erosion",
+        "cracked stone with moss and lichen, no polished surfaces",
+        "dust-covered bronze with verdigris patina, oxidized detail",
+        "worn limestone, sun-bleached, hand-tooled chisel marks visible",
+    ]
+    MONUMENTALISM_ATMOSPHERE = [
+        "low fog rolling across flagstones, swallowing the base of columns",
+        "cold damp stone air, visible breath, no sun",
+        "ash drifting down from a hidden fire above the colonnade",
+        "ominous stillness, no birds, no wind movement",
+    ]
+
+    DARK_MOODS = frozenset({"dark_philosophical", "dramatic_ancient",
+                            "stark_minimal", "epic_warrior"})
+
+    def _weave_digital_monumentalism(self, rng=None) -> str:
+        """Return one phrase per Monumentalism dimension (composition/lighting/texture/atmosphere)."""
+        rng = rng or random
+        parts = [
+            rng.choice(self.MONUMENTALISM_COMPOSITIONS),
+            rng.choice(self.MONUMENTALISM_LIGHTING),
+            rng.choice(self.MONUMENTALISM_TEXTURES),
+            rng.choice(self.MONUMENTALISM_ATMOSPHERE),
+        ]
+        return ", ".join(parts)
+
+    # ── Hopecore (golden light, rain on windows, mist, cliffs) ────────────────
+    HOPECORE_COMPOSITIONS = [
+        "wide landscape with figure on cliff edge, sun behind shoulder",
+        "rain streaking down a windowpane, blurred warm interior visible through glass",
+        "single path leading through morning mist into golden distance",
+        "open doorway pouring light onto a worn wooden floor",
+        "horizon line at lower third, vast sky above, lone figure in middle distance",
+    ]
+    HOPECORE_LIGHTING = [
+        "golden hour backlight, lens flare at edge of frame, warm halo",
+        "soft overcast with a single beam breaking through, illuminating subject",
+        "first light through rain, prismatic glow on wet surfaces",
+        "rim-lit silhouette against dawn sky, deep blue-to-amber gradient",
+    ]
+    HOPECORE_TEXTURES = [
+        "rain-beaded glass with light refracting through droplets",
+        "wet stone reflecting warm sky, puddles mirroring cliffs",
+        "morning dew on grass, water droplets catching first light",
+        "soft fabric catching rim light, woven texture visible",
+    ]
+    HOPECORE_ATMOSPHERE = [
+        "mist rising from a valley at dawn, eroding into blue sky",
+        "rain-soaked air, soft focus background, visible streaks",
+        "warm air shimmering above a sunlit path, dust motes drifting",
+        "horizon haze, layered atmospheric perspective into soft focus",
+    ]
+
+    HOPEFUL_MOODS = frozenset({"cinematic_hopeful", "mystical_greek", "calm_stoic"})
+
+    def _weave_hopecore(self, rng=None) -> str:
+        """Return one phrase per Hopecore dimension."""
+        rng = rng or random
+        parts = [
+            rng.choice(self.HOPECORE_COMPOSITIONS),
+            rng.choice(self.HOPECORE_LIGHTING),
+            rng.choice(self.HOPECORE_TEXTURES),
+            rng.choice(self.HOPECORE_ATMOSPHERE),
+        ]
+        return ", ".join(parts)
+
+    # ── Photorealism Rig (always-on anchoring suffix) ───────────────────────────
+    PHOTOREAL_RIG = (
+        "photorealistic, shot on Phase One IQ4, 80mm prime lens, "
+        "35mm film grain, no obvious 3D render, no plastic surfaces, "
+        "natural color science, no over-saturated highlights"
+    )
+
     def __init__(self, anthropic_api_key: str = ""):
         self.api_key = anthropic_api_key
 
@@ -158,12 +257,23 @@ class PromptArchitect:
         elif style == "cinematic":
             enhancements.append("cinematic color grading, anamorphic lens characteristics, film grain")
 
+        # Mood-based Digital Monumentalism weaving (dark/historical moods).
+        # Skipped for explicit photorealistic (style already adds its own rig).
+        if mood in self.DARK_MOODS and style != "photorealistic":
+            enhancements.append(self._weave_digital_monumentalism())
+
+        # Mood-based Hopecore weaving (warm/compassionate moods).
+        # Skipped for explicit photorealistic (style already adds its own rig).
+        if mood in self.HOPEFUL_MOODS and style != "photorealistic":
+            enhancements.append(self._weave_hopecore())
+
         # Seasonal
         if season and season in self.SEASONAL_CUES:
             enhancements.append(self.SEASONAL_CUES[season])
 
-        # Final quality boosters (always included)
-        enhancements.append("8k resolution, hyper-detailed, trending on ArtStation")
+        # Final quality boosters — Photorealism Rig is the always-on suffix that
+        # prevents FLUX drift into "obvious AI render".
+        enhancements.append(self.PHOTOREAL_RIG)
 
         # Combine
         prompt = f"{core}, {', '.join(enhancements)}"
@@ -273,14 +383,10 @@ class PromptArchitect:
         return prompt
 
     def enhance_with_claude(self, base_prompt: str, quote: str) -> str:
-        """
-        Optional: Use Claude to generate a metaphor-rich enhancement.
-        Returns enhanced prompt or falls back to base.
-        """
-        if not self.api_key:
+        """Use Claude Haiku 4.5 to enrich a FLUX prompt with quote-derived metaphor.
+        Falls back to base_prompt on any error. Never raises."""
+        if not self.api_key or not _ANTHROPIC_AVAILABLE:
             return base_prompt
-
-        import httpx
 
         system = (
             "You are a cinematic art director for ancient Greek philosophical content. "
@@ -291,36 +397,27 @@ class PromptArchitect:
         user = f"Quote: {quote[:200]}\nBase prompt: {base_prompt}"
 
         try:
-            transport = httpx.HTTPTransport(local_address="0.0.0.0")
-            with httpx.Client(transport=transport) as client:
-                resp = client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    json={
-                        "model": "claude-3-haiku-20240307",
-                        "max_tokens": 150,
-                        "temperature": 0.7,
-                        "system": system,
-                        "messages": [{"role": "user", "content": user}],
-                    },
-                    timeout=15,
-                )
-                resp.raise_for_status()
-                enhanced = resp.json()["content"][0]["text"].strip()
-                # Strip fences
-                if enhanced.startswith("```"):
-                    enhanced = enhanced.split("\n", 1)[1]
-                if enhanced.endswith("```"):
-                    enhanced = enhanced.rsplit("\n", 1)[0]
-                enhanced = enhanced.strip()
-                if enhanced and len(enhanced) > 40:
-                    return enhanced
-        except Exception:
-            pass
+            client = anthropic.Anthropic(api_key=self.api_key)
+            resp = client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=150,
+                temperature=0.7,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            enhanced = resp.content[0].text.strip()
+            # Strip fences
+            if enhanced.startswith("```"):
+                enhanced = enhanced.split("\n", 1)[1]
+            if enhanced.endswith("```"):
+                enhanced = enhanced.rsplit("\n", 1)[0]
+            enhanced = enhanced.strip()
+            if enhanced and len(enhanced) > 40:
+                return enhanced
+        except (anthropic.APIError, anthropic.APIConnectionError) as e:
+            logger.info(f"  [prompt-architect] SDK error, fallback to base: {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.info(f"  [prompt-architect] unexpected error: {e}")
 
         return base_prompt
 

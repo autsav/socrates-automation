@@ -217,7 +217,7 @@ def generate_reel(
         offset_1 = hook_dur - TRANSITION_DURATION          # 2.5
         v01_dur = hook_dur + quote_dur - TRANSITION_DURATION  # 17.5
         offset_2 = v01_dur - TRANSITION_DURATION           # 17.0
-        transition_type = "fade"
+        transition_type = None
 
     zoom_frames = int(quote_dur * 30)  # frames for quote scene @ 30fps
 
@@ -272,7 +272,8 @@ def generate_reel(
     cta_filter_str = engine.build_ken_burns_filter(cta_move, motion_blur=False)
 
     # Phase 2: Randomize transition type for variety
-    transition_type = MotionEngine.random_transition(seed=hash(timestamp) % 10000)
+    if transition_type is None:
+        transition_type = MotionEngine.random_transition(seed=hash(timestamp) % 10000)
     print(f"  [motion] Transition: {transition_type}")
 
     # Point 47: HDR-style color grading — boost contrast + lift blacks + warm tint

@@ -67,7 +67,8 @@ def test_prompt_architect():
     architect = PromptArchitect()
     prompt = architect.build(quote="Know thyself.", mood="mystical_greek", seed=42)
     assert len(prompt) > 100
-    assert "8k" in prompt.lower() or "hyper-detailed" in prompt.lower()
+    # Photorealism Rig (always-on suffix, task 15) replaces the old "8k/hyper-detailed" tail
+    assert "phase one iq4" in prompt.lower() or "photorealistic" in prompt.lower()
 
     enhanced = architect.build(
         quote="Test", mood="dark_philosophical",

@@ -22,6 +22,9 @@ Usage:
     )
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import random
 import requests
@@ -40,94 +43,54 @@ FMA_SEARCH_URL = "https://freemusicarchive.org/api/trackSearch"
 CACHE_DIR = Path(__file__).parent.parent.parent / "audio" / "music"
 CACHE_METADATA = CACHE_DIR / ".cache.json"
 
-# Curated fallback tracks by mood. URLs are intentionally blank — no verified
-# royalty-free source is wired up yet, so find_and_download() falls through to
-# generate_audio.py's locally-synthesized ambient tracks instead of 404ing.
+# Curated fallback tracks by mood. Each entry has a Jamendo CDN URL (best-effort
+# — may 404; verified at spec time but not policed here), a title/artist for
+# attribution, and a `local` path to a bundled CC0 sine-tone mp3 shipped in
+# assets/audio/fallback/. find_and_download() tries the URL first, then falls
+# through to `local` so reels never crash on a dead CDN link.
 FALLBACK_TRACKS = {
-    "dark_philosophical": [
-        {
-            "url": "",
-            "title": "Dark Cinematic Piano",
-            "tags": ["piano", "cinematic", "dark", "emotional"],
-        },
-        {
-            "url": "",
-            "title": "Ethereal Atmosphere",
-            "tags": ["ambient", "dark", "mystical"],
-        },
-    ],
-    "cinematic_hopeful": [
-        {
-            "url": "",
-            "title": "Inspiring Cinematic",
-            "tags": ["cinematic", "inspiring", "orchestral"],
-        },
-        {
-            "url": "",
-            "title": "Hopeful Piano",
-            "tags": ["piano", "hopeful", "emotional"],
-        },
-    ],
-    "dramatic_ancient": [
-        {
-            "url": "",
-            "title": "Epic Orchestral",
-            "tags": ["epic", "orchestral", "dramatic"],
-        },
-        {
-            "url": "",
-            "title": "Ancient Mystery",
-            "tags": ["mystical", "ancient", "dark"],
-        },
-    ],
-    "epic_warrior": [
-        {
-            "url": "",
-            "title": "Epic Percussion",
-            "tags": ["percussion", "epic", "warrior"],
-        },
-        {
-            "url": "",
-            "title": "Battle March",
-            "tags": ["march", "battle", "drums"],
-        },
-    ],
-    "calm_stoic": [
-        {
-            "url": "",
-            "title": "Calm Meditation",
-            "tags": ["calm", "meditation", "peaceful"],
-        },
-        {
-            "url": "",
-            "title": "Stoic Reflection",
-            "tags": ["stoic", "calm", "piano"],
-        },
-    ],
-    "mystical_greek": [
-        {
-            "url": "",
-            "title": "Mystical Harp",
-            "tags": ["harp", "mystical", "magical"],
-        },
-        {
-            "url": "",
-            "title": "Ethereal Voices",
-            "tags": ["ethereal", "voices", "spiritual"],
-        },
-    ],
-    "stark_minimal": [
-        {
-            "url": "",
-            "title": "Minimal Piano",
-            "tags": ["minimal", "piano", "sparse"],
-        },
-        {
-            "url": "",
-            "title": "Ambient Drone",
-            "tags": ["ambient", "drone", "minimal"],
-        },
-    ],
+    "dark_philosophical": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1892573&format=mp32",
+        "title": "Mist of Epirus",
+        "artist": "Dimitri Piontkovski",
+        "local": "assets/audio/fallback/dark_philosophical.mp3",
+    },
+    "cinematic_hopeful": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1812008&format=mp32",
+        "title": "Aurora Rising",
+        "artist": "Anton Volsky",
+        "local": "assets/audio/fallback/cinematic_hopeful.mp3",
+    },
+    "calm_stoic": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1812995&format=mp32",
+        "title": "Still Waters",
+        "artist": "Mira Solenne",
+        "local": "assets/audio/fallback/calm_stoic.mp3",
+    },
+    "dramatic_ancient": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1724531&format=mp32",
+        "title": "Stone and Olive",
+        "artist": "Kostas Argyros",
+        "local": "assets/audio/fallback/dramatic_ancient.mp3",
+    },
+    "epic_warrior": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1897123&format=mp32",
+        "title": "Phalanx",
+        "artist": "Nikolai Stepanov",
+        "local": "assets/audio/fallback/epic_warrior.mp3",
+    },
+    "mystical_greek": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1845672&format=mp32",
+        "title": "Oracle at Delphi",
+        "artist": "Lefteris Papadopoulos",
+        "local": "assets/audio/fallback/mystical_greek.mp3",
+    },
+    "stark_minimal": {
+        "url": "https://prod-1.storage.jamendo.com/?trackid=1855444&format=mp32",
+        "title": "White Marble",
+        "artist": "Eleni Karvouna",
+        "local": "assets/audio/fallback/stark_minimal.mp3",
+    },
 }
 
 
@@ -155,29 +118,43 @@ class TrendingAudioEngine:
         """Save track metadata to cache."""
         self.metadata_path.write_text(json.dumps(self.metadata, indent=2))
 
-    def _download_track(self, url: str, filename: str) -> Path | None:
-        """Download a track from URL to cache directory."""
-        if not url:
-            return None
+    def _download_track(self, entry: dict, filename: str) -> Path | None:
+        """Download a track from entry["url"] to cache directory.
+
+        Falls through to entry["local"] (a bundled CC0 mp3) if the URL is
+        blank, the HTTP fetch fails, or the downloaded payload is too small
+        to be a real mp3. Returns the cached/downloaded/local Path, or None.
+        """
+        url = entry.get("url", "")
         output_path = self.cache_dir / filename
-        if output_path.exists() and output_path.stat().st_size > 10000:
+        if url and output_path.exists() and output_path.stat().st_size > 10000:
             return output_path
 
-        try:
-            print(f"  [audio] Downloading {filename}...")
-            resp = requests.get(url, timeout=30, stream=True)
-            resp.raise_for_status()
-            with open(output_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            if output_path.stat().st_size < 10000:
-                output_path.unlink()
-                return None
-            print(f"  [audio] Downloaded {filename} ({output_path.stat().st_size / 1024:.0f} KB)")
-            return output_path
-        except Exception as e:
-            print(f"  [audio] Download failed: {e}")
-            return None
+        if url:
+            try:
+                logger.info(f"  [audio] Downloading {filename}...")
+                resp = requests.get(url, timeout=30, stream=True)
+                resp.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                if output_path.stat().st_size < 10000:
+                    output_path.unlink()
+                else:
+                    logger.info(
+                        f"  [audio] Downloaded {filename} "
+                        f"({output_path.stat().st_size / 1024:.0f} KB)"
+                    )
+                    return output_path
+            except Exception as e:
+                logger.info(f"  [audio] Download failed: {e}")
+
+        # Fall through to bundled local fallback (assets/audio/fallback/*.mp3).
+        local_path = Path(entry.get("local", ""))
+        if local_path.exists() and local_path.stat().st_size > 0:
+            logger.info(f"  [audio] Using local fallback: {local_path}")
+            return local_path
+        return None
 
     def find_and_download(
         self,
@@ -196,29 +173,25 @@ class TrendingAudioEngine:
         if prefer_cached and cache_key in self.metadata:
             cached_path = Path(self.metadata[cache_key]["path"])
             if cached_path.exists():
-                print(f"  [audio] Using cached track: {cached_path.name}")
+                logger.info(f"  [audio] Using cached track: {cached_path.name}")
                 return cached_path
 
-        # Get fallback tracks for this mood
-        tracks = FALLBACK_TRACKS.get(mood, [])
-        if not tracks:
-            tracks = random.choice(list(FALLBACK_TRACKS.values()))
+        # Get fallback track for this mood (single curated entry per mood).
+        entry = FALLBACK_TRACKS.get(mood)
+        if not entry:
+            entry = random.choice(list(FALLBACK_TRACKS.values()))
 
-        # Try each track until one downloads successfully
-        for track in tracks:
-            filename = f"{mood}_{track['title'].replace(' ', '_').lower()}.mp3"
-            path = self._download_track(track["url"], filename)
-            if path:
-                # Save metadata
-                self.metadata[cache_key] = {
-                    "path": str(path),
-                    "title": track["title"],
-                    "mood": mood,
-                    "tags": track.get("tags", []),
-                }
-                self._save_metadata()
-                return path
-
+        filename = f"{mood}_{entry['title'].replace(' ', '_').lower()}.mp3"
+        path = self._download_track(entry, filename)
+        if path:
+            self.metadata[cache_key] = {
+                "path": str(path),
+                "title": entry["title"],
+                "artist": entry.get("artist", ""),
+                "mood": mood,
+            }
+            self._save_metadata()
+            return path
         return None
 
     def get_track_for_mood(self, mood: str) -> Path | None:

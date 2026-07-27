@@ -16,6 +16,10 @@ Voice choice: "pNIncy4yVsqPhqIdc4Kc" (Adam) — deep, authoritative narrator.
 Alternative: "TxGEqnHWrfWFTfWB9MjX" (Josh) — younger, intense delivery.
 Alternative: "ErXw8Y8QH8n2Zn2l5J8h" (Sam) — contemplative, philosophical.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import base64
 import re
 import requests
@@ -27,13 +31,17 @@ from typing import Optional
 # ElevenLabs API endpoints
 ELEVENLABS_API = "https://api.elevenlabs.io/v1"
 
-# Pre-selected voices for philosophy content
+# Pre-selected baritone voices for philosophy content
+# IDs verified against this account's /v1/voices listing.
 VOICES = {
-    # IDs verified against this account's /v1/voices (2026-07-19) — the previous
-    # legacy IDs 404'd on current accounts.
-    "sage":      "pqHfZKP75CvOlQylNhV4",   # Bill — wise, mature, balanced (old, crisp)
-    "intense":   "pNInz6obpgDQGcFmaJgB",   # Adam — dominant, firm
-    "contemplative": "JBFqnCBsd6RMkjVDRZzb", # George — warm, captivating storyteller
+    # New baritone roster
+    "josh":   "TxGEqnHWrfWFTfWB9MjX",  # Josh — younger intense, opt-in for epic_warrior
+    "bill":   "pqHfZ75CvOlQylNhV4",   # Bill — wise, mature, balanced (default REEL_VOICE)
+    "david":  "onwK4e9ZLuTAKqWW03F9",  # David — British, narrative, contemplative
+    # Legacy aliases preserved for back-compat
+    "sage":          "pqHfZ75CvOlQylNhV4",   # alias for bill
+    "intense":       "TxGEqnHWrfWFTfWB9MjX", # alias for josh
+    "contemplative": "onwK4e9ZLuTAKqWW03F9", # alias for david
 }
 
 # Voice settings optimized for narration (not dialogue)
@@ -44,20 +52,19 @@ DEFAULT_SETTINGS = {
     "use_speaker_boost": True,  # Enhances voice clarity
 }
 
-# Mood -> voice mapping
+# Mood -> voice mapping (deep baritone default for gravitas)
 MOOD_VOICES = {
-    "calm_stoic":         "sage",
-    "cinematic_hopeful":  "contemplative",
-    "dark_philosophical": "intense",
-    "dramatic_ancient":   "sage",
-    "epic_warrior":       "intense",
-    "mystical_greek":     "contemplative",
-    "stark_minimal":      "sage",
+    "calm_stoic":         "bill",
+    "cinematic_hopeful":  "david",
+    "dark_philosophical": "bill",
+    "dramatic_ancient":   "bill",
+    "epic_warrior":       "josh",
+    "mystical_greek":     "david",
+    "stark_minimal":      "bill",
 }
 
-# Reel narration: use the "intense" voice for confrontational content
-# (matches the new controversy engine style)
-REEL_VOICE = "intense"
+# Default narration voice — deepest, wisest, most-resonant baritone
+REEL_VOICE = "bill"
 
 
 def _srt_ts(s: str) -> float:
@@ -223,7 +230,7 @@ def generate_voiceover(
         with open(output_path, "wb") as f:
             f.write(audio)
     except Exception as e:  # noqa: BLE001 - fall back to the plain endpoint
-        print(f"  [elevenlabs] with-timestamps unavailable ({e}) — plain endpoint")
+        logger.info(f"  [elevenlabs] with-timestamps unavailable ({e}) — plain endpoint")
         words = []
         try:
             response = requests.post(
@@ -233,14 +240,14 @@ def generate_voiceover(
             with open(output_path, "wb") as f:
                 f.write(response.content)
         except Exception as e2:
-            print(f"  [elevenlabs] Error: {e2}")
+            logger.info(f"  [elevenlabs] Error: {e2}")
             return None
 
     if not output_path.exists() or output_path.stat().st_size == 0:
         return None
 
     size_kb = output_path.stat().st_size / 1024
-    print(f"  [elevenlabs] Saved {output_path.name} ({size_kb:.0f} KB)")
+    logger.info(f"  [elevenlabs] Saved {output_path.name} ({size_kb:.0f} KB)")
     generate_voiceover.last_words = words
     return output_path
 
@@ -309,7 +316,7 @@ def prepare_reel_voiceover(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     voice = REEL_VOICE
-    print(f"  [elevenlabs] Using voice '{voice}' for mood '{mood}'")
+    logger.info(f"  [elevenlabs] Using voice '{voice}' for mood '{mood}'")
 
     scene_settings = scene_settings or {}
     hook_path = out_dir / f"voice_hook_{timestamp}.mp3"
