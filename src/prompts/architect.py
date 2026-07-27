@@ -18,6 +18,16 @@ import random
 import re
 from typing import Literal
 
+try:
+    import anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
+
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class PromptArchitect:
     """
@@ -273,14 +283,10 @@ class PromptArchitect:
         return prompt
 
     def enhance_with_claude(self, base_prompt: str, quote: str) -> str:
-        """
-        Optional: Use Claude to generate a metaphor-rich enhancement.
-        Returns enhanced prompt or falls back to base.
-        """
-        if not self.api_key:
+        """Use Claude Haiku 4.5 to enrich a FLUX prompt with quote-derived metaphor.
+        Falls back to base_prompt on any error. Never raises."""
+        if not self.api_key or not _ANTHROPIC_AVAILABLE:
             return base_prompt
-
-        import httpx
 
         system = (
             "You are a cinematic art director for ancient Greek philosophical content. "
@@ -291,36 +297,27 @@ class PromptArchitect:
         user = f"Quote: {quote[:200]}\nBase prompt: {base_prompt}"
 
         try:
-            transport = httpx.HTTPTransport(local_address="0.0.0.0")
-            with httpx.Client(transport=transport) as client:
-                resp = client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    json={
-                        "model": "claude-3-haiku-20240307",
-                        "max_tokens": 150,
-                        "temperature": 0.7,
-                        "system": system,
-                        "messages": [{"role": "user", "content": user}],
-                    },
-                    timeout=15,
-                )
-                resp.raise_for_status()
-                enhanced = resp.json()["content"][0]["text"].strip()
-                # Strip fences
-                if enhanced.startswith("```"):
-                    enhanced = enhanced.split("\n", 1)[1]
-                if enhanced.endswith("```"):
-                    enhanced = enhanced.rsplit("\n", 1)[0]
-                enhanced = enhanced.strip()
-                if enhanced and len(enhanced) > 40:
-                    return enhanced
-        except Exception:
-            pass
+            client = anthropic.Anthropic(api_key=self.api_key)
+            resp = client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=150,
+                temperature=0.7,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            enhanced = resp.content[0].text.strip()
+            # Strip fences
+            if enhanced.startswith("```"):
+                enhanced = enhanced.split("\n", 1)[1]
+            if enhanced.endswith("```"):
+                enhanced = enhanced.rsplit("\n", 1)[0]
+            enhanced = enhanced.strip()
+            if enhanced and len(enhanced) > 40:
+                return enhanced
+        except (anthropic.APIError, anthropic.APIConnectionError) as e:
+            logger.info(f"  [prompt-architect] SDK error, fallback to base: {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.info(f"  [prompt-architect] unexpected error: {e}")
 
         return base_prompt
 
