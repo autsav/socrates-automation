@@ -143,6 +143,46 @@ class PromptArchitect:
         ]
         return ", ".join(parts)
 
+    # ── Hopecore (golden light, rain on windows, mist, cliffs) ────────────────
+    HOPECORE_COMPOSITIONS = [
+        "wide landscape with figure on cliff edge, sun behind shoulder",
+        "rain streaking down a windowpane, blurred warm interior visible through glass",
+        "single path leading through morning mist into golden distance",
+        "open doorway pouring light onto a worn wooden floor",
+        "horizon line at lower third, vast sky above, lone figure in middle distance",
+    ]
+    HOPECORE_LIGHTING = [
+        "golden hour backlight, lens flare at edge of frame, warm halo",
+        "soft overcast with a single beam breaking through, illuminating subject",
+        "first light through rain, prismatic glow on wet surfaces",
+        "rim-lit silhouette against dawn sky, deep blue-to-amber gradient",
+    ]
+    HOPECORE_TEXTURES = [
+        "rain-beaded glass with light refracting through droplets",
+        "wet stone reflecting warm sky, puddles mirroring cliffs",
+        "morning dew on grass, water droplets catching first light",
+        "soft fabric catching rim light, woven texture visible",
+    ]
+    HOPECORE_ATMOSPHERE = [
+        "mist rising from a valley at dawn, eroding into blue sky",
+        "rain-soaked air, soft focus background, visible streaks",
+        "warm air shimmering above a sunlit path, dust motes drifting",
+        "horizon haze, layered atmospheric perspective into soft focus",
+    ]
+
+    HOPEFUL_MOODS = frozenset({"cinematic_hopeful", "mystical_greek", "calm_stoic"})
+
+    def _weave_hopecore(self, rng=None) -> str:
+        """Return one phrase per Hopecore dimension."""
+        rng = rng or random
+        parts = [
+            rng.choice(self.HOPECORE_COMPOSITIONS),
+            rng.choice(self.HOPECORE_LIGHTING),
+            rng.choice(self.HOPECORE_TEXTURES),
+            rng.choice(self.HOPECORE_ATMOSPHERE),
+        ]
+        return ", ".join(parts)
+
     def __init__(self, anthropic_api_key: str = ""):
         self.api_key = anthropic_api_key
 
@@ -214,6 +254,11 @@ class PromptArchitect:
         # Skipped for explicit photorealistic (style already adds its own rig).
         if mood in self.DARK_MOODS and style != "photorealistic":
             enhancements.append(self._weave_digital_monumentalism())
+
+        # Mood-based Hopecore weaving (warm/compassionate moods).
+        # Skipped for explicit photorealistic (style already adds its own rig).
+        if mood in self.HOPEFUL_MOODS and style != "photorealistic":
+            enhancements.append(self._weave_hopecore())
 
         # Seasonal
         if season and season in self.SEASONAL_CUES:
