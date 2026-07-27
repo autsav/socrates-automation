@@ -18,6 +18,9 @@ analytics/trend_scraper/debate/content_writer/visual_designer/audio_engineer.
 """
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 from datetime import date as date_cls, datetime
 from pathlib import Path
@@ -127,7 +130,7 @@ def _stage(
 
 
 def run_team_pipeline(
-    dry_run: bool = True,
+    dry_run: bool = False,
     *,
     client=None,
     now: datetime | None = None,
@@ -152,6 +155,19 @@ def run_team_pipeline(
     if on_log is not None:
         on_log("info", "Pipeline starting" if resume_from is None
                 else f"Pipeline resuming from {resume_from!r}")
+
+    if dry_run:
+        # Wrap the studio client's paid call so dry-run never spends tokens.
+        # Only mutate when a client is present (caller-passed or just built);
+        # instance-method assignment is safe for real StudioClient and mocks.
+        if client is not None:
+            def _dry_call(*a, **kw):
+                logger.info("DRY-RUN: skipping paid studio call %s",
+                            a[0] if a else "unknown")
+                return {}
+            client.call = _dry_call
+        if on_log is not None:
+            on_log("info", "DRY-RUN: paid studio calls wrapped to no-ops")
 
     data_store.init_db()
 
@@ -180,7 +196,8 @@ def run_team_pipeline(
                 on_stage_done(name, f"resumed from checkpoint ({summarize(result)})")
             return result
         result = stage(name, fn, summarize)
-        _save_checkpoint(run_date, name, serialize(result))
+        if not dry_run:
+            _save_checkpoint(run_date, name, serialize(result))
         return result
 
     if on_agent_activity is not None:
@@ -324,7 +341,6 @@ def run_team_pipeline(
     if on_deliverable is not None:
         on_deliverable("Engagement Strategist", f"Seed comments, DM triggers for {len(engagement_specs)} posts")
 
-    _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     date = approved_plan.date
 
     artifacts = {
@@ -340,10 +356,15 @@ def run_team_pipeline(
     }
 
     output_paths = {}
-    for key, payload in artifacts.items():
-        path = _OUTPUT_DIR / f"{key}_{date}.json"
-        path.write_text(json.dumps(payload, indent=2))
-        output_paths[key] = path
+    if dry_run:
+        if on_log is not None:
+            on_log("info", "DRY-RUN: skipping artifact write loop")
+    else:
+        _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        for key, payload in artifacts.items():
+            path = _OUTPUT_DIR / f"{key}_{date}.json"
+            path.write_text(json.dumps(payload, indent=2))
+            output_paths[key] = path
 
     if on_log is not None:
         on_log("info", "Pipeline complete")
@@ -374,5 +395,5 @@ if __name__ == "__main__":
                              "re-running (and re-paying for) them.")
     args = parser.parse_args()
     result = run_team_pipeline(dry_run=args.dry_run, resume_from=args.resume_from)
-    print(json.dumps({"output_paths": {k: str(v) for k, v in
+    logger.info(json.dumps({"output_paths": {k: str(v) for k, v in
                       result["output_paths"].items()}}, indent=2))
