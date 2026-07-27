@@ -34,7 +34,7 @@ def test_shared_prefix_contains_headline():
 def test_build_prompt_lists_pool():
     pool = [{"row_number": 3, "quote": "Know thyself", "audience": "stuck"}]
     prefix, role = strategist.build_prompt(_perf(), 0, [], pool)
-    assert "Know thyself" in role and "strategist" in role.lower()
+    assert "Know thyself" in role and "content director" in role.lower()
 
 
 def test_make_brief_returns_creativebrief():
