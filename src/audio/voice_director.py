@@ -7,10 +7,14 @@ import subprocess
 from pathlib import Path
 
 # Overrides merged over elevenlabs_engine.DEFAULT_SETTINGS by the caller.
+# `speed` is honored by eleven_turbo_v2_5 (the engine's model_id) and ignored
+# harmlessly on models that don't support it. The hook attacks faster (+12%),
+# the quote slows for gravitas (-8%) — compounding the ~5% pitch-down from
+# apply_gravitas. Lower hook stability = more expressive/urgent.
 _PROFILES = {
-    "hook":  {"stability": 0.22, "style": 0.55},   # intense, fast attack
-    "quote": {"stability": 0.70, "style": 0.05},   # slow gravitas
-    "cta":   {"stability": 0.40, "style": 0.30},   # direct, close
+    "hook":  {"stability": 0.18, "style": 0.62, "speed": 1.12},   # intense, fast attack
+    "quote": {"stability": 0.72, "style": 0.05, "speed": 0.92},   # slow gravitas
+    "cta":   {"stability": 0.40, "style": 0.30, "speed": 1.0},    # direct, close
 }
 _BRIDGE_BASE_STABILITY = 0.45
 _BRIDGE_STEP = 0.05          # each chapter gets more urgent
@@ -42,10 +46,15 @@ def insert_chapter_breaks(text: str, group_size: int = 3) -> str:
 
 def apply_gravitas(path: Path) -> bool:
     """~5% pitch-down on the quote VO (lower pitch narrows the AI-vs-human
-    gap — peer-reviewed finding). In-place; best-effort; False on failure."""
+    gap — peer-reviewed finding). Skips files whose sibling SRT contains
+    <break> tags (pitch shift would corrupt explicit pause timing).
+    In-place; best-effort; False on failure."""
     try:
         path = Path(path)
         if not path.exists() or not shutil.which("ffmpeg"):
+            return False
+        srt = path.with_suffix(".srt")
+        if srt.exists() and "<break" in srt.read_text(errors="ignore"):
             return False
         tmp = path.with_suffix(".grav" + path.suffix)
         # asetrate lowers pitch AND speed; atempo restores duration.

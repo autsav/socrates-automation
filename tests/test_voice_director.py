@@ -41,3 +41,21 @@ def test_chapter_breaks_inserted_between_sentence_groups():
 
 def test_apply_gravitas_returns_false_on_missing_file(tmp_path):
     assert apply_gravitas(tmp_path / "nope.mp3") is False
+
+
+def test_apply_gravitas_skips_files_with_break_tags(tmp_path):
+    """Files with sibling SRT containing <break> must NOT be pitch-down'd —
+    pitch-shift warps the timing of inserted pauses."""
+    from unittest.mock import patch
+    from src.audio import voice_director
+
+    mp3 = tmp_path / "voice.mp3"
+    mp3.write_bytes(b"\x00")
+    srt = tmp_path / "voice.srt"
+    srt.write_text('1\n00:00:00,000 --> 00:00:01,000\nHello <break time="0.5s" /> world\n')
+
+    with patch.object(voice_director.subprocess, "run") as mock_run:
+        result = voice_director.apply_gravitas(mp3)
+
+    assert result is False
+    mock_run.assert_not_called()
