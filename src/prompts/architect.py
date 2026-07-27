@@ -101,6 +101,48 @@ class PromptArchitect:
         "winter": "frost on marble surfaces, bare branches, pale blue light",
     }
 
+    # ── Digital Monumentalism (dark/marble/Roman/historical) ──────────────────
+    MONUMENTALISM_COMPOSITIONS = [
+        "low-angle view looking up at weathered marble columns, monumental scale",
+        "extreme wide shot of crumbling stone amphitheater at twilight",
+        "foreground silhouette of a single robed figure against a vast temple facade",
+        "tight crop on a cracked marble inscription, lichen growing between carved letters",
+        "centered symmetrical frame of a broken statue, negative space above",
+        "depth-layered receding arches into mist, lone figure at vanishing point",
+    ]
+    MONUMENTALISM_LIGHTING = [
+        "single hard shaft of light falling across carved stone, deep shadows elsewhere",
+        "overcast cold blue with a warm glow escaping from a distant archway",
+        "firelight flickering on a stone wall, specular highlights on worn marble",
+        "low-key chiaroscuro, side-lit subject emerging from darkness",
+    ]
+    MONUMENTALISM_TEXTURES = [
+        "weathered travertine marble, mineral staining, real erosion",
+        "cracked stone with moss and lichen, no polished surfaces",
+        "dust-covered bronze with verdigris patina, oxidized detail",
+        "worn limestone, sun-bleached, hand-tooled chisel marks visible",
+    ]
+    MONUMENTALISM_ATMOSPHERE = [
+        "low fog rolling across flagstones, swallowing the base of columns",
+        "cold damp stone air, visible breath, no sun",
+        "ash drifting down from a hidden fire above the colonnade",
+        "ominous stillness, no birds, no wind movement",
+    ]
+
+    DARK_MOODS = frozenset({"dark_philosophical", "dramatic_ancient",
+                            "stark_minimal", "epic_warrior"})
+
+    def _weave_digital_monumentalism(self, rng=None) -> str:
+        """Return one phrase per Monumentalism dimension (composition/lighting/texture/atmosphere)."""
+        rng = rng or random
+        parts = [
+            rng.choice(self.MONUMENTALISM_COMPOSITIONS),
+            rng.choice(self.MONUMENTALISM_LIGHTING),
+            rng.choice(self.MONUMENTALISM_TEXTURES),
+            rng.choice(self.MONUMENTALISM_ATMOSPHERE),
+        ]
+        return ", ".join(parts)
+
     def __init__(self, anthropic_api_key: str = ""):
         self.api_key = anthropic_api_key
 
@@ -167,6 +209,11 @@ class PromptArchitect:
             enhancements.append("digital matte painting, concept art, ArtStation trending")
         elif style == "cinematic":
             enhancements.append("cinematic color grading, anamorphic lens characteristics, film grain")
+
+        # Mood-based Digital Monumentalism weaving (dark/historical moods).
+        # Skipped for explicit photorealistic (style already adds its own rig).
+        if mood in self.DARK_MOODS and style != "photorealistic":
+            enhancements.append(self._weave_digital_monumentalism())
 
         # Seasonal
         if season and season in self.SEASONAL_CUES:
