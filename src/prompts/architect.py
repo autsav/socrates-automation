@@ -183,6 +183,13 @@ class PromptArchitect:
         ]
         return ", ".join(parts)
 
+    # ── Photorealism Rig (always-on anchoring suffix) ───────────────────────────
+    PHOTOREAL_RIG = (
+        "photorealistic, shot on Phase One IQ4, 80mm prime lens, "
+        "35mm film grain, no obvious 3D render, no plastic surfaces, "
+        "natural color science, no over-saturated highlights"
+    )
+
     def __init__(self, anthropic_api_key: str = ""):
         self.api_key = anthropic_api_key
 
@@ -264,8 +271,9 @@ class PromptArchitect:
         if season and season in self.SEASONAL_CUES:
             enhancements.append(self.SEASONAL_CUES[season])
 
-        # Final quality boosters (always included)
-        enhancements.append("8k resolution, hyper-detailed, trending on ArtStation")
+        # Final quality boosters — Photorealism Rig is the always-on suffix that
+        # prevents FLUX drift into "obvious AI render".
+        enhancements.append(self.PHOTOREAL_RIG)
 
         # Combine
         prompt = f"{core}, {', '.join(enhancements)}"
