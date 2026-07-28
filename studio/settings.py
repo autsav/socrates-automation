@@ -1,4 +1,5 @@
 """Studio configuration constants (non-secret). Models / effort / budget dials."""
+import os
 from pathlib import Path
 
 from src.core.excel_reader import AUDIENCE_TO_MOOD
@@ -21,6 +22,7 @@ ROLE_MODELS = {
     "music_director":         "claude-sonnet-4-6",
     "trend_scout":            "claude-sonnet-4-6",
     "prompt_critic":          "claude-sonnet-4-6",
+    "social_strategist":      os.getenv("STRATEGIST_MODEL", "claude-opus-4-7"),
     "story_writer":           "claude-opus-4-8",
     "hook_specialist":        "claude-sonnet-4-6",
 }
@@ -40,6 +42,7 @@ ROLE_EFFORT = {
     "music_director":         "medium",
     "trend_scout":            "medium",
     "prompt_critic":          "medium",
+    "social_strategist":      "high",
     "story_writer":           "high",
     "hook_specialist":        "medium",
 }
@@ -50,3 +53,6 @@ _DATA = Path(__file__).resolve().parent.parent / "data"
 PERF_BRIEF_PATH = _DATA / "perf_brief.json"
 PERF_BRIEF_TTL_HOURS = 24
 SPEND_LOG_PATH = _DATA / "studio_spend.json"
+
+STRATEGY_AUDIENCE = os.getenv("STRATEGY_AUDIENCE",
+                              "procrastinators and doomscrollers who feel stuck")
