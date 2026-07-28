@@ -1947,6 +1947,37 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     return record
 
 
+class Pipeline:
+    """Minimal Pipeline holder — houses the deterministic `_match_quote()`
+    helper that the social_strategist agent calls to pick a quote row from
+    the excel reader before its single Opus call. Existing module-level
+    pipeline functions remain the canonical entry points; this class is
+    a thin OO surface used by Tests/Tasks 7-9 only.
+    """
+
+    _MATCH_SCORE_THRESHOLD = 0.2
+
+    def _match_quote(self, keywords: list[str]) -> dict | None:
+        """Highest-scoring excel quote matching trend keywords. Deterministic.
+        None if no row scores >= 0.2. No LLM call."""
+        keywords_lc = [k.lower() for k in keywords if k]
+        if not keywords_lc:
+            return None
+        rows = self.excel_reader.all_rows()
+        scored = []
+        for row in rows:
+            text_lc = (row.get("text", "") + " " + row.get("theme", "")).lower()
+            score = sum(1 for k in keywords_lc if k in text_lc)
+            if row.get("mood", "").lower() in keywords_lc:
+                score += 0.5
+            if score >= self._MATCH_SCORE_THRESHOLD:
+                scored.append((score, row.get("row_number", 0), row))
+        if not scored:
+            return None
+        scored.sort(key=lambda t: (-t[0], t[1]))  # highest score, then lowest row_number
+        return scored[0][2]
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
