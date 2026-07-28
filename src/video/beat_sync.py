@@ -9,6 +9,9 @@ Two backends:
 Research: Reels with beat-synced cuts have 20-30% higher completion rates.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import subprocess
 import re
 from pathlib import Path
@@ -204,7 +207,7 @@ def detect_beats_librosa(
         return result
 
     except Exception as e:
-        print(f"  [beat-sync] librosa detection failed ({e}) — falling back to ebur128")
+        logger.info(f"  [beat-sync] librosa detection failed ({e}) — falling back to ebur128")
         return []
 
 
@@ -219,10 +222,10 @@ def detect_beats(
     if _HAS_LIBROSA:
         peaks = detect_beats_librosa(audio_path, min_peak_distance)
         if peaks:
-            print(f"  [beat-sync] librosa detected {len(peaks)} beats")
+            logger.info(f"  [beat-sync] librosa detected {len(peaks)} beats")
             return peaks
     # Fallback to ffmpeg ebur128
-    print(f"  [beat-sync] Using ebur128 fallback (install librosa for better accuracy)")
+    logger.info(f"  [beat-sync] Using ebur128 fallback (install librosa for better accuracy)")
     return detect_energy_peaks(audio_path, min_peak_distance)
 
 
@@ -341,14 +344,14 @@ def analyze_audio_for_sync(
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python beat_sync.py <audio_file.mp3>")
+        logger.info("Usage: python beat_sync.py <audio_file.mp3>")
         sys.exit(1)
 
     path = Path(sys.argv[1])
     result = analyze_audio_for_sync(path, mood="dark_philosophical")
-    print(f"Audio: {path}")
-    print(f"Detected peaks: {result['peaks']}")
-    print(f"Scene durations: {result['scene_durations']}")
-    print(f"Transition offsets: {result['transition_offsets']}")
-    print(f"Transition type: {result['transition_type']}")
-    print(f"Used beat sync: {result['used_beats']}")
+    logger.info(f"Audio: {path}")
+    logger.info(f"Detected peaks: {result['peaks']}")
+    logger.info(f"Scene durations: {result['scene_durations']}")
+    logger.info(f"Transition offsets: {result['transition_offsets']}")
+    logger.info(f"Transition type: {result['transition_type']}")
+    logger.info(f"Used beat sync: {result['used_beats']}")

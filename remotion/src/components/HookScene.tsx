@@ -1,13 +1,15 @@
 import React from "react";
-import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { AnimatedText } from "./AnimatedText";
 import { Palette } from "../styles/theme";
 import { WordTime } from "../lib/wordAt";
 
 /**
- * HookScene — the opening pattern-interrupt. Word-by-word spring reveal with a
- * subtle whole-scene zoom-in on entrance and a fade+scale out at the end so it
- * hands off cleanly to the quote.
+ * HookScene — the opening pattern-interrupt. The first 1-3 seconds decide
+ * retention, so the entrance is a HARD pop (not a soft spring): 1.18 -> 1.0 in
+ * 6 frames + a 2-frame jolt. A scroller's eye is gone by frame 6 if nothing
+ * moved hard. Word-by-word reveal with a fade+scale out so it hands off cleanly
+ * to the quote.
  */
 export const HookScene: React.FC<{
   text: string;
@@ -18,13 +20,14 @@ export const HookScene: React.FC<{
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
-  const entrance = spring({
-    frame,
-    fps,
-    config: { damping: 14, mass: 0.8, stiffness: 90 },
-    durationInFrames: 20,
+  // Frame-0 HARD pop: 1.18 -> 1.0 in 6 frames (replaces the soft 20-frame spring).
+  // This is the scroll-stopper — the algorithm rewards an immediate visual move.
+  const hardPop = interpolate(frame, [0, 6], [1.18, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
   });
-  const enterScale = interpolate(entrance, [0, 1], [1.06, 1]);
+  // 2-frame entry jolt: a hard x-shift the eye can't ignore (pattern interrupt).
+  const jolt = frame < 2 ? (frame % 2 === 0 ? -6 : 6) : 0;
 
   const outFade = interpolate(
     frame,
@@ -40,8 +43,8 @@ export const HookScene: React.FC<{
   );
 
   // Big-type retention pattern (recipe #2): show <=4 words at a time during the
-  // 3-second hold window. Chunks cut hard (pattern interrupt), timed to the VO
-  // word timings when present, equal splits otherwise.
+  // hold window. Chunks cut hard (pattern interrupt), timed to the VO word
+  // timings when present, equal splits otherwise.
   const words = text.trim().split(/\s+/);
   const chunkCount = Math.max(1, Math.ceil(words.length / 4));
   const wt = wordTimes ?? [];
@@ -67,17 +70,18 @@ export const HookScene: React.FC<{
         position: "absolute",
         inset: 0,
         opacity: outFade,
-        transform: `scale(${enterScale * outScale})`,
+        transform: `translateX(${jolt}px) scale(${hardPop * outScale})`,
       }}
     >
       <AnimatedText
         text={chunk.text}
         palette={palette}
         fontSize={192}
-        stagger={0.08}
+        stagger={0.06}
         wordTimes={chunk.times}
         staticFirstFrames={chunk.index === 0 ? 3 : 0}
         animSeed={animSeed}
+        hookMode
       />
     </div>
   );

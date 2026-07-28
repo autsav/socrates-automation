@@ -1,6 +1,9 @@
 """Generate ambient audio tracks for each mood using ffmpeg built-in synthesis.
 100% original generated audio — no downloads or licenses needed."""
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import subprocess
 import shutil
 import sys
@@ -95,7 +98,7 @@ def prepare_reel_audio(
 
 def generate_audio():
     if not shutil.which("ffmpeg"):
-        print("Error: ffmpeg not found. Install with: brew install ffmpeg")
+        logger.error("Error: ffmpeg not found. Install with: brew install ffmpeg")
         sys.exit(1)
 
     os.makedirs(AUDIO_DIR, exist_ok=True)
@@ -103,15 +106,15 @@ def generate_audio():
     for mood, (desc, args) in MOODS.items():
         output = os.path.join(AUDIO_DIR, f"{mood}.mp3")
         cmd = ["ffmpeg", "-y"] + args + [output]
-        print(f"  Generating {mood}.mp3... ", end="", flush=True)
+        logger.info(f"  Generating {mood}.mp3... ", end="", flush=True)
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
             size = os.path.getsize(output)
-            print(f"OK ({size/1024:.1f} KB) — {desc}")
+            logger.info(f"OK ({size/1024:.1f} KB) — {desc}")
         else:
             error = result.stderr[-200:] if result.stderr else "unknown error"
-            print(f"FAILED: {error}")
+            logger.info(f"FAILED: {error}")
 
 
 if __name__ == "__main__":

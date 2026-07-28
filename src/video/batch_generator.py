@@ -16,6 +16,9 @@ Usage:
 
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 from pathlib import Path
 
 import openpyxl
@@ -77,10 +80,10 @@ def generate_batch(
     """
     quotes = read_ready_quotes(excel_path, limit=count)
     if not quotes:
-        print("  [batch] No ready quotes found in quotes.xlsx")
+        logger.info("  [batch] No ready quotes found in quotes.xlsx")
         return []
 
-    print(f"  [batch] Generating {len(quotes)} POV Reels from quotes.xlsx...")
+    logger.info(f"  [batch] Generating {len(quotes)} POV Reels from quotes.xlsx...")
     paths = generate_pov_reels(quotes, output_dir=output_dir, mood_map=AUDIENCE_TO_MOOD)
 
     _print_summary(quotes, paths, output_dir)
@@ -88,22 +91,22 @@ def generate_batch(
 
 
 def _print_summary(quotes: list[dict], paths: list, output_dir: str | Path) -> None:
-    print("\n" + "=" * 60)
-    print("  POV REEL BATCH GENERATION SUMMARY")
-    print("=" * 60)
-    print(f"  Requested:  {len(quotes)}")
-    print(f"  Generated:  {len(paths)}")
-    print(f"  Failed:     {len(quotes) - len(paths)}")
-    print(f"  Output dir: {Path(output_dir).resolve()}")
-    print(f"  ≈ {len(paths) / 5:.1f} days of content at 5/day, "
+    logger.info("\n" + "=" * 60)
+    logger.info("  POV REEL BATCH GENERATION SUMMARY")
+    logger.info("=" * 60)
+    logger.info(f"  Requested:  {len(quotes)}")
+    logger.info(f"  Generated:  {len(paths)}")
+    logger.info(f"  Failed:     {len(quotes) - len(paths)}")
+    logger.info(f"  Output dir: {Path(output_dir).resolve()}")
+    logger.info(f"  ≈ {len(paths) / 5:.1f} days of content at 5/day, "
           f"{len(paths) / 4:.1f} days at 4/day")
-    print("-" * 60)
+    logger.info("-" * 60)
     for i, path in enumerate(paths[:10]):
         preview = quotes[i]["quote"][:50] if i < len(quotes) else ""
-        print(f"    {i + 1:>2}. {Path(path).name}  —  {preview}...")
+        logger.info(f"    {i + 1:>2}. {Path(path).name}  —  {preview}...")
     if len(paths) > 10:
-        print(f"    ... and {len(paths) - 10} more")
-    print("=" * 60 + "\n")
+        logger.info(f"    ... and {len(paths) - 10} more")
+    logger.info("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

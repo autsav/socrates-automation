@@ -6,6 +6,10 @@
   optimize.py --status           print champions + open experiments
   optimize.py --apply-decisions  poll Telegram once; promote/reject per approval
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import argparse
 import json
 import sys
@@ -69,7 +73,7 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
     if args.status:
         for a in assets.iter_managed(db_path):
             exp = experiments.get_open_experiment(a["key"], db_path)
-            print(f"{a['key']}: champion set; open_experiment={'yes' if exp else 'no'}")
+            logger.info(f"{a['key']}: champion set; open_experiment={'yes' if exp else 'no'}")
         return 0
 
     if args.surface_pending:
@@ -92,13 +96,13 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
                 "candidate": v["value"],
             }
             msg = loop.format_proposal_message(proposal)
-            print(f"→ surfacing {a['key']} (v#{v['id']})")
+            logger.info(f"→ surfacing {a['key']} (v#{v['id']})")
             if notify is not None:
                 notify(msg)
             else:
                 _default_surface(proposal, msg)
             count += 1
-        print(f"\nSurfaced {count} pending challenger(s) to Telegram.")
+        logger.info(f"\nSurfaced {count} pending challenger(s) to Telegram.")
         return 0
 
     if args.apply_decisions:
@@ -111,20 +115,20 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
             approved = d["status"] == "approved"
             result = loop.apply_decision(vid, approved, db_path)
             approval.mark_optimizer_applied(vid)
-            print(f"challenger v#{vid}: {result}")
-        print(f"\n{len(decisions)} decision(s).")
+            logger.info(f"challenger v#{vid}: {result}")
+        logger.info(f"\n{len(decisions)} decision(s).")
         return 0
 
     if args.evaluate:
         wins = loop.evaluate_experiments(db_path=db_path)
         for p in wins:
             msg = loop.format_proposal_message(p)
-            print(msg)
+            logger.info(msg)
             if notify is not None:
                 notify(msg)
             else:
                 _default_surface(p, msg)
-        print(f"\n{len(wins)} A/B winner(s) surfaced.")
+        logger.info(f"\n{len(wins)} A/B winner(s) surfaced.")
         return 0
 
     if args.run or args.dry_run:
@@ -137,13 +141,13 @@ def main(argv=None, *, client=None, notify=None, db_path=registry.DB_PATH,
                                    propose_fn=propose_fn)
         for p in proposals:
             msg = loop.format_proposal_message(p)
-            print(msg)
+            logger.info(msg)
             if args.run:
                 if notify is not None:
                     notify(msg)              # test seam
                 else:
                     _default_surface(p, msg)  # real Telegram w/ approve/reject buttons
-        print(f"\n{len(proposals)} proposal(s).")
+        logger.info(f"\n{len(proposals)} proposal(s).")
         return 0
 
     ap.print_help()

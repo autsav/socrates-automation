@@ -11,6 +11,9 @@ Usage: After posting a Reel, call notify_post_published() to remind
 the user to manually add a trending sound via the Instagram app.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import logging
 import subprocess
@@ -53,7 +56,7 @@ class TelegramBackend:
             resp.raise_for_status()
             return True
         except Exception as e:
-            print(f"  [notify] Telegram failed: {e}")
+            logger.info(f"  [notify] Telegram failed: {e}")
             return False
 
     def send_video(self, video_path: Path, caption: str = "") -> bool:
@@ -61,7 +64,7 @@ class TelegramBackend:
         import requests
         video_path = Path(video_path)  # coerce string → Path
         if not video_path.exists():
-            print(f"  [notify] Video file not found: {video_path}")
+            logger.info(f"  [notify] Video file not found: {video_path}")
             return False
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendVideo"
@@ -73,12 +76,12 @@ class TelegramBackend:
                     timeout=120,
                 )
             if not resp.ok:
-                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                logger.info(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
                 return False
-            print(f"  [notify] Sent video via Telegram: {video_path.name} ({video_path.stat().st_size / 1024:.0f} KB)")
+            logger.info(f"  [notify] Sent video via Telegram: {video_path.name} ({video_path.stat().st_size / 1024:.0f} KB)")
             return True
         except Exception as e:
-            print(f"  [notify] Telegram video send failed: {e}")
+            logger.info(f"  [notify] Telegram video send failed: {e}")
             return False
 
     def send_photo(self, photo_path: Path, caption: str = "") -> bool:
@@ -86,7 +89,7 @@ class TelegramBackend:
         import requests
         photo_path = Path(photo_path)
         if not photo_path.exists():
-            print(f"  [notify] Photo file not found: {photo_path}")
+            logger.info(f"  [notify] Photo file not found: {photo_path}")
             return False
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
@@ -98,12 +101,12 @@ class TelegramBackend:
                     timeout=60,
                 )
             if not resp.ok:
-                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                logger.info(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
                 return False
-            print(f"  [notify] Sent photo via Telegram: {photo_path.name}")
+            logger.info(f"  [notify] Sent photo via Telegram: {photo_path.name}")
             return True
         except Exception as e:
-            print(f"  [notify] Telegram photo send failed: {e}")
+            logger.info(f"  [notify] Telegram photo send failed: {e}")
             return False
 
     def send_with_buttons(self, message: str, buttons: list) -> int | None:
@@ -120,11 +123,11 @@ class TelegramBackend:
                 timeout=15,
             )
             if not resp.ok:
-                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                logger.info(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
                 return None
             return resp.json().get("result", {}).get("message_id")
         except Exception as e:
-            print(f"  [notify] Telegram send_with_buttons failed: {e}")
+            logger.info(f"  [notify] Telegram send_with_buttons failed: {e}")
             return None
 
     def send_video_with_buttons(self, video_path: Path, caption: str,
@@ -136,7 +139,7 @@ class TelegramBackend:
         import requests
         video_path = Path(video_path)
         if not video_path.exists():
-            print(f"  [notify] Video file not found: {video_path}")
+            logger.info(f"  [notify] Video file not found: {video_path}")
             return None
         try:
             with open(video_path, "rb") as f:
@@ -149,11 +152,11 @@ class TelegramBackend:
                     timeout=120,
                 )
             if not resp.ok:
-                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                logger.info(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
                 return None
             return resp.json().get("result", {}).get("message_id")
         except Exception as e:
-            print(f"  [notify] Telegram send_video_with_buttons failed: {e}")
+            logger.info(f"  [notify] Telegram send_video_with_buttons failed: {e}")
             return None
 
     def get_updates(self, offset: int | None = None, timeout: int = 0) -> list:
@@ -171,11 +174,11 @@ class TelegramBackend:
                 params=params, timeout=timeout + 15,
             )
             if not resp.ok:
-                print(f"  [notify] getUpdates failed: {resp.status_code} {resp.text[:200]}")
+                logger.info(f"  [notify] getUpdates failed: {resp.status_code} {resp.text[:200]}")
                 return []
             return resp.json().get("result", [])
         except Exception as e:
-            print(f"  [notify] getUpdates failed: {e}")
+            logger.info(f"  [notify] getUpdates failed: {e}")
             return []
 
     def answer_callback_query(self, callback_query_id: str, text: str = "") -> bool:
@@ -189,7 +192,7 @@ class TelegramBackend:
             )
             return resp.ok
         except Exception as e:
-            print(f"  [notify] answerCallbackQuery failed: {e}")
+            logger.info(f"  [notify] answerCallbackQuery failed: {e}")
             return False
 
     def send_document(self, doc_path: Path, caption: str = "") -> bool:
@@ -197,7 +200,7 @@ class TelegramBackend:
         import requests
         doc_path = Path(doc_path)
         if not doc_path.exists():
-            print(f"  [notify] Document file not found: {doc_path}")
+            logger.info(f"  [notify] Document file not found: {doc_path}")
             return False
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
@@ -209,12 +212,12 @@ class TelegramBackend:
                     timeout=60,
                 )
             if not resp.ok:
-                print(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
+                logger.info(f"  [notify] Telegram API error {resp.status_code}: {resp.text[:200]}")
                 return False
-            print(f"  [notify] Sent document via Telegram: {doc_path.name}")
+            logger.info(f"  [notify] Sent document via Telegram: {doc_path.name}")
             return True
         except Exception as e:
-            print(f"  [notify] Telegram document send failed: {e}")
+            logger.info(f"  [notify] Telegram document send failed: {e}")
             return False
 
 
@@ -239,7 +242,7 @@ class SlackBackend:
             resp.raise_for_status()
             return True
         except Exception as e:
-            print(f"  [notify] Slack failed: {e}")
+            logger.info(f"  [notify] Slack failed: {e}")
             return False
 
 
@@ -369,13 +372,13 @@ class Notifier:
             try:
                 ok = backend.send(message)
                 if ok:
-                    print(f"  [notify] Sent via {backend.name}")
+                    logger.info(f"  [notify] Sent via {backend.name}")
                     sent_any = True
             except Exception as e:
-                print(f"  [notify] Backend {backend.name} failed: {e}")
+                logger.info(f"  [notify] Backend {backend.name} failed: {e}")
 
         if not sent_any:
-            print("  [notify] ⚠️  No external backend succeeded — check logs/notifications.jsonl")
+            logger.info("  [notify] ⚠️  No external backend succeeded — check logs/notifications.jsonl")
 
     def notify_manual_reel_ready(
         self,
@@ -468,15 +471,15 @@ class Notifier:
                 else:
                     ok = False
                 if ok:
-                    print(f"  [notify] Sent Reel video via {backend.name}")
+                    logger.info(f"  [notify] Sent Reel video via {backend.name}")
                     sent_video = True
                     # Send follow-up text message with caption
                     backend.send(message)
             except Exception as e:
-                print(f"  [notify] Video send via {backend.name} failed: {e}")
+                logger.info(f"  [notify] Video send via {backend.name} failed: {e}")
 
         if not sent_video:
-            print("  [notify] ⚠️  Could not send video — check logs/notifications.jsonl and GitHub artifacts")
+            logger.info("  [notify] ⚠️  Could not send video — check logs/notifications.jsonl and GitHub artifacts")
 
     def notify_story_teaser(
         self,
@@ -518,9 +521,9 @@ class Notifier:
                 backend.send(message)
                 break
             except Exception as e:
-                print(f"  [notify] Story teaser send failed via {backend.name}: {e}")
+                logger.info(f"  [notify] Story teaser send failed via {backend.name}: {e}")
 
-        print(f"  [notify] Story teaser dispatched")
+        logger.info(f"  [notify] Story teaser dispatched")
 
     def notify_twitter_thread(
         self,
@@ -586,9 +589,9 @@ class Notifier:
                 backend.send(message)
                 break
             except Exception as e:
-                print(f"  [notify] Twitter thread send failed via {backend.name}: {e}")
+                logger.info(f"  [notify] Twitter thread send failed via {backend.name}: {e}")
 
-        print(f"  [notify] Twitter thread ({len(tweets)} tweets) dispatched")
+        logger.info(f"  [notify] Twitter thread ({len(tweets)} tweets) dispatched")
 
     def notify_seed_comments(
         self,
@@ -654,9 +657,9 @@ class Notifier:
                 backend.send(message)
                 break  # send once (Telegram or first available)
             except Exception as e:
-                print(f"  [notify] Seed comment send failed via {backend.name}: {e}")
+                logger.info(f"  [notify] Seed comment send failed via {backend.name}: {e}")
 
-        print(f"  [notify] Seed comments dispatched ({len(seed_comments)} comments)")
+        logger.info(f"  [notify] Seed comments dispatched ({len(seed_comments)} comments)")
 
     def notify_bio_link_rotation(
         self,
@@ -782,7 +785,7 @@ class Notifier:
                         backend.send(message)
                     break
                 except Exception as e:
-                    print(f"  [notify] Telegram channel post failed: {e}")
+                    logger.info(f"  [notify] Telegram channel post failed: {e}")
 
     def notify_wallpapers_ready(
         self,
@@ -840,16 +843,16 @@ class Notifier:
                         backend.send_photo(path, caption=f"Wallpaper ({fmt})")
                         sent_any = True
                     except Exception as e:
-                        print(f"  [notify] Wallpaper send failed: {e}")
+                        logger.info(f"  [notify] Wallpaper send failed: {e}")
                 elif backend.name == "telegram" and hasattr(backend, "send_document"):
                     try:
                         backend.send_document(path, caption=f"Wallpaper ({fmt})")
                         sent_any = True
                     except Exception as e:
-                        print(f"  [notify] Wallpaper send failed: {e}")
+                        logger.info(f"  [notify] Wallpaper send failed: {e}")
 
         if not sent_any:
-            print("  [notify] ⚠️  No wallpaper notification backend succeeded")
+            logger.info("  [notify] ⚠️  No wallpaper notification backend succeeded")
 
 
 # ── CLI helper ───────────────────────────────────────────────────────────────
@@ -858,18 +861,18 @@ def notify_latest(cfg):
     """Send notification for the most recently logged post (workflow helper)."""
     log_path = LOG_DIR / "posts.jsonl"
     if not log_path.exists():
-        print("[notify] No posts.jsonl found")
+        logger.info("[notify] No posts.jsonl found")
         return
 
     try:
         with open(log_path, "r", encoding="utf-8") as f:
             lines = [l.strip() for l in f if l.strip()]
         if not lines:
-            print("[notify] No posts in log")
+            logger.info("[notify] No posts in log")
             return
         latest = json.loads(lines[-1])
     except Exception as e:
-        print(f"[notify] Failed to read posts log: {e}")
+        logger.info(f"[notify] Failed to read posts log: {e}")
         return
 
     notifier = Notifier(cfg)
@@ -892,4 +895,4 @@ if __name__ == "__main__":
     if args.latest:
         notify_latest(cfg)
     else:
-        print("Usage: python notifier.py --latest")
+        logger.info("Usage: python notifier.py --latest")

@@ -10,6 +10,9 @@ Usage: After posting a Reel, suggest a trending sound the user can
 manually add via the Instagram app.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import random
 from pathlib import Path
@@ -140,9 +143,9 @@ def refresh_weekly_rotation():
 if __name__ == "__main__":
     import sys
     mood = sys.argv[1] if len(sys.argv) > 1 else "dark_philosophical"
-    print(f"Trending suggestion for '{mood}':")
-    print(get_trending_suggestion(mood))
-    print()
-    print("All curated sounds:")
+    logger.info(f"Trending suggestion for '{mood}':")
+    logger.info(get_trending_suggestion(mood))
+    logger.info()
+    logger.info("All curated sounds:")
     for s in list_all_sounds():
-        print(f"  - {s['name']} ({', '.join(s['moods'])})")
+        logger.info(f"  - {s['name']} ({', '.join(s['moods'])})")

@@ -95,9 +95,13 @@ def test_reel_voiceover_applies_per_scene_delivery_profiles(tmp_path, monkeypatc
 
     assert len(captured) == 3
     hook_settings, quote_settings, cta_settings = captured
-    assert hook_settings["stability"] == 0.22
-    assert quote_settings["stability"] == 0.70
+    # Hook attacks faster (lower stability 0.22 -> 0.18, +speed); the quote
+    # slows for gravitas (0.70 -> 0.72, -speed). Stability still differs per scene.
+    assert hook_settings["stability"] == 0.18
+    assert quote_settings["stability"] == 0.72
     assert hook_settings["stability"] != quote_settings["stability"]
+    assert hook_settings.get("speed") == 1.12
+    assert quote_settings.get("speed") == 0.92
 
 
 def test_reel_voiceover_scene_settings_default_none_is_unchanged(tmp_path, monkeypatch):

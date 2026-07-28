@@ -3,6 +3,9 @@ Token Manager — automatically refresh Meta access tokens before expiry.
 Uses Meta's fb_exchange_token endpoint to extend token life.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import requests
 from datetime import datetime, timedelta, timezone
 
@@ -32,14 +35,14 @@ def refresh_if_needed(
     Returns valid token (new or current).
     """
     if not app_id or not app_secret:
-        print("  [token] No app_id/secret configured — skipping refresh")
+        logger.warning("  [token] No app_id/secret configured — skipping refresh")
         return current_token
 
     if not _is_token_expiring_soon(expires_at):
-        print("  [token] Token is fresh, no refresh needed")
+        logger.info("  [token] Token is fresh, no refresh needed")
         return current_token
 
-    print("  [token] Token expiring soon — refreshing...")
+    logger.info("  [token] Token expiring soon — refreshing...")
     try:
         response = requests.post(
             META_TOKEN_URL,
@@ -55,12 +58,12 @@ def refresh_if_needed(
         data = response.json()
         new_token = data.get("access_token")
         if not new_token:
-            print(f"  [token] Refresh response missing access_token: {data}")
+            logger.info(f"  [token] Refresh response missing access_token: {data}")
             return current_token
-        print("  [token] Token refreshed successfully")
+        logger.info("  [token] Token refreshed successfully")
         return new_token
     except requests.RequestException as e:
-        print(f"  [token] Refresh failed: {e}")
+        logger.info(f"  [token] Refresh failed: {e}")
         return current_token
 
 
@@ -90,6 +93,6 @@ def get_valid_token_with_fallback(cfg) -> str:
                 save_token("meta", token, datetime.now(timezone.utc) + timedelta(days=60))
             return token
     except Exception as e:
-        print(f"  [token] data_store check failed: {e}")
+        logger.info(f"  [token] data_store check failed: {e}")
 
     return cfg.META_ACCESS_TOKEN

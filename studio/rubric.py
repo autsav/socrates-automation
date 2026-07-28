@@ -13,6 +13,12 @@ _CONCRETE_HINTS = re.compile(
     r"\d|marble|bread|floor|barrel|rain|shoes|coin|cup|dirt|cloak|storm|2am|phone")
 _SPECIFIC_CTA = re.compile(
     r"send this to (the|your|someone|a) ", re.I)
+# Negation outpulls affirmation ("you are NOT who you think" > "be your best"),
+# and 2am/time-stamps make the hook feel like the viewer's own life. Both bump
+# the hook-variant score so the specialist pass prefers them.
+_NEGATION = re.compile(r"\b(not|never|no |nobody|nothing|none|stop|quit)\b", re.I)
+_TIME_STAMP = re.compile(
+    r"\b2am|3am|midnight|monday|today|tonight|before (lunch|bed|noon)\b", re.I)
 
 
 def _words(s):
@@ -126,11 +132,17 @@ def score_story_detailed(d: dict) -> dict:
 
 
 def score_hook(hook: str) -> float:
-    """Hook-variant scoring for the specialist pass (spec 4)."""
+    """Hook-variant scoring for the specialist pass (spec 4).
+
+    Rewards concrete images/numbers, negation, and 2am/time-stamps (relatability);
+    penalizes abstractions, questions, and resolution phrases that close the loop.
+    """
     try:
         hl = (hook or "").lower()
         score = 5.0
         score += 2.0 * len(_CONCRETE_HINTS.findall(hl))
+        score += 1.5 * bool(_TIME_STAMP.search(hl))   # relatable time anchor
+        score += 1.5 * bool(_NEGATION.search(hl))     # negation outpulls affirmation
         score -= 2.0 * sum(w in _ABSTRACTIONS for w in _words(hl))
         if hook.rstrip().endswith("?"):
             score -= 3.0

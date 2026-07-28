@@ -23,6 +23,9 @@ Usage:
 
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import shutil
 import subprocess
 import time
@@ -298,7 +301,7 @@ def generate_pov_reel(
     Returns the output path, or None if ffmpeg is unavailable.
     """
     if not ffmpeg_available():
-        print("  [pov] ffmpeg not found — skipping POV Reel generation")
+        logger.warning("  [pov] ffmpeg not found — skipping POV Reel generation")
         return None
 
     if quote_duration is None:
@@ -448,14 +451,14 @@ def generate_pov_reel(
             str(output_path),
         ]
 
-        print(f"  [pov] Generating POV Reel ({total_duration:.1f}s)...")
+        logger.info(f"  [pov] Generating POV Reel ({total_duration:.1f}s)...")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         if result.returncode != 0:
             error = result.stderr[-600:] if result.stderr else "unknown error"
             raise RuntimeError(f"ffmpeg POV reel generation failed: {error}")
 
         size = output_path.stat().st_size
-        print(f"  [pov] Saved: {output_path} ({size / 1024:.0f} KB)")
+        logger.info(f"  [pov] Saved: {output_path} ({size / 1024:.0f} KB)")
         return output_path
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -508,9 +511,9 @@ def generate_pov_reels(
             if path:
                 results.append(path)
         except Exception as e:
-            print(f"  [pov] ⚠️ Failed to generate Reel for row {row_number}: {e}")
+            logger.info(f"  [pov] ⚠️ Failed to generate Reel for row {row_number}: {e}")
 
-    print(f"  [pov] Batch complete: {len(results)}/{len(quotes)} POV Reels generated → {output_dir}")
+    logger.info(f"  [pov] Batch complete: {len(results)}/{len(quotes)} POV Reels generated → {output_dir}")
     return results
 
 
@@ -521,4 +524,4 @@ if __name__ == "__main__":
         cta="Save this before you forget it.",
         output_path="output/pov_reels/pov_demo.mp4",
     )
-    print(out)
+    logger.info(out)

@@ -12,17 +12,23 @@ from collections import defaultdict
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "pipeline.db"
 
-CTA_TYPES = ["save_bait", "share_bait", "comment_bait", "agree_disagree", "follow_bait", "fill_blank"]
+CTA_TYPES = ["save_bait", "share_bait", "comment_bait", "agree_disagree",
+             "follow_bait", "fill_blank", "debate_force", "stake_claim"]
 
 # Default weights for CTA selection (research-backed, 2024-2026)
-# Save bait has highest algorithmic value; share bait has highest reach value
+# debate_force (a binary with a keyword the funnel parses) is the highest-comment
+# type; save_bait keeps the highest algorithmic value. Weights mirror the
+# random-choicer in comment_bait.CommentBait.generate_cta so the Thompson
+# sampler and the fallback agree.
 DEFAULT_WEIGHTS = {
-    "save_bait": 30,
-    "share_bait": 25,
-    "comment_bait": 20,
-    "agree_disagree": 15,
-    "follow_bait": 7,
-    "fill_blank": 3,
+    "save_bait": 18,
+    "share_bait": 15,
+    "comment_bait": 14,
+    "agree_disagree": 12,
+    "follow_bait": 6,
+    "fill_blank": 5,
+    "debate_force": 18,
+    "stake_claim": 12,
 }
 
 

@@ -5,6 +5,10 @@ Two LLM calls (role ``music_director``): ``compose_query`` then ``rank_tracks``.
 The orchestrator ``select_music`` (Task 3) chains them with the Jamendo source
 in ``src/audio/jamendo_music.py`` and degrades gracefully.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 
 from studio import playbooks
@@ -92,12 +96,12 @@ def select_music(client, ctx, api_key, output_dir):
     try:
         direction = compose_query(client, ctx)
     except Exception as e:  # noqa: BLE001 - never crash a reel
-        print(f"  [music-director] query failed ({e})")
+        logger.info(f"  [music-director] query failed ({e})")
         return None
 
     hits = jamendo_music.search_tracks(direction, api_key, limit=20)
     if not hits:
-        print("  [music-director] no Jamendo hits")
+        logger.info("  [music-director] no Jamendo hits")
         return None
 
     chosen = None
@@ -105,26 +109,26 @@ def select_music(client, ctx, api_key, output_dir):
         pick = rank_tracks(client, ctx, hits)
         chosen = next((h for h in hits if str(h.get("id")) == pick.track_id), None)
         if chosen is not None:
-            print(f"  [music-director] picked {pick.track_id}: {pick.rationale[:60]}")
+            logger.info(f"  [music-director] picked {pick.track_id}: {pick.rationale[:60]}")
     except Exception as e:  # noqa: BLE001
-        print(f"  [music-director] rank failed ({e}) — heuristic fallback")
+        logger.info(f"  [music-director] rank failed ({e}) — heuristic fallback")
     if chosen is None:
         try:
             chosen = jamendo_music.pick_from_pool(hits)
         except Exception as e:  # noqa: BLE001 - never crash a reel
-            print(f"  [music-director] heuristic fallback failed ({e})")
+            logger.info(f"  [music-director] heuristic fallback failed ({e})")
             chosen = None
     if chosen is None:
         return None
 
     # Attribution: Jamendo tracks are CC — log artist + license so the human can
     # credit them (auto-attribution in captions is out of scope).
-    print(f"  [music-director] track by {chosen.get('artist_name', '?')} "
+    logger.info(f"  [music-director] track by {chosen.get('artist_name', '?')} "
           f"({chosen.get('license_ccurl', 'CC')})")
 
     url = jamendo_music.pick_audio_url(chosen)
     if not url:
-        print("  [music-director] chosen track has no download URL")
+        logger.info("  [music-director] chosen track has no download URL")
         return None
 
     out_dir = Path(output_dir)

@@ -11,6 +11,9 @@ Slide structure (psychology-driven for saves + reach):
 Output: 5 × 1080x1080 JPEGs (square for carousel feed post).
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import random
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -297,7 +300,7 @@ def compose_carousel(
         compose_slide_breakdown(takeaway, bg_path, output_dir, timestamp),
         compose_slide_cta(cta_text, attribution, bg_path, output_dir, timestamp),
     ]
-    print(f"  [carousel] 5 slides → {output_dir}/carousel_*_{timestamp}.jpg")
+    logger.info(f"  [carousel] 5 slides → {output_dir}/carousel_*_{timestamp}.jpg")
     return slides
 
 
@@ -347,4 +350,4 @@ if __name__ == "__main__":
         timestamp="test",
     )
     for s in slides:
-        print(f"  Slide: {s}")
+        logger.info(f"  Slide: {s}")

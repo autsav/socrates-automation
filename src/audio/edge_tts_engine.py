@@ -16,6 +16,9 @@ emits sentence-level cues) and drops the requirement that the ``edge-tts`` binar
 be on ``PATH`` — importing the package is enough.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import asyncio
 from pathlib import Path
 
@@ -161,7 +164,7 @@ def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path,
     try:
         words = asyncio.run(_edge_tts_synth(text, voice, output_path, rate, pitch))
     except Exception as e:
-        print(f"  [edge-tts] Error: {e}")
+        logger.info(f"  [edge-tts] Error: {e}")
         try:
             output_path.unlink(missing_ok=True)
         except Exception:
@@ -169,7 +172,7 @@ def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path,
         return False
 
     if not output_path.exists() or output_path.stat().st_size == 0:
-        print("  [edge-tts] Failed: no audio produced")
+        logger.error("  [edge-tts] Failed: no audio produced")
         try:
             output_path.unlink(missing_ok=True)
         except Exception:
@@ -178,7 +181,7 @@ def generate_scene_voiceover_edge_tts(text: str, voice: str, output_path: Path,
 
     _write_word_srt(output_path.with_suffix(".srt"), words)
     size_kb = output_path.stat().st_size / 1024
-    print(f"  [edge-tts] Saved {output_path.name} ({size_kb:.0f} KB, {len(words)} words)")
+    logger.info(f"  [edge-tts] Saved {output_path.name} ({size_kb:.0f} KB, {len(words)} words)")
     return True
 
 
@@ -202,7 +205,7 @@ def prepare_reel_voiceover_edge_tts(
     # One consistent "wise grandfather" sage voice for every reel — with a
     # per-scene delivery arc (SCENE_PROSODY) instead of flat prosody.
     voice = REEL_VOICE
-    print(f"  [edge-tts] Using sage voice '{voice}' (scene-arc prosody) "
+    logger.info(f"  [edge-tts] Using sage voice '{voice}' (scene-arc prosody) "
           f"for mood '{mood}'")
 
     hook_path = out_dir / f"voice_hook_{timestamp}.mp3"

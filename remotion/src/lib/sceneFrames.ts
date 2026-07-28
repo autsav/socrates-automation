@@ -25,10 +25,17 @@ export function sceneFrames(
   const vd = voiceDurations;
   const bridgeOn = hasBridge || !!(vd && vd.bridge);
   if (vd && (vd.hook || vd.bridge || vd.quote || vd.cta)) {
-    const PAD = 0.35;  // dead-air trim: retention rate beats runtime (recipe #3)
-    const MIN = { hook: 2.5, bridge: 2.5, quote: 3.0, cta: 2.0 };
-    const secs = (d: number | undefined, min: number) => Math.max(min, (d ?? 0) + PAD);
-    const hook = hasHook ? Math.round(secs(vd.hook, MIN.hook) * fps) : 0;
+    // Tighter pad (0.35 -> 0.20): retention rate beats runtime. The hook floor
+    // drops 2.5 -> 1.6s so a 3-word punch hook doesn't trail into dead air that
+    // loses the scroller; a 0.25s "gasp" tail is added AFTER the hook VO so the
+    // cut to the quote rides a beat of near-silence (the most reliable
+    // watch-through trigger). cta floor 2.0 -> 1.8 keeps the loop tight.
+    const HOOK_GASP = 0.25;
+    const PAD = 0.2;
+    const MIN = { hook: 1.6, bridge: 2.5, quote: 3.0, cta: 1.8 };
+    const secs = (d: number | undefined, min: number, extra = 0) =>
+      Math.max(min, (d ?? 0) + PAD + extra);
+    const hook = hasHook ? Math.round(secs(vd.hook, MIN.hook, HOOK_GASP) * fps) : 0;
     const bridge = bridgeOn ? Math.round(secs(vd.bridge, MIN.bridge) * fps) : 0;
     const quote = Math.round(secs(vd.quote, MIN.quote) * fps);
     const cta = Math.round(secs(vd.cta, MIN.cta) * fps);

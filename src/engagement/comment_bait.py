@@ -228,6 +228,25 @@ class CommentBait:
             "One word that describes your current excuse: ________",
             "The habit I'm pretending isn't a problem is ________. Say it.",
         ],
+        # debate_force: the single highest-comment CTA type — a forced binary with
+        # an explicit keyword. The keyword (STAY/WALK/etc.) is parsed by
+        # pipeline._extract_trigger_keyword, so it flows into the existing
+        # comment->bio cron funnel with no new plumbing.
+        "debate_force": [
+            "Comment 'STAY' if you agree, 'WALK' if I'm wrong.",
+            "One word: PROTECT or LEAVE. Comment it.",
+            "Agree or disagree — but comment which. No lurking.",
+            "If this is you, comment the 👁 emoji. If not, 👎.",
+            "Comment 'GUILTY' if this hit too close. No explanation needed.",
+        ],
+        # stake_claim: participation via personal stake — the viewer reveals
+        # something about themselves, which drives reply threads (reach).
+        "stake_claim": [
+            "Comment the age you stopped chasing. I'll read every one.",
+            "Comment the app you just reopened. Prove me right.",
+            "Tag the friend who needs to hear this — they'll know why.",
+            "Comment the one thing you're pretending isn't a problem.",
+        ],
     }
 
     # ── Emotional Resonance Boosters ───────────────────────────────────────────
@@ -277,14 +296,18 @@ class CommentBait:
     def generate_cta(
         self,
         style: Literal["save_bait", "share_bait", "comment_bait", "follow_bait",
-                         "agree_disagree", "fill_blank", "random"] = "random",
+                         "agree_disagree", "fill_blank", "debate_force",
+                         "stake_claim", "random"] = "random",
     ) -> str:
         """Generate a CTA optimized for a specific engagement type."""
         if style == "random":
-            # Weight toward highest-ROI actions
+            # Weight toward the forcing styles — debate_force (a binary with a
+            # keyword) is the single highest-comment CTA type. The keyword flows
+            # into the comment->bio funnel via _extract_trigger_keyword.
             style = random.choices(
-                ["save_bait", "share_bait", "comment_bait", "agree_disagree", "follow_bait", "fill_blank"],
-                weights=[30, 25, 20, 15, 7, 3],
+                ["save_bait", "share_bait", "comment_bait", "agree_disagree",
+                 "follow_bait", "fill_blank", "debate_force", "stake_claim"],
+                weights=[18, 15, 14, 12, 6, 5, 18, 12],
                 k=1,
             )[0]
 

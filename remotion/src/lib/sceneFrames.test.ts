@@ -13,7 +13,9 @@ describe("sceneFrames", () => {
   it("enforces per-scene minimums when VO is short", () => {
     const fps = 30;
     const s = sceneFrames(10.5, fps, { quote: 0.5 });
-    expect(s.hook).toBeGreaterThanOrEqual(Math.round(2.5 * fps));
+    // hook floor dropped 2.5 -> 1.6s (punch hooks shouldn't trail into dead air);
+    // a 0.25s "gasp" tail is added after hook VO, so the effective hook min is 1.6.
+    expect(s.hook).toBeGreaterThanOrEqual(Math.round(1.6 * fps));
     expect(s.quote).toBeGreaterThanOrEqual(Math.round(3.0 * fps));
   });
 

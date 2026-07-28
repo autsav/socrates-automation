@@ -8,6 +8,9 @@ Point 52: YouTube Shorts export (16:9→9:16 crop, 1080×1920, metadata)
 
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import subprocess
 from pathlib import Path
 from typing import Literal
@@ -113,9 +116,9 @@ def export_for_tiktok(
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
-        print(f"  [tiktok] export failed: {result.stderr[-300:]}")
+        logger.info(f"  [tiktok] export failed: {result.stderr[-300:]}")
         return None
-    print(f"  [tiktok] exported → {out_path.name}")
+    logger.info(f"  [tiktok] exported → {out_path.name}")
     return out_path
 
 
@@ -174,9 +177,9 @@ def export_for_youtube_shorts(
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
-        print(f"  [yt-shorts] export failed: {result.stderr[-300:]}")
+        logger.info(f"  [yt-shorts] export failed: {result.stderr[-300:]}")
         return None
-    print(f"  [yt-shorts] exported → {out_path.name}")
+    logger.info(f"  [yt-shorts] exported → {out_path.name}")
     return out_path
 
 

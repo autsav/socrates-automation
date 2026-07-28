@@ -8,6 +8,10 @@ trending audio. Instagram gives you the post_id. You run this script
 with that post_id, and the bot takes over: fetching comments and replying
 for 30 minutes.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import argparse
 import os
 import sys
@@ -34,18 +38,18 @@ def main():
     token = os.getenv("META_ACCESS_TOKEN", "")
 
     if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY not set. Needed for AI replies.")
+        logger.error("ERROR: ANTHROPIC_API_KEY not set. Needed for AI replies.")
         sys.exit(1)
     if not token:
-        print("ERROR: META_ACCESS_TOKEN not set. Needed to fetch comments.")
+        logger.error("ERROR: META_ACCESS_TOKEN not set. Needed to fetch comments.")
         sys.exit(1)
 
     from src.engagement.engagement_bot import run_engagement_bot
 
-    print(f"Starting engagement bot for post {args.post_id}")
-    print(f"  Rounds: {args.rounds}")
-    print(f"  Delay: {args.delay}s")
-    print(f"  Quote context: {args.quote[:50]}..." if args.quote else "  No quote context")
+    logger.info(f"Starting engagement bot for post {args.post_id}")
+    logger.info(f"  Rounds: {args.rounds}")
+    logger.info(f"  Delay: {args.delay}s")
+    logger.info(f"  Quote context: {args.quote[:50]}..." if args.quote else "  No quote context")
 
     stats = run_engagement_bot(
         media_id=args.post_id,
@@ -56,7 +60,7 @@ def main():
         delay_sec=args.delay,
     )
 
-    print(f"\nDone: {stats['replied']} replied, {stats['skipped']} skipped, {stats['errors']} errors")
+    logger.info(f"\nDone: {stats['replied']} replied, {stats['skipped']} skipped, {stats['errors']} errors")
 
 
 if __name__ == "__main__":

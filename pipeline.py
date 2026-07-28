@@ -1385,7 +1385,7 @@ def _reels_use_renderer(reel: bool, carousel: bool, renderer: str) -> bool:
     """Return True when the POV reel path should run (any renderer except
     the FLUX static-image Reel path). Non-reel (image) and carousel posts
     are unaffected."""
-    return renderer in ("remotion", "hyperframes", "ffmpeg") or (reel and not carousel)
+    return (reel and not carousel) or (renderer in ("remotion", "hyperframes", "ffmpeg") and not carousel)
 
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,

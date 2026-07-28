@@ -6,6 +6,9 @@ debate, and produce content live.
 """
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import argparse
 import threading
 import webbrowser
@@ -37,7 +40,7 @@ def main() -> None:
 
     url = f"http://localhost:{PORT}"
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    print(f"Live dashboard: {url}")
+    logger.info(f"Live dashboard: {url}")
     app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False, threaded=True)
 
 

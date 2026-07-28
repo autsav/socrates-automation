@@ -37,6 +37,10 @@ export interface AnimatedTextProps {
   /** Seed varying which per-word effect flavor (e.g. pop vs pop2) is used;
    *  deterministic given the seed, differs between reels. */
   animSeed?: number;
+  /** Hook-scene mode: amplifies stress/neg/num/accent words with a 3-frame
+   *  scale spike + accent-color flash — the on-screen analog of the VO punch.
+   *  Used only by HookScene; off for Bridge (the story reads, it doesn't punch). */
+  hookMode?: boolean;
 }
 
 /** Estimate a font size so the longest word and total text fill ~80%+ width
@@ -67,6 +71,7 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
   wordTimes = [],
   staticFirstFrames = 0,
   animSeed = 0,
+  hookMode = false,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -125,6 +130,24 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
           fxColor: string | null = null,
           fxGlow = 0;
         let display = word;
+
+        // hookMode impact flash (retention): on accent/stress/neg/num words the
+        // whole word punches — a 1.0 -> 1.25 -> 1.0 scale spike over 3 frames
+        // plus an accent-color fill flash. This is the visual analog of the VO
+        // punch and only fires in the Hook scene (the story reads, it doesn't
+        // punch). Bounded so it never breaks the static feed-thumbnail window.
+        const cls = wordTimes[i]?.cls;
+        const hookPunch =
+          hookMode &&
+          !inStaticWindow &&
+          local >= 0 &&
+          local <= 6 &&
+          (cls === "stress" || cls === "neg" || cls === "num" || cls === "power");
+        if (hookPunch) {
+          fxScale = Math.max(fxScale, 1 + 0.25 * Math.max(0, 1 - Math.abs(local - 1.5) / 1.5));
+          if (!fxColor) fxColor = palette.accent;
+          fxGlow = Math.max(fxGlow, 1);
+        }
         if (!inStaticWindow && fx !== "plain") {
           if (fx === "pop" || fx === "pop2") {
             const amp = fx === "pop" ? 0.18 : 0.12;

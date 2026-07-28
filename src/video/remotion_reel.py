@@ -28,6 +28,9 @@ Usage:
 
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import shutil
 import subprocess
@@ -125,7 +128,7 @@ def _loudnorm(path: Path, timeout: int = 120) -> None:
         else:
             tmp.unlink(missing_ok=True)
     except Exception as e:  # pragma: no cover - defensive
-        print(f"  [remotion] loudnorm skipped ({e})")
+        logger.info(f"  [remotion] loudnorm skipped ({e})")
         try:
             tmp.unlink(missing_ok=True)
         except Exception:
@@ -283,7 +286,7 @@ def write_bridge_file(
                 shutil.copy(src, dst)
             return name
         except Exception as e:  # pragma: no cover - defensive
-            print(f"  [remotion] audio copy failed ({e})")
+            logger.info(f"  [remotion] audio copy failed ({e})")
             return None
 
     voices: dict[str, str | None] = {"hook": None, "quote": None, "cta": None}
@@ -347,7 +350,7 @@ def write_bridge_file(
         try:
             beats = beat_sync.detect_beats(Path(quote_voice))
         except Exception as e:  # pragma: no cover - defensive
-            print(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
+            logger.info(f"  [remotion] beat detection failed ({e}) — reel plays un-synced")
             beats = []
     # Acoustic detection returns nothing on short spoken clips (ebur128 fallback,
     # librosa excluded). Derive emphasis beats from the quote word timings so the
@@ -355,7 +358,7 @@ def write_bridge_file(
     if not beats and quote_words:
         beats = _emphasis_beats(quote_words)
         if beats:
-            print(f"  [remotion] no acoustic beats — using {len(beats)} "
+            logger.info(f"  [remotion] no acoustic beats — using {len(beats)} "
                   f"emphasis beat(s) from quote word timing")
 
     sfx = _synth_sfx(bridge_path.parent)
@@ -450,7 +453,7 @@ def generate_remotion_reel(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not remotion_available():
-        print("  [remotion] Node/Remotion not installed — skipping (use POV fallback)")
+        logger.warning("  [remotion] Node/Remotion not installed — skipping (use POV fallback)")
         return None
 
     duration = _clamp_duration(quote, duration)
@@ -493,7 +496,7 @@ def generate_remotion_reel(
         "--log=error",
     ]
 
-    print(f"  [remotion] Rendering Reel ({duration:.1f}s, mood={mood})...")
+    logger.info(f"  [remotion] Rendering Reel ({duration:.1f}s, mood={mood})...")
     try:
         result = subprocess.run(
             cmd,
@@ -503,23 +506,23 @@ def generate_remotion_reel(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        print(f"  [remotion] ⚠️ Render timed out after {timeout}s — falling back")
+        logger.info(f"  [remotion] ⚠️ Render timed out after {timeout}s — falling back")
         return None
     except Exception as e:  # pragma: no cover - defensive
-        print(f"  [remotion] ⚠️ Render invocation failed: {e} — falling back")
+        logger.info(f"  [remotion] ⚠️ Render invocation failed: {e} — falling back")
         return None
 
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "unknown error")[-800:]
-        print(f"  [remotion] ⚠️ Render failed — falling back to POV generator:\n{err}")
+        logger.info(f"  [remotion] ⚠️ Render failed — falling back to POV generator:\n{err}")
         return None
 
     if not output_path.exists():
-        print("  [remotion] ⚠️ Render reported success but output missing — falling back")
+        logger.warning("  [remotion] ⚠️ Render reported success but output missing — falling back")
         return None
 
     size = output_path.stat().st_size
-    print(f"  [remotion] Saved: {output_path} ({size / 1024:.0f} KB)")
+    logger.info(f"  [remotion] Saved: {output_path} ({size / 1024:.0f} KB)")
     _loudnorm(output_path)
     return output_path
 
@@ -533,4 +536,4 @@ if __name__ == "__main__":
         mood="dark_philosophical",
         output_path=REPO_ROOT / "output" / "remotion_demo.mp4",
     )
-    print(out)
+    logger.info(out)

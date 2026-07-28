@@ -7,6 +7,9 @@ into a relatable narrative. This replaces flat advice-style captions with
 compelling micro-stories that stop the scroll.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -723,7 +726,7 @@ def build_excel():
         ws3.row_dimensions[row_num].height = 40
 
     wb.save("quotes.xlsx")
-    print(f"✅ Created quotes.xlsx with {len(QUOTES)} story-driven quotes across 3 sheets")
+    logger.info(f"✅ Created quotes.xlsx with {len(QUOTES)} story-driven quotes across 3 sheets")
 
 
 if __name__ == "__main__":

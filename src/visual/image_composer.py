@@ -11,6 +11,9 @@ Typography enhancements:
   - Subtle panel drop shadow for depth
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import textwrap
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageEnhance
@@ -1115,4 +1118,4 @@ if __name__ == "__main__":
         attribution="— Socrates",
         timestamp="test"
     )
-    print(f"Composed: {result}")
+    logger.info(f"Composed: {result}")

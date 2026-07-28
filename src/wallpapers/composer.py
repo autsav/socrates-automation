@@ -17,6 +17,9 @@ Usage:
     paths = wp.create_wallpaper_set(quote, output_dir="output")
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import random
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
@@ -89,7 +92,7 @@ class WallpaperComposer:
             path = output_dir / f"wallpaper_{fmt}_{self.mood}_{seed or random.randint(1000,9999)}.jpg"
             wallpaper.save(path, quality=95, optimize=True)
             results[fmt] = path
-            print(f"  [wallpaper] Created {fmt}: {path.name}")
+            logger.info(f"  [wallpaper] Created {fmt}: {path.name}")
 
         return results
 

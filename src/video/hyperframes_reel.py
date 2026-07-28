@@ -97,8 +97,7 @@ def _render_html(payload: dict, output_path: Path) -> Path:
         ]
 
     # Compute sceneFrames from voiceDurations for the template
-    from src.video.reel_data import SUPPORTED_MOODS
-    from hyperframes.js.lib.sceneFrames import sceneFrames  # type: ignore
+    from src.video.reel_data import SUPPORTED_MOODS, sceneFrames
 
     mood = payload.get("mood", "dark_philosophical")
     if mood not in SUPPORTED_MOODS:
@@ -120,8 +119,10 @@ def _render_html(payload: dict, output_path: Path) -> Path:
         has_hook,
     )
 
+    # Remove computed keys so they don't collide with explicit kwargs
+    render_ctx = {k: v for k, v in payload.items() if k not in ("sceneFrames", "mood")}
     html = template.render(
-        **payload,
+        **render_ctx,
         reel_data=payload,
         sceneFrames=sf,
         mood=mood,

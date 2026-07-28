@@ -19,6 +19,9 @@ Usage:
 
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import random
 from pathlib import Path
@@ -109,7 +112,7 @@ class AutoReplyEngine:
                 text = resp.json()["content"][0]["text"].strip().strip('"')
                 return text or None
         except Exception as e:
-            print(f"  [auto-reply] Claude call failed ({e}) — using fallback")
+            logger.info(f"  [auto-reply] Claude call failed ({e}) — using fallback")
             return None
 
     def generate_reply(

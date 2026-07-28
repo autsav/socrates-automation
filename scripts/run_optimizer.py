@@ -12,6 +12,10 @@ the same mechanism `optimize.py --run`/`--surface-pending` use. Surfacing is
 best-effort: a Telegram failure never fails the weekly workflow, and
 `--dry-run` prints proposals without surfacing them.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import sys
 from pathlib import Path
 
@@ -39,16 +43,16 @@ def _surface(proposal, msg):
         import optimize
         optimize._default_surface(proposal, msg)
     except Exception as e:  # noqa: BLE001 - best-effort, never block the weekly run
-        print(f"[optimizer] surface failed: {e}")
+        logger.info(f"[optimizer] surface failed: {e}")
 
 
 def _print_proposal(p, *, surface=True):
     try:
         msg = loop.format_proposal_message(p)
     except Exception as e:  # noqa: BLE001 - malformed proposal never aborts the run
-        print(f"[optimizer] could not format proposal: {e}")
+        logger.info(f"[optimizer] could not format proposal: {e}")
         return
-    print(msg)
+    logger.info(msg)
     if surface:
         _surface(p, msg)
 
@@ -57,9 +61,9 @@ def main(dry_run=False) -> int:
     try:
         evaluated = loop.evaluate_experiments()
     except Exception as e:  # noqa: BLE001 - best-effort, never block the weekly run
-        print(f"[optimizer] evaluate_experiments failed: {e}")
+        logger.info(f"[optimizer] evaluate_experiments failed: {e}")
         evaluated = []
-    print(f"[optimizer] experiments evaluated: {len(evaluated)} win-proposal(s)")
+    logger.info(f"[optimizer] experiments evaluated: {len(evaluated)} win-proposal(s)")
     for p in evaluated:
         _print_proposal(p, surface=not dry_run)
 
@@ -69,7 +73,7 @@ def main(dry_run=False) -> int:
         # WOULD be considered for a fresh challenger.
         from src.optimizer import assets
         keys = [m["key"] for m in assets.iter_managed()]
-        print(f"[optimizer] dry-run: would evaluate {len(keys)} managed prompt(s) for "
+        logger.info(f"[optimizer] dry-run: would evaluate {len(keys)} managed prompt(s) for "
               f"new challengers, not queued (no API call): {', '.join(keys)}")
         return 0
 

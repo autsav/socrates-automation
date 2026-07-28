@@ -8,6 +8,11 @@ import {
 } from "./PovReel";
 import { VIDEO } from "./styles/theme";
 
+// Sentry ErrorBoundary is intentionally NOT used here. The `import * as Sentry`
+// from "@sentry/react" pattern produced undefined-ErrorBoundary at bundle time
+// when bundled headless (webpack ESM/CJS interop on the namespace import), and
+// the headless render path has no DSN configured anyway. sentry.ts still
+// initializes Sentry as a side-effect if a DSN is ever set.
 export const RemotionRoot: React.FC = () => {
   return (
     <Composition

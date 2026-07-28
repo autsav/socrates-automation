@@ -6,6 +6,7 @@ import studio.copywriter as copywriter
 import studio.trend_scout as trend_scout
 import studio.music_director as music_director
 import studio.story_writer as story_writer
+import src.content.controversy_engine as controversy_engine
 
 MANAGED_PROMPTS = [
     {"key": "prompt.strategist.role", "default": strategist._ROLE_DEFAULT},
@@ -16,6 +17,10 @@ MANAGED_PROMPTS = [
     {"key": "prompt.music_director.query", "default": music_director._QUERY_ROLE_DEFAULT},
     {"key": "prompt.music_director.rank", "default": music_director._RANK_ROLE_DEFAULT},
     {"key": "prompt.story_writer.role", "default": story_writer._ROLE_DEFAULT},
+    # The Controversy Engine (ROAST/VERDICT/DEBATE) is the highest-volume
+    # generator and was previously hardcoded — routing it through prompt_store
+    # lets the optimizer A/B its system prompt against real sends-per-reach.
+    {"key": "prompt.controversy.system", "default": controversy_engine._SYSTEM_PROMPT},
 ]
 
 

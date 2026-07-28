@@ -12,6 +12,10 @@ Run:  .venv/bin/python scripts/generate_product.py            # full run
 Then (manual, one-time): upload output/product/stoic_reset_journal.pdf to
 Gumroad at £12, set the IG bio link to the Gumroad URL.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import argparse
 import html
 import json
@@ -153,7 +157,7 @@ def html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
     """Render HTML → PDF via headless Chrome. False (no raise) when unavailable."""
     chrome = _find_chrome()
     if not chrome:
-        print("[product] no Chrome/Chromium found — PDF step skipped")
+        logger.warning("[product] no Chrome/Chromium found — PDF step skipped")
         return False
     try:
         subprocess.run(
@@ -162,7 +166,7 @@ def html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
             check=True, capture_output=True, timeout=120)
         return pdf_path.exists()
     except Exception as e:
-        print(f"[product] Chrome PDF render failed: {e}")
+        logger.info(f"[product] Chrome PDF render failed: {e}")
         return False
 
 
@@ -223,14 +227,14 @@ def main(argv=None) -> int:
         content = generate_content(Config().ANTHROPIC_API_KEY)
         ok, reason = validate_content(content)
         if not ok:
-            print(f"[product] generated content failed validation: {reason}")
+            logger.info(f"[product] generated content failed validation: {reason}")
             return 1
         content_path.write_text(json.dumps(content, ensure_ascii=False, indent=2))
 
     html_path.write_text(render_html(content))
-    print(f"[product] HTML: {html_path}")
+    logger.info(f"[product] HTML: {html_path}")
     if html_to_pdf(html_path, pdf_path):
-        print(f"[product] PDF:  {pdf_path} ({pdf_path.stat().st_size // 1024} KB)")
+        logger.info(f"[product] PDF:  {pdf_path} ({pdf_path.stat().st_size // 1024} KB)")
         if not args.no_telegram:
             try:
                 from config import Config
@@ -239,10 +243,10 @@ def main(argv=None) -> int:
                     pdf_path,
                     caption="📓 The Stoic Reset Journal — review it. If it's good: "
                             "upload to Gumroad at £12 and set the bio link.")
-                print("[product] sent to Telegram for review")
+                logger.info("[product] sent to Telegram for review")
             except Exception as e:
-                print(f"[product] Telegram send failed (PDF is on disk): {e}")
-    print("\nNext (manual): 1) review PDF  2) Gumroad upload £12  3) set IG bio link")
+                logger.info(f"[product] Telegram send failed (PDF is on disk): {e}")
+    logger.info("\nNext (manual): 1) review PDF  2) Gumroad upload £12  3) set IG bio link")
     return 0
 
 

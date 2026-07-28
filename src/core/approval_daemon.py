@@ -31,6 +31,9 @@ spamming the log).
 """
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import signal
 import sys
@@ -69,13 +72,13 @@ def _post_approved_reel(row_id: int, entry: dict, cfg) -> bool:
     reel_path = entry.get("reel_path")
     caption = entry.get("caption") or ""
     if not reel_path or not Path(reel_path).exists():
-        print(f"  [poster] row {row_id}: reel missing on disk ({reel_path!r}), skipping")
+        logger.info(f"  [poster] row {row_id}: reel missing on disk ({reel_path!r}), skipping")
         return False
 
     access_token = getattr(cfg, "META_ACCESS_TOKEN", None)
     ig_account_id = getattr(cfg, "IG_ACCOUNT_ID", None)
     if not (access_token and ig_account_id):
-        print(f"  [poster] row {row_id}: missing META creds, skipping")
+        logger.info(f"  [poster] row {row_id}: missing META creds, skipping")
         return False
 
     try:
@@ -90,7 +93,7 @@ def _post_approved_reel(row_id: int, entry: dict, cfg) -> bool:
                 "api_secret": cfg.CLOUDINARY_API_SECRET,
             },
         )
-        print(f"  [poster] row {row_id}: posted → {post_id}")
+        logger.info(f"  [poster] row {row_id}: posted → {post_id}")
         # Update the posts table with the real IG id so analytics can find it.
         try:
             from src.core.data_store import mark_posted
@@ -98,10 +101,10 @@ def _post_approved_reel(row_id: int, entry: dict, cfg) -> bool:
             # None to match mark_posted's str-typed signature.
             mark_posted(row_id, post_id, "", reel_path)
         except Exception as e:
-            print(f"  [poster] row {row_id}: mark_posted failed (non-fatal): {e}")
+            logger.info(f"  [poster] row {row_id}: mark_posted failed (non-fatal): {e}")
         return True
     except Exception as e:
-        print(f"  [poster] row {row_id}: post_reel_to_instagram failed: {e}")
+        logger.info(f"  [poster] row {row_id}: post_reel_to_instagram failed: {e}")
         return False
 
 
@@ -128,7 +131,7 @@ def _drain_pending_posts(cfg) -> int:
         if not entry.get("reel_path"):
             # Legacy row from before we patched notify_manual_reel_ready to
             # stash the path here — can't auto-post without it.
-            print(f"  [poster] row {key}: approved but no reel_path stored; "
+            logger.info(f"  [poster] row {key}: approved but no reel_path stored; "
                   f"marking applied to avoid infinite retry")
             entry["applied"] = True
             entry["applied_at"] = datetime.now(timezone.utc).isoformat()
@@ -153,7 +156,7 @@ _running = True
 def _stop(*_):
     global _running
     _running = False
-    print("\n[daemon] stop signal received, exiting after current cycle…")
+    logger.info("\n[daemon] stop signal received, exiting after current cycle…")
 
 
 def main() -> int:
@@ -163,33 +166,33 @@ def main() -> int:
 
     cfg = Config()
     if not (getattr(cfg, "TELEGRAM_BOT_TOKEN", None) and getattr(cfg, "TELEGRAM_CHAT_ID", None)):
-        print("[daemon] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set; nothing to do")
+        logger.info("[daemon] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set; nothing to do")
         return 0
 
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
-    print(f"[daemon] started at {datetime.now(timezone.utc).isoformat()}")
-    print(f"[daemon] poll interval = {POLL_INTERVAL_SEC}s; approvals store = {APPROVALS_PATH}")
+    logger.info(f"[daemon] started at {datetime.now(timezone.utc).isoformat()}")
+    logger.info(f"[daemon] poll interval = {POLL_INTERVAL_SEC}s; approvals store = {APPROVALS_PATH}")
 
     while _running:
         try:
             new = poll_once(cfg, timeout=0)
             if new:
-                print(f"[daemon] poll → {len(new)} new reel decision(s): {new}")
+                logger.info(f"[daemon] poll → {len(new)} new reel decision(s): {new}")
             posted = _drain_pending_posts(cfg)
             if posted:
-                print(f"[daemon] auto-posted {posted} reel(s)")
+                logger.info(f"[daemon] auto-posted {posted} reel(s)")
         except Exception as e:
             # Never let the daemon die on a single bad poll.
-            print(f"[daemon] poll cycle error (continuing): {e}")
+            logger.info(f"[daemon] poll cycle error (continuing): {e}")
         # Sleep in small chunks so SIGTERM is responsive even mid-sleep.
         slept = 0.0
         while _running and slept < POLL_INTERVAL_SEC:
             time.sleep(0.25)
             slept += 0.25
 
-    print("[daemon] stopped cleanly")
+    logger.info("[daemon] stopped cleanly")
     return 0
 
 

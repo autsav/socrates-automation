@@ -31,6 +31,9 @@ Usage:
 
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import random
 from pathlib import Path
@@ -174,7 +177,7 @@ class TrendingHijacker:
                 return None
             return output_path
         except Exception as e:
-            print(f"  [trending-audio] Download failed for {track['track_name']}: {e}")
+            logger.info(f"  [trending-audio] Download failed for {track['track_name']}: {e}")
             return None
 
     def get_track_path(self, mood: str, seed: int = 0) -> Path | None:

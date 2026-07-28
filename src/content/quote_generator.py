@@ -4,6 +4,9 @@ Uses Claude Haiku to generate new philosophical quotes, then builds captions
 using the existing story-driven template system.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import httpx
 from pathlib import Path
@@ -103,7 +106,7 @@ def generate_quotes(
     attempts = 0
     max_attempts = 5
 
-    print(f"  [quotes] Generating {target_count} fresh quotes...")
+    logger.info(f"  [quotes] Generating {target_count} fresh quotes...")
 
     while len(all_quotes) < target_count and attempts < max_attempts:
         remaining = target_count - len(all_quotes)
@@ -112,9 +115,9 @@ def generate_quotes(
         try:
             batch = _generate_quote_batch(api_key, count=batch_size)
             all_quotes.extend(batch)
-            print(f"  [quotes] Got {len(batch)} quotes (total: {len(all_quotes)}/{target_count})")
+            logger.info(f"  [quotes] Got {len(batch)} quotes (total: {len(all_quotes)}/{target_count})")
         except Exception as e:
-            print(f"  [quotes] Generation attempt {attempts + 1} failed: {e}")
+            logger.info(f"  [quotes] Generation attempt {attempts + 1} failed: {e}")
 
         attempts += 1
 
@@ -133,7 +136,7 @@ def generate_quotes(
             seen.add(key)
             unique.append((quote, audience))
 
-    print(f"  [quotes] Generated {len(unique)} unique quotes")
+    logger.info(f"  [quotes] Generated {len(unique)} unique quotes")
     return unique
 
 
@@ -273,7 +276,7 @@ def build_excel_from_quotes(
         ws3.row_dimensions[row_num].height = 40
 
     wb.save(output_path)
-    print(f"  [quotes] ✅ Created {output_path} with {len(quotes)} fresh quotes")
+    logger.info(f"  [quotes] ✅ Created {output_path} with {len(quotes)} fresh quotes")
     return output_path
 
 
@@ -304,4 +307,4 @@ if __name__ == "__main__":
     if key:
         generate_fresh_quotes(api_key=key)
     else:
-        print("Set ANTHROPIC_API_KEY in .env to generate quotes")
+        logger.info("Set ANTHROPIC_API_KEY in .env to generate quotes")

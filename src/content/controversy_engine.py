@@ -17,25 +17,42 @@ import json
 import logging
 from typing import Literal
 
+from studio import playbooks
+from src.optimizer import prompt_store
+
 log = logging.getLogger(__name__)
 
 # Modes for the controversy engine
 Mode = Literal["roast", "verdict", "debate"]
 
 _SYSTEM_PROMPT = (
-    "You are a provocative philosophy content writer for an Instagram account. "
-    "You take Socratic/stoic quotes and make them RELEVANT and CONFRONTATIONAL "
-    "for a modern audience scrolling Instagram at 2am.\n\n"
+    "You are a provocative philosophy writer for a confrontational Instagram "
+    "account that turns Socratic/Stoic quotes into reels people screenshot and "
+    "send. Audience: 2am doomscrollers who feel called out.\n\n"
+    "RETENTION PSYCHOLOGY (apply to every beat):\n"
+    "- Open a curiosity GAP in the hook and never close it until the quote lands. "
+    "The viewer must NEED the next sentence.\n"
+    "- Pattern-interrupt the assumed: assert something that sounds WRONG, then "
+    "prove it. Agreement is scroll-past; contradiction is watch-through.\n"
+    "- Negation beats affirmation: 'You are NOT who you think you are' outpulls "
+    "'Be your best self'. Lead with what's false, not what's true.\n"
+    "- Specificity = retention: 'the app you reopened 3 times before lunch' beats "
+    "'phone addiction'. A concrete number or 2am image every ~8 words.\n"
+    "- Identity threat sells shares: the viewer forwards it to say 'this is so "
+    "you' about a friend. End on a line that hands them those words.\n"
+    "- Falsify-friendly: make a claim concrete enough one side can rage. Vague = "
+    "no comments.\n\n"
     "RULES:\n"
-    "- NEVER be hateful, discriminatory, or target protected groups\n"
-    "- NEVER reference real tragedies, violence, or sensitive current events\n"
-    "- DO be uncomfortable. Make people feel called out. Make them screenshot it.\n"
-    "- DO use modern language (no 'thou shalt' or archaic phrasing)\n"
-    "- DO reference modern life: phones, scrolling, 9-to-5, dating apps, "
-    "social media, hustle culture, burnout, procrastination, comfort zones\n"
-    "- Keep hooks under 12 words. Punch hard. No padding.\n"
-    "- The quote stays as-is. The INTERPRETATION is what's provocative.\n"
+    "- NEVER hateful, discriminatory, or protected-group targeting.\n"
+    "- NEVER real tragedies, violence, named living individuals, or sensitive "
+    "current events. (A trend's CULTURE is fair game; the trend's VICTIMS are not.)\n"
+    "- DO make them feel personally attacked. Screenshot-bait, not hate-bait.\n"
+    "- Modern language only. No 'thou shalt'. Reference their life: 9-to-5, "
+    "scrolling, dating apps, burnout, hustle culture, ghosting, self-care-as-avoidance.\n"
+    "- Hook <=12 words, a STATEMENT (questions cost ~0.5s retention). Punch hard.\n"
+    "- The quote stays verbatim. The INTERPRETATION is the provocation.\n"
     "- Output JSON only, no markdown.\n"
+    + playbooks.STORY_CRAFT  # shared craft canon, same as story_writer
 )
 
 _ROAST_SCHEMA = {
@@ -82,32 +99,54 @@ _DEBATE_SCHEMA = {
 
 _SCHEMAS = {"roast": _ROAST_SCHEMA, "verdict": _VERDICT_SCHEMA, "debate": _DEBATE_SCHEMA}
 
-_MODE_PROMPTS = {
+_MODE_PLAYBOOKS = {
     "roast": (
-        "MODE: ROAST\n"
-        "Take this quote and roast a specific modern habit with it. "
-        "Make it funny but cutting. The reader should feel PERSONALLY attacked.\n"
-        "Quote: {quote}\n"
-        "Target habit (if specified): {target}\n"
-        "Generate the roast now."
+        "ROAST STRUCTURE (retention-optimized):\n"
+        "1. ACCUSE (hook): name the habit as a verdict on the viewer, not a joke. "
+        "'Your 9-to-5 is a slow death you call a career.'\n"
+        "2. INDICT (2-3 sentences): the specific nightly cost — what they lose "
+        "tonight, this week, this decade. Concrete, not 'productivity'.\n"
+        "3. CONVICT via the quote: Socrates already tried and found them guilty. "
+        "The quote is the verdict, not a bumper sticker.\n"
+        "4. SENTENCE (CTA): one line that makes them argue the punishment is too harsh.\n"
+        "Polarization lever: blame, not advice. Never 'try this'. Always 'you already lost'."
     ),
     "verdict": (
-        "MODE: VERDICT\n"
-        "A trend is happening right now: {trend}\n"
-        "What would Socrates say about it? Use this quote as his verdict:\n"
-        "Quote: {quote}\n"
-        "Make it provocative — not a safe 'wisdom applies to everything' take. "
-        "Take a SIDE. Make people disagree.\n"
-        "Generate the verdict now."
+        "VERDICT STRUCTURE (newsjack, retention-optimized):\n"
+        "1. TREND-AS-EVIDENCE (hook): state what everyone is doing with the trend "
+        "as if it's already a verdict. Use the trend's own specific noun/number.\n"
+        "2. CROSS-EXAMINE: the one question about the trend nobody's asking. "
+        "Socrates would ask it; you state it.\n"
+        "3. THE VERDICT (quote): drop the quote as the judge's ruling. Take a SIDE "
+        "- 'wisdom applies to everything' is banned, it reads as spam.\n"
+        "4. SENTENCE (CTA): agree/disagree with the ruling — force a binary.\n"
+        "Polarization lever: take the UNPOPULAR side of the trend. 50/50 split is "
+        "the goal; safe consensus gets no comments."
     ),
     "debate": (
-        "MODE: DEBATE\n"
-        "Use this quote to make a bold claim that will split your audience "
-        "into two camps. Something where 50% will agree and 50% will rage.\n"
-        "Quote: {quote}\n"
-        "Topic (if specified): {target}\n"
-        "Generate the debate take now."
+        "DEBATE STRUCTURE (audience-split, retention-optimized):\n"
+        "1. THE CLAIM (hook): a binary, falsifiable statement. 'Comfort is just "
+        "stuck with better branding.' Half will already rage.\n"
+        "2. THE STAKE: what they lose if they're on the wrong side — tonight, not "
+        "in theory.\n"
+        "3. THE EXHIBIT (quote): the ancient precedent that already settled this "
+        "centuries ago. The quote is the closing argument.\n"
+        "4. THE SPLIT (CTA): force agree OR disagree in one word. No 'thoughts?'.\n"
+        "Polarization lever: make the claim about an IDENTITY (the grinder, the "
+        "self-care girlie, the optimist), not a topic. People defend identities."
     ),
+}
+
+# Per-mode user-prompt template. {body} carries the quote/target/trend block,
+# {mode} the mode name. The playbook above is the load-bearing retention lever.
+_MODE_PROMPTS = {
+    m: (
+        f"MODE: {m.upper()}\n"
+        f"{{playbook}}\n\n"
+        "{body}\n"
+        "Generate the {mode} now."
+    )
+    for m in ("roast", "verdict", "debate")
 }
 
 
@@ -132,17 +171,35 @@ def generate_controversy(
         or None on failure.
     """
     schema = _SCHEMAS[mode]
-    prompt_template = _MODE_PROMPTS[mode]
-    user = prompt_template.format(quote=quote, target=target or "pick one", trend=trend or "pick a relevant current trend")
+    body = {
+        "roast":  f"Quote: {quote}\nTarget habit: {target or 'pick one'}",
+        "verdict":f"A trend is live right now: {trend or 'pick a relevant current trend'}\n"
+                  f"Quote (his verdict): {quote}",
+        "debate": f"Quote: {quote}\nTopic: {target or 'pick one that splits 50/50'}",
+    }[mode]
+    user = _MODE_PROMPTS[mode].format(
+        playbook=_MODE_PLAYBOOKS[mode], body=body, mode=mode,
+    )
 
     try:
+        # Route the system prompt through prompt_store so the nightly optimizer
+        # (prompt_critic + loop.run_once) can A/B it against real sends-per-reach,
+        # the same machinery that already improves story_writer. The hardcoded
+        # default seeds v1 on first access.
+        sys_prompt = prompt_store.get("prompt.controversy.system", _SYSTEM_PROMPT)
         result = client.call(
             "copywriter",  # use copywriter role for creative writing
-            _SYSTEM_PROMPT,
+            sys_prompt,
             f"You are generating {mode} content.",
             user,
             schema,
         )
+        # Tighten the controversy-path hook to 11 words (the studio story path
+        # keeps 15 — its hooks land softer over a longer scene). A 15-word hook
+        # at a frame-0 hard-pop is too much text to read in ~1.6s.
+        hook = (result or {}).get("hook", "") if isinstance(result, dict) else ""
+        if hook and len(hook.split()) > 11:
+            result["hook"] = " ".join(hook.split()[:11])
         return result
     except Exception as e:
         log.warning(f"[controversy] generation failed ({e})")
@@ -152,14 +209,15 @@ def generate_controversy(
 def pick_mode(slot: int = 0, trend_available: bool = False) -> Mode:
     """Pick a mode for this post. Rotates to keep variety.
 
-    - verdict mode is only used when a trend is available
-    - roast and debate alternate for the other slots
+    - No trend: roast/debate alternate on the evergreen target pool.
+    - Trend present: every trend slot uses the trend; the ANGLE rotates
+      (verdict / roast-of-trend / debate-of-trend) rather than dropping the
+      trend 2 of 3 slots. Roasting the *habit a trend reveals* is a fresh angle
+      the old slot-only logic never produced.
     """
-    if trend_available and slot % 3 == 0:
-        return "verdict"
-    if slot % 2 == 0:
-        return "roast"
-    return "debate"
+    if not trend_available:
+        return "roast" if slot % 2 == 0 else "debate"
+    return ["verdict", "roast", "debate"][slot % 3]
 
 
 # Modern habits that Socrates would roast (for when no target is specified)

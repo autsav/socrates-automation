@@ -27,6 +27,45 @@ SUPPORTED_MOODS = (
 )
 
 
+def sceneFrames(
+    durationSec: float,
+    fps: int,
+    voiceDurations: dict[str, float | None] | None = None,
+    hasBridge: bool = False,
+    hasHook: bool = True,
+) -> dict[str, float]:
+    """Scene timing in seconds (HyperFrames-native). Ported from TypeScript."""
+    HOOK_GASP = 0.25
+    PAD = 0.2
+    MIN = {"hook": 1.6, "bridge": 2.5, "quote": 3.0, "cta": 1.8}
+
+    def secs(d: float | None, min_val: float, extra: float = 0) -> float:
+        return max(min_val, (d or 0) + PAD + extra)
+
+    vd = voiceDurations or {}
+    bridgeOn = hasBridge or bool(vd.get("bridge"))
+
+    if any(vd.get(k) for k in ("hook", "bridge", "quote", "cta")):
+        hook = secs(vd.get("hook"), MIN["hook"], HOOK_GASP) if hasHook else 0.0
+        bridge = secs(vd.get("bridge"), MIN["bridge"]) if bridgeOn else 0.0
+        quote = secs(vd.get("quote"), MIN["quote"])
+        cta = secs(vd.get("cta"), MIN["cta"])
+        return {"total": hook + bridge + quote + cta, "hook": hook, "bridge": bridge, "quote": quote, "cta": cta}
+
+    hook = max(MIN["hook"], durationSec * 0.18) if hasHook else 0.0
+    bridge = max(MIN["bridge"], durationSec * 0.22) if bridgeOn else 0.0
+    quote = max(MIN["quote"], durationSec * 0.42)
+    cta = max(MIN["cta"], durationSec * 0.18)
+    # Fallback must preserve total duration (matching Remotion logic)
+    hookFrac = 0.34 if not bridgeOn else 0.30
+    ctaFrac = 0.26 if not bridgeOn else 0.24
+    hook = min(3.5, durationSec * hookFrac) if hasHook else 0.0
+    bridge = 2.5 if bridgeOn else 0.0
+    cta = min(2.5, durationSec * ctaFrac)
+    quote = max(durationSec - hook - bridge - cta, 2.0)
+    return {"total": hook + bridge + quote + cta, "hook": hook, "bridge": bridge, "quote": quote, "cta": cta}
+
+
 def _probe_duration(path: Path) -> float | None:
     """Best-effort media duration in seconds via ffprobe; None if unavailable."""
     if not shutil.which("ffprobe"):

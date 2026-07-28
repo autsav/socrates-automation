@@ -3,6 +3,9 @@ Image Generator — uses Fal.ai FLUX model to generate cinematic backgrounds.
 Cost: ~$0.003 per image. 30 posts/month ≈ £0.07.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import os
 import time
 import random
@@ -64,7 +67,7 @@ def _resolve_tier() -> str:
     """Pick the FLUX tier from FAL_TIER env; default and fallback = 'pro'."""
     t = os.getenv("FAL_TIER", "pro").lower()
     if t not in FAL_TIER_URLS:
-        print(f"  [image] Unknown FAL_TIER={t!r} — falling back to 'pro'")
+        logger.info(f"  [image] Unknown FAL_TIER={t!r} — falling back to 'pro'")
         t = "pro"
     return t
 
@@ -166,10 +169,10 @@ def enhance_prompt(mood: str, quote: str, api_key: str = "") -> str:
                 enhanced = enhanced.rsplit("\n", 1)[0]
             enhanced = enhanced.strip()
             if enhanced and len(enhanced) > 40:
-                print(f"  [image] Claude-enhanced prompt ({len(enhanced)} chars)")
+                logger.info(f"  [image] Claude-enhanced prompt ({len(enhanced)} chars)")
                 return enhanced
     except Exception as e:
-        print(f"  [image] Prompt enhancement failed ({e}) — using base prompt")
+        logger.info(f"  [image] Prompt enhancement failed ({e}) — using base prompt")
 
     return base_prompt
 
@@ -186,7 +189,7 @@ def _generate_with_retry(headers, payload, max_retries=2, url="https://fal.run/f
             last_error = e
             if attempt < max_retries:
                 wait = 2 ** attempt
-                print(f"  [fal] Connection error, retrying in {wait}s...")
+                logger.info(f"  [fal] Connection error, retrying in {wait}s...")
                 time.sleep(wait)
             continue
         except requests.HTTPError as e:
@@ -197,7 +200,7 @@ def _generate_with_retry(headers, payload, max_retries=2, url="https://fal.run/f
             if attempt < max_retries:
                 wait = 2 ** attempt
                 code = e.response.status_code if e.response is not None else "?"
-                print(f"  [fal] HTTP {code}, retrying in {wait}s...")
+                logger.info(f"  [fal] HTTP {code}, retrying in {wait}s...")
                 time.sleep(wait)
             continue
     raise last_error
@@ -231,7 +234,7 @@ def generate_background(
     seed = _resolve_seed(seed)
     payload = _build_payload(tier, prompt, seed)
 
-    print(f"  [image] Generating {mood} background (tier={tier}, seed={seed})...")
+    logger.info(f"  [image] Generating {mood} background (tier={tier}, seed={seed})...")
     data = _generate_with_retry(headers, payload, url=_fal_url(tier))
 
     # Extract image URL from response
@@ -272,4 +275,4 @@ if __name__ == "__main__":
         quote="The unexamined life is not worth living.",
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
     )
-    print(f"Saved: {path} (seed={seed})")
+    logger.info(f"Saved: {path} (seed={seed})")

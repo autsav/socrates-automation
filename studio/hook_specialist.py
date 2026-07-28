@@ -5,8 +5,14 @@ import re
 from studio.types import _obj
 from studio.rubric import score_hook, RESOLUTION_PHRASES
 
+# 12 psychological angles. The original 8 covered most of the wheel but missed
+# the highest-retention IDENTITY angles — betrayal, identity-threat, and
+# social-proof-inversion produce the most "sent to a friend" hooks. scarcity
+# ties the curiosity gap to a clock the viewer feels.
 HOOK_ANGLES = ("fear", "curiosity", "status", "absurdity", "loss",
-               "time-urgency", "secret", "challenge")
+               "time-urgency", "secret", "challenge",
+               "betrayal", "identity-threat",
+               "social-proof-inversion", "scarcity")
 
 _HOOKS_SCHEMA = _obj({"hooks": {"type": "array", "items": {"type": "string"}}},
                      ["hooks"])
@@ -18,7 +24,7 @@ _PREFIX = (
     "opening a loop it never resolves.")
 
 
-def generate_hooks(client, story: dict, n: int = 8) -> list[str]:
+def generate_hooks(client, story: dict, n: int = 12) -> list[str]:
     """One call, one hook per angle. [] on any failure (never raises)."""
     try:
         role = (

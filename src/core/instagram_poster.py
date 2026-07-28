@@ -3,6 +3,9 @@ Instagram Poster — uploads image to Cloudinary (public URL), then posts via Me
 Flow: local JPEG → Cloudinary CDN URL → Meta /media → Meta /media_publish
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import time
 import requests
 import cloudinary
@@ -251,18 +254,18 @@ def post_to_instagram(
     Full flow: upload image → create container → publish.
     Returns Instagram post ID.
     """
-    print("  Uploading to Cloudinary...")
+    logger.info("  Uploading to Cloudinary...")
     public_url = upload_to_cloudinary(image_path, cloudinary_config)
-    print(f"  Public URL: {public_url}")
+    logger.info(f"  Public URL: {public_url}")
 
-    print("  Creating Meta media container...")
+    logger.info("  Creating Meta media container...")
     container_id = _create_media_container(ig_account_id, public_url, caption, access_token)
-    print(f"  Container ID: {container_id}")
+    logger.info(f"  Container ID: {container_id}")
 
-    print("  Waiting for container to finish processing...")
+    logger.info("  Waiting for container to finish processing...")
     _wait_for_container(container_id, access_token)
 
-    print("  Publishing to Instagram...")
+    logger.info("  Publishing to Instagram...")
     post_id = _publish_container(ig_account_id, container_id, access_token)
 
     return post_id
@@ -333,20 +336,20 @@ def post_carousel_to_instagram(
     """
     children_ids = []
     for i, image_path in enumerate(image_paths):
-        print(f"  Uploading carousel slide {i + 1}/{len(image_paths)} to Cloudinary...")
+        logger.info(f"  Uploading carousel slide {i + 1}/{len(image_paths)} to Cloudinary...")
         public_url = upload_to_cloudinary(image_path, cloudinary_config)
-        print(f"  Creating carousel item container {i + 1}/{len(image_paths)}...")
+        logger.info(f"  Creating carousel item container {i + 1}/{len(image_paths)}...")
         container_id = _create_carousel_item_container(ig_account_id, public_url, access_token)
         children_ids.append(container_id)
 
-    print("  Creating parent carousel container...")
+    logger.info("  Creating parent carousel container...")
     carousel_id = _create_carousel_container(ig_account_id, children_ids, caption, access_token)
-    print(f"  Carousel container ID: {carousel_id}")
+    logger.info(f"  Carousel container ID: {carousel_id}")
 
-    print("  Waiting for carousel container to finish processing...")
+    logger.info("  Waiting for carousel container to finish processing...")
     _wait_for_container(carousel_id, access_token)
 
-    print("  Publishing carousel to Instagram...")
+    logger.info("  Publishing carousel to Instagram...")
     post_id = _publish_container(ig_account_id, carousel_id, access_token)
 
     return post_id
@@ -364,26 +367,26 @@ def post_reel_to_instagram(
     Full flow: upload video → (optional cover) → create Reel container → publish.
     Returns Instagram post ID.
     """
-    print("  Uploading video to Cloudinary...")
+    logger.info("  Uploading video to Cloudinary...")
     public_url = upload_video_to_cloudinary(video_path, cloudinary_config)
-    print(f"  Public URL: {public_url}")
+    logger.info(f"  Public URL: {public_url}")
 
     cover_url = None
     if cover_path:
-        print("  Uploading cover image to Cloudinary...")
+        logger.info("  Uploading cover image to Cloudinary...")
         cover_url = upload_to_cloudinary(cover_path, cloudinary_config)
-        print(f"  Cover URL: {cover_url}")
+        logger.info(f"  Cover URL: {cover_url}")
 
-    print("  Creating Reel media container...")
+    logger.info("  Creating Reel media container...")
     container_id = _create_reel_container(
         ig_account_id, public_url, caption, access_token, cover_url=cover_url
     )
-    print(f"  Container ID: {container_id}")
+    logger.info(f"  Container ID: {container_id}")
 
-    print("  Waiting for container to finish processing...")
+    logger.info("  Waiting for container to finish processing...")
     _wait_for_container(container_id, access_token, max_wait=360)  # video processing is slow
 
-    print("  Publishing Reel to Instagram...")
+    logger.info("  Publishing Reel to Instagram...")
     post_id = _publish_container(ig_account_id, container_id, access_token)
 
     return post_id

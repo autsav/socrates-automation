@@ -8,6 +8,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.app.schemas import Receipt
 from backend.app.supabase_client import upload_to_storage as supabase_upload
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/receipts", tags=["receipts"])
 
@@ -21,6 +24,7 @@ _VALID_USER_ID_RE = re.compile(r"^[a-zA-Z0-9._:-]+$")
 def _validate_user_id(user_id: str) -> str:
     """Reject user_ids that could cause path traversal."""
     if not _VALID_USER_ID_RE.match(user_id):
+        logger.warning("receipt_user_id_invalid", user_id=user_id)
         raise HTTPException(
             status_code=422,
             detail={
@@ -29,6 +33,7 @@ def _validate_user_id(user_id: str) -> str:
             },
         )
     if ".." in user_id:
+        logger.warning("receipt_user_id_path_traversal", user_id=user_id)
         raise HTTPException(
             status_code=422,
             detail={
@@ -56,6 +61,13 @@ async def upload_receipt(
 
     # Validate file size
     if len(file_data) > MAX_FILE_SIZE:
+        logger.warning(
+            "receipt_file_too_large",
+            user_id=user_id,
+            filename=file.filename,
+            size=len(file_data),
+            max_size=MAX_FILE_SIZE,
+        )
         raise HTTPException(
             status_code=422,
             detail={"code": "RECEIPT_001", "message": "File size exceeds 10MB limit"},
@@ -74,7 +86,22 @@ async def upload_receipt(
             file_data=file_data,
             content_type=file.content_type or "application/octet-stream",
         )
+        logger.info(
+            "receipt_uploaded",
+            user_id=user_id,
+            file_uuid=file_uuid,
+            size=len(file_data),
+            storage_path=storage_path,
+        )
     except Exception as e:
+        logger.error(
+            "receipt_upload_failed",
+            user_id=user_id,
+            filename=file.filename,
+            storage_path=storage_path,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         raise HTTPException(
             status_code=502,
             detail=f"Failed to upload file to storage: {str(e)}",

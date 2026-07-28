@@ -11,6 +11,9 @@ Generates 3 MP3 files per Reel:
   - cta_voice.mp3     (reads the CTA text)
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import requests
 from pathlib import Path
 from typing import Literal
@@ -63,10 +66,10 @@ def _tts_openai(
         resp.raise_for_status()
         output_path.write_bytes(resp.content)
         size_kb = output_path.stat().st_size / 1024
-        print(f"  [voiceover] ✅ Saved {output_path.name} ({size_kb:.0f} KB)")
+        logger.info(f"  [voiceover] ✅ Saved {output_path.name} ({size_kb:.0f} KB)")
         return True
     except Exception as e:
-        print(f"  [voiceover] OpenAI TTS failed: {e}")
+        logger.info(f"  [voiceover] OpenAI TTS failed: {e}")
         return False
 
 
@@ -117,7 +120,7 @@ def prepare_reel_voiceover(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     voice = get_voice_for_mood(mood)
-    print(f"  [voiceover] Using voice '{voice}' for mood '{mood}'")
+    logger.info(f"  [voiceover] Using voice '{voice}' for mood '{mood}'")
 
     hook_path = out_dir / f"voice_hook_{timestamp}.mp3"
     quote_path = out_dir / f"voice_quote_{timestamp}.mp3"
@@ -146,7 +149,7 @@ if __name__ == "__main__":
 
     key = os.getenv("OPENAI_API_KEY", "")
     if not key:
-        print("Set OPENAI_API_KEY env var to generate voiceovers.")
+        logger.info("Set OPENAI_API_KEY env var to generate voiceovers.")
         sys.exit(1)
 
     text = sys.argv[1] if len(sys.argv) > 1 else "The unexamined life is not worth living."
@@ -155,6 +158,6 @@ if __name__ == "__main__":
 
     ok = generate_scene_voiceover(text, voice, key, out)
     if ok:
-        print(f"Generated: {out}")
+        logger.info(f"Generated: {out}")
     else:
-        print("Failed")
+        logger.error("Failed")

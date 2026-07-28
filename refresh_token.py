@@ -6,6 +6,9 @@ Outputs new token — update your GitHub secret manually.
 Usage: python refresh_token.py
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import os
 import requests
 from dotenv import load_dotenv
@@ -30,12 +33,12 @@ def refresh_meta_token():
     data = response.json()
 
     if "access_token" in data:
-        print("\n✅ New token (valid 60 days):")
-        print(data["access_token"])
-        print("\n→ Update META_ACCESS_TOKEN in GitHub Secrets")
-        print("→ Update META_ACCESS_TOKEN in your .env file")
+        logger.info("\n✅ New token (valid 60 days):")
+        logger.info(data["access_token"])
+        logger.info("\n→ Update META_ACCESS_TOKEN in GitHub Secrets")
+        logger.info("→ Update META_ACCESS_TOKEN in your .env file")
     else:
-        print(f"\n❌ Error: {data}")
+        logger.info(f"\n❌ Error: {data}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,10 @@ Manual posts are logged with status='proposed' and no post_id. This pulls the
 account's recent media via the Graph API and matches each pending proposal by a
 caption marker (the chosen hook), so analytics can later fetch metrics for them.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import logging
 from datetime import datetime
@@ -120,4 +124,4 @@ if __name__ == "__main__":
     from config import Config
     cfg = Config()
     data_store.init_db()
-    print(f"Reconciled {reconcile_pending(cfg.META_ACCESS_TOKEN, cfg.IG_ACCOUNT_ID)} post(s).")
+    logger.info(f"Reconciled {reconcile_pending(cfg.META_ACCESS_TOKEN, cfg.IG_ACCOUNT_ID)} post(s).")

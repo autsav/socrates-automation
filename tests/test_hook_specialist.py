@@ -8,7 +8,7 @@ from studio.hook_specialist import HOOK_ANGLES, generate_hooks, pick_hook
 
 
 def test_eight_angles():
-    assert len(HOOK_ANGLES) == 8 and len(set(HOOK_ANGLES)) == 8
+    assert len(HOOK_ANGLES) == 12 and len(set(HOOK_ANGLES)) == 12
 
 
 def test_generate_hooks_calls_role(monkeypatch):
@@ -17,7 +17,7 @@ def test_generate_hooks_calls_role(monkeypatch):
             assert role == "hook_specialist"
             return {"hooks": [f"You feel angle {a} tonight." for a in HOOK_ANGLES]}
     hooks = generate_hooks(C(), {"beat_reframe": "story text", "beat_hook": "old"})
-    assert len(hooks) == 8
+    assert len(hooks) == 12
 
 
 def test_generate_hooks_failure_returns_empty():

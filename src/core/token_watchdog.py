@@ -16,6 +16,9 @@ Telegram when configured, prints otherwise — never blocks posting).
 """
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -80,12 +83,12 @@ def main() -> int:
     cfg = Config()
     token = cfg.META_ACCESS_TOKEN
     if not token:
-        print("[watchdog] no META_ACCESS_TOKEN configured")
+        logger.info("[watchdog] no META_ACCESS_TOKEN configured")
         return 0
     age = check_token_age(token)
     alive, probe_msg = probe_token(token, cfg.IG_ACCOUNT_ID)
-    print(f"[watchdog] {age['message']}")
-    print(f"[watchdog] probe: {probe_msg}")
+    logger.info(f"[watchdog] {age['message']}")
+    logger.info(f"[watchdog] probe: {probe_msg}")
     alert = None
     if not alive:
         alert = probe_msg
@@ -95,9 +98,9 @@ def main() -> int:
         try:
             from src.core.notifier import Notifier
             Notifier(cfg).send(alert)
-            print("[watchdog] alert sent to Telegram")
+            logger.info("[watchdog] alert sent to Telegram")
         except Exception as e:
-            print(f"[watchdog] alert send failed ({e})")
+            logger.info(f"[watchdog] alert send failed ({e})")
     return 0
 
 

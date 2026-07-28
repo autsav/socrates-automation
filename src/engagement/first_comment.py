@@ -6,6 +6,9 @@ Best-effort: never fails the post.
 """
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import requests
 
 from src.core.instagram_poster import _graph
@@ -23,7 +26,7 @@ def post_comment(media_id: str, text: str, access_token: str) -> bool:
         )
         return r.status_code == 200
     except Exception as e:  # noqa: BLE001
-        print(f"  [first-comment] failed ({e})")
+        logger.info(f"  [first-comment] failed ({e})")
         return False
 
 

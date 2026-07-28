@@ -5,6 +5,9 @@ Hybrid Quote Reader
 - Falls back to hardcoded mood map if no API key
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import httpx
 from datetime import datetime
 from pathlib import Path
@@ -82,7 +85,7 @@ def read_todays_quote(
                 f"quotes.xlsx not found at {path.absolute()}\n"
                 "Set ANTHROPIC_API_KEY to auto-generate fresh quotes."
             )
-        print("  [excel] quotes.xlsx not found — generating fresh quotes...")
+        logger.info("  [excel] quotes.xlsx not found — generating fresh quotes...")
         generate_fresh_quotes(excel_path=str(path), api_key=api_key)
 
     wb = openpyxl.load_workbook(path)
@@ -92,13 +95,13 @@ def read_todays_quote(
     remaining = _count_ready_quotes(ws)
     if remaining < REGEN_THRESHOLD:
         if api_key:
-            print(f"  [excel] Only {remaining} quotes left — regenerating fresh batch...")
+            logger.info(f"  [excel] Only {remaining} quotes left — regenerating fresh batch...")
             generate_fresh_quotes(excel_path=str(path), api_key=api_key)
             # Reload workbook after regeneration
             wb = openpyxl.load_workbook(path)
             ws = wb["Quotes"]
         else:
-            print(f"  [excel] Warning: only {remaining} quotes left. "
+            logger.info(f"  [excel] Warning: only {remaining} quotes left. "
                   "Set ANTHROPIC_API_KEY to auto-regenerate.")
 
     # Collect all ready rows
@@ -180,19 +183,19 @@ def get_mood_prompt(quote: str, audience: str, api_key: str = "") -> str:
 
             for mood in VALID_MOODS:
                 if mood in raw:
-                    print(f"  [mood] Claude → {mood}")
+                    logger.info(f"  [mood] Claude → {mood}")
                     return mood
 
             fallback = AUDIENCE_TO_MOOD.get(audience, "dark_philosophical")
-            print(f"  [mood] Claude unknown '{raw}' → fallback {fallback}")
+            logger.info(f"  [mood] Claude unknown '{raw}' → fallback {fallback}")
             return fallback
 
         except Exception as e:
-            print(f"  [mood] Claude error ({e}) → fallback")
+            logger.info(f"  [mood] Claude error ({e}) → fallback")
 
     # Hardcoded fallback
     fallback = AUDIENCE_TO_MOOD.get(audience, "dark_philosophical")
-    print(f"  [mood] Fallback → {fallback} (no API)")
+    logger.info(f"  [mood] Fallback → {fallback} (no API)")
     return fallback
 
 
@@ -214,7 +217,7 @@ def mark_as_posted(excel_path: str, row_number: int, post_id: str):
             break
 
     wb.save(path)
-    print(f"  [excel] Marked row {row_number} as posted ({today})")
+    logger.info(f"  [excel] Marked row {row_number} as posted ({today})")
 
 
 def get_quote_by_row(row_number: int, excel_path: str = "quotes.xlsx") -> str | None:
@@ -242,9 +245,9 @@ if __name__ == "__main__":
 
     # Test: read today's quote
     data = read_todays_quote("quotes.xlsx")
-    print(f"Quote:    {data['quote'][:80]}...")
-    print(f"Audience: {data['audience']}")
-    print(f"Row:      {data['row_number']}")
+    logger.info(f"Quote:    {data['quote'][:80]}...")
+    logger.info(f"Audience: {data['audience']}")
+    logger.info(f"Row:      {data['row_number']}")
 
     # Test: get mood (with fallback)
     mood = get_mood_prompt(
@@ -252,4 +255,4 @@ if __name__ == "__main__":
         audience=data["audience"],
         api_key=os.getenv("ANTHROPIC_API_KEY", "")
     )
-    print(f"Mood:     {mood}")
+    logger.info(f"Mood:     {mood}")

@@ -16,6 +16,9 @@ far.
 """
 from __future__ import annotations
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import json
 import re
 from datetime import datetime, timezone
@@ -232,8 +235,8 @@ if __name__ == "__main__":
     cfg = Config()
     if args.poll:
         decided = poll_once(cfg)
-        print(json.dumps(decided, indent=2))
+        logger.info(json.dumps(decided, indent=2))
     elif args.check is not None:
-        print(get_decision(args.check))
+        logger.info(get_decision(args.check))
     else:
         parser.print_help()

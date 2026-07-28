@@ -8,6 +8,9 @@ Adds save_rate column to all analytics queries and surfaces
 a ranked report sorted by save_rate desc.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 
 def calculate_save_rate(saved: int, reach: int) -> float:
     """
@@ -28,7 +31,7 @@ def get_save_rate_report(limit: int = 20) -> list[dict]:
     try:
         from src.core.data_store import _get_connection
     except ImportError:
-        print("  [analytics] data_store not available")
+        logger.info("  [analytics] data_store not available")
         return []
 
     conn = _get_connection()
@@ -80,12 +83,12 @@ def get_save_rate_report(limit: int = 20) -> list[dict]:
 def print_save_rate_report(report: list[dict]) -> None:
     """Print save rate KPI table to stdout."""
     if not report:
-        print("  [analytics] No posts with metrics yet.")
+        logger.info("  [analytics] No posts with metrics yet.")
         return
-    print(f"\n{'Post ID':<20} {'Save%':>6} {'Rank':>4}  {'Saved':>5} {'Reach':>6}  Quote")
-    print("-" * 90)
+    logger.info(f"\n{'Post ID':<20} {'Save%':>6} {'Rank':>4}  {'Saved':>5} {'Reach':>6}  Quote")
+    logger.info("-" * 90)
     for row in report:
-        print(
+        logger.info(
             f"{row['post_id']:<20} {row['save_rate']:>5.2f}%  {row['save_rate_rank']:>4}"
             f"  {row['saved']:>5} {row['reach']:>6}  {row['quote_text']}"
         )

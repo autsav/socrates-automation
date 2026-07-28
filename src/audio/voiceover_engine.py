@@ -20,6 +20,9 @@ Usage:
     audio_path = vo.speak(script, voice="onyx")
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import re
 import random
 from pathlib import Path
@@ -290,7 +293,7 @@ class VoiceoverEngine:
                 self._generate_speech(script_text, voice, api_key, output_path)
                 result[key] = str(output_path)
             except Exception as e:
-                print(f"  [voiceover] Failed to generate {key}: {e}")
+                logger.info(f"  [voiceover] Failed to generate {key}: {e}")
 
         return result if result else None
 
@@ -316,7 +319,7 @@ class VoiceoverEngine:
         with open(output_path, "wb") as f:
             f.write(resp.content)
 
-        print(f"  [voiceover] Generated {output_path.name} ({output_path.stat().st_size / 1024:.0f} KB)")
+        logger.info(f"  [voiceover] Generated {output_path.name} ({output_path.stat().st_size / 1024:.0f} KB)")
 
     @classmethod
     def demo_voices(cls) -> list[str]:

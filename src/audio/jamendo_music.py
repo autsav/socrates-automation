@@ -6,6 +6,10 @@ HTTP, metadata extraction, download + validation, and a heuristic fallback pick.
 Every function degrades gracefully — search/download failures return []/False so
 the Music Director can fall back to the mood-based bed.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 from pathlib import Path
 
 import requests
@@ -38,7 +42,7 @@ def search_tracks(direction, client_id, limit=20):
         resp.raise_for_status()
         results = resp.json().get("results", [])
     except Exception as e:  # noqa: BLE001 - degrade gracefully
-        print(f"  [jamendo] search error ({query[:30]}): {e}")
+        logger.info(f"  [jamendo] search error ({query[:30]}): {e}")
         return []
     return [h for h in results if h.get("audiodownload_allowed")]
 
@@ -90,13 +94,13 @@ def download_track(url, output_path):
         dl.raise_for_status()
         output_path.write_bytes(dl.content)
         size_kb = output_path.stat().st_size / 1024
-        print(f"  [jamendo] Saved {output_path.name} ({size_kb:.0f} KB)")
+        logger.info(f"  [jamendo] Saved {output_path.name} ({size_kb:.0f} KB)")
         ok = _validate_audio_file(output_path)
         if not ok:
             output_path.unlink(missing_ok=True)
         return ok
     except Exception as e:  # noqa: BLE001
-        print(f"  [jamendo] download error: {e}")
+        logger.info(f"  [jamendo] download error: {e}")
         return False
 
 

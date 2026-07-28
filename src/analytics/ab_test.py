@@ -4,6 +4,9 @@ Selects caption variant, image mood, and posting slot based on
 rolling 30-day performance data from SQLite.
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import random
 from typing import Callable
 
@@ -39,12 +42,12 @@ def pick_caption_variant(
 
     if trials < 5:
         variant = random.choice([0, 1])
-        print(f"  [ab] caption cold start ({trials} trials) → random {variant}")
+        logger.info(f"  [ab] caption cold start ({trials} trials) → random {variant}")
         return variant
 
     winner = _thompson_sample(wins_a, wins_b, trials)
     variant = 0 if winner == "a" else 1
-    print(f"  [ab] caption → variant {variant} (wins: {wins_a}/{wins_b}, trials: {trials})")
+    logger.info(f"  [ab] caption → variant {variant} (wins: {wins_a}/{wins_b}, trials: {trials})")
     return variant
 
 
@@ -86,9 +89,9 @@ def pick_mood(
 
     if best_mood is None or best_score < 0:
         best_mood = random.choice(valid_moods)
-        print(f"  [ab] mood cold start → random {best_mood}")
+        logger.info(f"  [ab] mood cold start → random {best_mood}")
     else:
-        print(f"  [ab] mood → {best_mood} (score {best_score})")
+        logger.info(f"  [ab] mood → {best_mood} (score {best_score})")
 
     return best_mood
 
@@ -109,7 +112,7 @@ def pick_optimal_slot(
 
     if trials < 5:
         slot = random.choice([0, 1, 2])
-        print(f"  [ab] slot cold start ({trials} trials) → random {slot}")
+        logger.info(f"  [ab] slot cold start ({trials} trials) → random {slot}")
         return slot
 
     winner = _thompson_sample(wins_a, wins_b, trials)
@@ -118,7 +121,7 @@ def pick_optimal_slot(
     else:
         slot = 2
 
-    print(f"  [ab] slot → {slot} (wins: {wins_a}/{wins_b}, trials: {trials})")
+    logger.info(f"  [ab] slot → {slot} (wins: {wins_a}/{wins_b}, trials: {trials})")
     return slot
 
 
@@ -151,7 +154,7 @@ def pick_micro_moment_audience(weekday: int | None = None) -> str:
     elif hour >= 22:
         audience = "lost"           # Late night existential
 
-    print(f"  [ab] micro-moment audience → {audience} (weekday={weekday}, hour={hour})")
+    logger.info(f"  [ab] micro-moment audience → {audience} (weekday={weekday}, hour={hour})")
     return audience
 
 
@@ -167,5 +170,5 @@ def pick_posting_time(slot: int) -> tuple[int, int]:
     slot_hours = {0: 7, 1: 12, 2: 20}
     hour = slot_hours.get(slot, 7)
     minute = random.choice(GOLDEN_MINUTES)
-    print(f"  [ab] golden-15 posting time → {hour:02d}:{minute:02d}")
+    logger.info(f"  [ab] golden-15 posting time → {hour:02d}:{minute:02d}")
     return hour, minute

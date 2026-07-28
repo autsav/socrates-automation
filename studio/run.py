@@ -1,4 +1,8 @@
 """Studio orchestrator — chains the four agents; returns None to signal fallback."""
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import logging
 
 from studio import analyst, strategist, copywriter, concept_picker
@@ -73,8 +77,8 @@ if __name__ == "__main__":
     pool = _build_pool("quotes.xlsx")
     out = run_studio(client, _current_slot(), pool, [])
     if out is None:
-        print("Studio fell back (legacy path would run).")
+        logger.info("Studio fell back (legacy path would run).")
     else:
         brief, decision, _ = out
-        print(json.dumps({"brief": brief.to_dict(),
+        logger.info(json.dumps({"brief": brief.to_dict(),
                           "decision": decision.to_dict()}, indent=2))

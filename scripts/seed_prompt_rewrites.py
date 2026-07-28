@@ -15,6 +15,10 @@ Run:  .venv/bin/python scripts/seed_prompt_rewrites.py           # seed
       .venv/bin/python scripts/seed_prompt_rewrites.py --dry-run # validate only
 After seeding, approve via Telegram (optimize.py surfaces them) or promote by hand.
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import argparse
 import sys
 from pathlib import Path
@@ -174,14 +178,14 @@ def main(argv=None):
         experiments.open_experiment(key, champ["id"], cid)
         seeded.append((key, f"challenger v#{cid}", rationale))
 
-    print(f"\n{'DRY-RUN — ' if args.dry_run else ''}Seeded {len(seeded)} challenger(s):")
+    logger.info(f"\n{'DRY-RUN — ' if args.dry_run else ''}Seeded {len(seeded)} challenger(s):")
     for key, tag, rationale in seeded:
-        print(f"  ✓ {key:32} {tag}")
-        print(f"      why: {rationale}")
+        logger.info(f"  ✓ {key:32} {tag}")
+        logger.info(f"      why: {rationale}")
     if rejected:
-        print(f"\nSkipped {len(rejected)}:")
+        logger.info(f"\nSkipped {len(rejected)}:")
         for key, why in rejected:
-            print(f"  ✗ {key:32} {why}")
+            logger.info(f"  ✗ {key:32} {why}")
     return 0
 
 

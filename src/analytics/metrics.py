@@ -3,6 +3,9 @@ Analytics Ingestion — fetch Meta Insights metrics ~24h after posting.
 Runs as a separate cron job (GitHub Actions analytics.yml).
 """
 
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import requests
 
 GRAPH_URL = "https://graph.instagram.com/v22.0"
@@ -59,7 +62,7 @@ def ingest_all_pending(
     try:
         from src.core.data_store import _get_connection
     except ImportError:
-        print("  [analytics] data_store not available, skipping")
+        logger.warning("  [analytics] data_store not available, skipping")
         return 0
 
     conn = _get_connection()
@@ -83,15 +86,15 @@ def ingest_all_pending(
         conn.close()
 
     if not pending:
-        print("  [analytics] No pending posts to ingest")
+        logger.info("  [analytics] No pending posts to ingest")
         return 0
 
-    print(f"  [analytics] Fetching metrics for {len(pending)} post(s)...")
+    logger.info(f"  [analytics] Fetching metrics for {len(pending)} post(s)...")
     updated = 0
 
     for post_id in pending:
         if dry_run:
-            print(f"    [dry-run] Would fetch metrics for {post_id}")
+            logger.info(f"    [dry-run] Would fetch metrics for {post_id}")
             updated += 1
             continue
 
@@ -119,11 +122,11 @@ def ingest_all_pending(
             finally:
                 conn.close()
             updated += 1
-            print(f"    [analytics] Ingested metrics for {post_id}")
+            logger.info(f"    [analytics] Ingested metrics for {post_id}")
         except Exception as e:
-            print(f"    [analytics] Failed to fetch metrics for {post_id}: {e}")
+            logger.info(f"    [analytics] Failed to fetch metrics for {post_id}: {e}")
 
-    print(f"  [analytics] Updated {updated}/{len(pending)} posts")
+    logger.info(f"  [analytics] Updated {updated}/{len(pending)} posts")
     return updated
 
 
@@ -141,12 +144,12 @@ def ingest_window(access_token, ig_account_id, db_path, days=7, dry_run=False):
         updated = 0
         for (post_id,) in rows:
             if dry_run:
-                print(f"    [dry-run] would re-poll {post_id}")
+                logger.info(f"    [dry-run] would re-poll {post_id}")
                 continue
             try:
                 m = fetch_post_metrics(post_id, access_token, ig_account_id)
             except Exception as e:  # noqa: BLE001 - one dead post never stops the sweep
-                print(f"    [analytics] {post_id} failed ({e}) — skipping")
+                logger.info(f"    [analytics] {post_id} failed ({e}) — skipping")
                 continue
             con.execute(
                 "INSERT OR REPLACE INTO post_metrics "
@@ -185,7 +188,7 @@ def get_save_rate_report(
     try:
         from src.core.data_store import _get_connection
     except ImportError:
-        print("  [analytics] data_store not available")
+        logger.info("  [analytics] data_store not available")
         return []
 
     conn = _get_connection()
@@ -237,12 +240,12 @@ def get_save_rate_report(
 def print_save_rate_report(report: list[dict]) -> None:
     """Print save rate KPI table to stdout."""
     if not report:
-        print("  [analytics] No posts with metrics yet.")
+        logger.info("  [analytics] No posts with metrics yet.")
         return
-    print(f"\n{'Post ID':<20} {'Save%':>6} {'Rank':>4}  {'Saved':>5} {'Reach':>6}  Quote")
-    print("-" * 90)
+    logger.info(f"\n{'Post ID':<20} {'Save%':>6} {'Rank':>4}  {'Saved':>5} {'Reach':>6}  Quote")
+    logger.info("-" * 90)
     for row in report:
-        print(
+        logger.info(
             f"{row['post_id']:<20} {row['save_rate']:>5.2f}%  {row['save_rate_rank']:>4}"
             f"  {row['saved']:>5} {row['reach']:>6}  {row['quote_text']}"
         )
@@ -258,4 +261,4 @@ if __name__ == "__main__":
 
     cfg = Config()
     count = ingest_all_pending(cfg.META_ACCESS_TOKEN, cfg.IG_ACCOUNT_ID, dry_run=args.dry_run)
-    print(f"Done. Ingested {count} posts.")
+    logger.info(f"Done. Ingested {count} posts.")

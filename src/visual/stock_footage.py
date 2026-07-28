@@ -7,6 +7,10 @@ real footage removes that penalty entirely.
 Pexels API is free (no attribution required, no usage limits for reasonable use).
 API key: https://www.pexels.com/api/
 """
+
+from src.utils.logger import get_logger
+logger = get_logger(__name__)
+
 import requests
 from pathlib import Path
 from typing import Optional
@@ -272,5 +276,5 @@ def fetch_reel_clips(mood, api_key, output_dir, topic_query=None, n=4):
             if got:
                 clips.append(Path(got))
         except Exception as e:  # noqa: BLE001 - one dead query never stops the fetch
-            print(f"  [stock] clip query failed ({e}) — continuing")
+            logger.info(f"  [stock] clip query failed ({e}) — continuing")
     return clips
