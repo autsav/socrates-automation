@@ -91,7 +91,7 @@ No secrets in repo. Verified by grep check in acceptance gate.
 ### `index.astro` — home
 
 Sections, top→bottom:
-1. Hero: hero quote (one featured per build), brand statement, IG follow CTA (primary)
+1. Hero: hero quote (first valid row by xlsx row order; featured = `QuoteCard` linked to its detail page), brand statement, IG follow CTA (primary)
 2. "What this is" 3-card strip: daily reel, philosophy library, AI-citable
 3. Lead form (Formspree): email + name → weekly quote pack
 4. Portfolio: 6 most-recent posted reels as IG embeds
@@ -110,7 +110,7 @@ Index lists all pillars. Each pillar page has:
 - Auto-linked `QuoteCard` grid for every quote tagged with that pillar
 - Internal links to other pillars
 
-Pillars seeded from xlsx `pillar` column (distinct values). Schema: `CollectionPage` + `BreadcrumbList`.
+Pillars seeded from xlsx `pillar` column (distinct values, normalized: lowercase, hyphenated, deduped; typo'd pillars logged as warnings). Schema: `CollectionPage` + `BreadcrumbList`.
 
 ### `quotes/[slug].astro` — auto-generated
 
@@ -122,7 +122,7 @@ One page per xlsx row. Slug = `{author-slug}-{first-4-words-slug}`. Per-page:
 - `Quotation` JSON-LD
 - Per-quote OG card (`/og/{slug}.png`)
 
-Filtering at build: skip rows with empty `quote_text` or `author`. Count skipped, log warning, don't fail build. Slug collisions → `-2`, `-3` suffix, log warning.
+Filtering at build: skip rows with empty `quote_text`, `author`, or `pillar`. Count skipped, log warning, don't fail build. Slug collisions → `-2`, `-3` suffix, log warning.
 
 ### `llms.txt`
 
