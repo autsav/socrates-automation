@@ -57,8 +57,11 @@ def main() -> None:
     print("STDERR:", result.stderr)
     print("Return code:", result.returncode)
 
-    mp4 = repo / "hyperframes" / "out" / "reel.mp4"
-    if mp4.exists():
+    # HyperFrames writes to renders/ with a timestamp
+    renders_dir = repo / "hyperframes" / "renders"
+    mp4s = sorted(renders_dir.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if mp4s:
+        mp4 = mp4s[0]
         size = mp4.stat().st_size
         print(f"MP4 exists: {mp4} ({size} bytes)")
     else:

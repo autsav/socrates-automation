@@ -1,0 +1,46 @@
+name: HyperFrames Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  hyperframes-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install hyperframes deps
+        run: |
+          cd hyperframes
+          npm ci
+
+      - name: Run vitest
+        run: |
+          cd hyperframes
+          npm test
+
+      - name: Smoke render via Python bridge
+        run: |
+          python scripts/render_hyperframes_test.py
+
+      - name: Verify MP4 produced
+        run: |
+          ls -lh hyperframes/renders/*.mp4

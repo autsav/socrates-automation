@@ -61,3 +61,12 @@ remotion/public/sfx-*.wav
 remotion/public/vo-*.mp3
 remotion/public/music.mp3
 remotion/public/bg.jpg
+
+# HyperFrames render-produced artifacts
+hyperframes/renders/
+hyperframes/assets/
+hyperframes/index.html
+hyperframes_studio/
+
+# Studio script generated artifacts
+sfx-*.wav
