@@ -71,7 +71,7 @@
 - Consumes: nothing (greenfield).
 - Produces: a `hyperframes/` dir with `npm install` working, `npm test` runnable (no tests yet → exits 0), `npx hyperframes --version` resolvable.
 
-- [ ] **Step 1: Create `hyperframes/package.json`**
+- [x] **Step 1: Create `hyperframes/package.json`**
 
 ```json
 {
@@ -96,7 +96,7 @@
 }
 ```
 
-- [ ] **Step 2: Create `hyperframes/tsconfig.json`**
+- [x] **Step 2: Create `hyperframes/tsconfig.json`**
 
 ```json
 {
@@ -114,7 +114,7 @@
 }
 ```
 
-- [ ] **Step 3: Create `hyperframes/hyperframes.config.ts`**
+- [x] **Step 3: Create `hyperframes/hyperframes.config.ts`**
 
 ```typescript
 import { defineConfig } from "hyperframes";
@@ -128,7 +128,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Create `hyperframes/.gitignore`**
+- [x] **Step 4: Create `hyperframes/.gitignore`**
 
 ```
 node_modules/
@@ -136,14 +136,14 @@ out/
 *.mp4
 ```
 
-- [ ] **Step 5: Create empty placeholder dirs**
+- [x] **Step 5: Create empty placeholder dirs**
 
 ```bash
 mkdir -p hyperframes/js/lib hyperframes/tests
 touch hyperframes/js/lib/.gitkeep hyperframes/tests/.gitkeep
 ```
 
-- [ ] **Step 6: Install deps + verify**
+- [x] **Step 6: Install deps + verify**
 
 Run:
 ```bash
@@ -151,7 +151,7 @@ cd hyperframes && npm install && npx hyperframes --version && npm test
 ```
 Expected: `npm install` succeeds; `npx hyperframes --version` prints a version; `npm test` exits 0 (no tests found).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add hyperframes/
@@ -171,14 +171,14 @@ git commit -m "feat(hyperframes): scaffold hyperframes/ project (package.json, t
 - Consumes: nothing.
 - Produces: `sceneFrames(durationSec, fps, voiceDurations?, hasBridge=false, hasHook=true): SceneFrames` where `SceneFrames = {total, hook, bridge, quote, cta}` in **SECONDS** (not frames). `fps` is kept as a param so the test can compare against Remotion's frame output via `Math.round(sec*fps)`.
 
-- [ ] **Step 1: Read the Remotion source + test**
+- [x] **Step 1: Read the Remotion source + test**
 
 ```bash
 cat remotion/src/lib/sceneFrames.ts
 cat remotion/src/lib/sceneFrames.test.ts
 ```
 
-- [ ] **Step 2: Write the failing test (port, seconds-converted expected values)**
+- [x] **Step 2: Write the failing test (port, seconds-converted expected values)**
 
 ```typescript
 // hyperframes/tests/sceneFrames.test.ts
@@ -229,12 +229,12 @@ describe("sceneFrames (seconds)", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `cd hyperframes && npm test -- sceneFrames`
 Expected: FAIL with "Cannot find module '../js/lib/sceneFrames'".
 
-- [ ] **Step 4: Implement `sceneFrames.ts`**
+- [x] **Step 4: Implement `sceneFrames.ts`**
 
 ```typescript
 // hyperframes/js/lib/sceneFrames.ts
@@ -294,19 +294,19 @@ export function sceneFrames(
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd hyperframes && npm test -- sceneFrames`
 Expected: PASS (all 6 cases).
 
-- [ ] **Step 6: Cross-check against Remotion's own test**
+- [x] **Step 6: Cross-check against Remotion's own test**
 
 ```bash
 cd remotion && npx vitest run src/lib/sceneFrames.test.ts
 ```
 Expected: still green (Remotion path untouched). If any expected value here disagrees with the port's `round(sec*fps)`, reconcile by reading `remotion/src/lib/sceneFrames.ts` again — the seconds-port must be the frames-source divided by fps.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add hyperframes/js/lib/sceneFrames.ts hyperframes/tests/sceneFrames.test.ts
@@ -326,13 +326,13 @@ git commit -m "feat(hyperframes): port sceneFrames.ts to seconds + test (TDD)"
 - Consumes: nothing.
 - Produces: `WordTime = { start: number; end: number; word: string }`; `wordAt(sceneSeconds, words: WordTime[]): number` — index of the active word at `sceneSeconds`, or `words.length-1` past the end.
 
-- [ ] **Step 1: Read Remotion source**
+- [x] **Step 1: Read Remotion source**
 
 ```bash
 cat remotion/src/lib/wordAt.ts remotion/src/lib/wordAt.test.ts
 ```
 
-- [ ] **Step 2: Write the failing test (verbatim port)**
+- [x] **Step 2: Write the failing test (verbatim port)**
 
 Copy `remotion/src/lib/wordAt.test.ts` to `hyperframes/tests/wordAt.test.ts`, changing only the import:
 
@@ -342,21 +342,21 @@ import { wordAt } from "../js/lib/wordAt";
 
 Keep every assertion identical.
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `cd hyperframes && npm test -- wordAt`
 Expected: FAIL "Cannot find module".
 
-- [ ] **Step 4: Implement `wordAt.ts` (verbatim)**
+- [x] **Step 4: Implement `wordAt.ts` (verbatim)**
 
 Copy `remotion/src/lib/wordAt.ts` to `hyperframes/js/lib/wordAt.ts` unchanged. Remove any `remotion` import (there is none in wordAt).
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd hyperframes && npm test -- wordAt`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperframes/js/lib/wordAt.ts hyperframes/tests/wordAt.test.ts
