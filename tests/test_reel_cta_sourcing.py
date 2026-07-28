@@ -32,7 +32,7 @@ def _run_and_capture_cta(monkeypatch, tmp_path, quote_data):
         dry_run=True,
         manual=False,
         access_token="token",
-        use_remotion=False,
+        renderer="ffmpeg",
     )
     return captured["cta"]
 
