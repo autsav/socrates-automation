@@ -2148,6 +2148,8 @@ if __name__ == "__main__":
     if args.batch:
         from src.video.batch_generator import generate_batch
         generate_batch()
+    elif args.strategy:
+        Pipeline(args).run()
     elif args.manual:
         # --manual implies --reel (generate video) but skips API posting
         run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio,
