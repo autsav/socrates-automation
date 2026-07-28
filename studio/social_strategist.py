@@ -67,3 +67,29 @@ def _build_user_msg(trend: dict, quote_row: dict, audience: str) -> str:
         f"AUDIENCE: {audience}\n\n"
         "Output QuoteData JSON. Platform: Instagram (2026)."
     )
+
+
+from studio import client as _client_module
+from studio.client import StudioError
+
+# module-level reference so tests can monkeypatch `social_strategist.client`
+client = _client_module.StudioClient
+
+
+def run(inp: StrategyInput) -> dict:
+    """Single Opus call + validation. Retry once on StudioError."""
+    user_msg = _build_user_msg(inp.trend, inp.quote_row, inp.audience)
+    raw = None
+    for attempt in range(2):
+        try:
+            raw = client.call(
+                _ROLE, SHARED_PREFIX, SYSTEM_PROMPT, user_msg, QUOTE_DATA_SCHEMA,
+            )
+            break
+        except StudioError:
+            if attempt == 1:
+                raise
+    creative = QuoteData.from_dict(raw).to_dict()
+    _validate(creative)
+    _linter(creative["caption"])
+    return creative
