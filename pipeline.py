@@ -1949,17 +1949,72 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     return record
 
 
+class _DryRunTrendScout:
+    def __init__(self, client):
+        self._client = client
+
+    def run(self) -> dict | None:
+        from studio import trend_scout
+        from src.content.trend_sources import fetch_trends
+        try:
+            cfg = SimpleNamespace(
+                GNEWS_API_KEY=__import__("os").environ.get("GNEWS_API_KEY", ""),
+            )
+            candidates = fetch_trends(cfg)
+        except Exception as e:
+            print(f"dry-run.trend_fetch_failed: {e}", file=__import__("sys").stderr)
+            return None
+        if not candidates:
+            return None
+        ctx = {"text": "Stoic philosophy quote", "attribution": "Marcus Aurelius"}
+        try:
+            hook = trend_scout.pick_hook(self._client, candidates, ctx)
+        except Exception as e:
+            print(f"dry-run.trend_pick_failed: {e}", file=__import__("sys").stderr)
+            return None
+        if not getattr(hook, "used", False):
+            return None
+        return {"headline": hook.topic, "keywords": [hook.topic], "angle": hook.hook}
+
+
+class _DryRunMusicDirector:
+    def pick(self, mood: str, trend_keywords: list[str]) -> dict:
+        from studio import music_director
+        import os
+        ctx = {"mood": mood, "trend_keywords": trend_keywords}
+        path = music_director.select_music(
+            client=None,
+            ctx=ctx,
+            api_key=os.environ.get("JAMENDO_CLIENT_ID", ""),
+            output_dir="content/music/",
+        )
+        if path is None:
+            return {"track_id": None}
+        return {"track_id": str(path)}
+
+
+class _DryRunPromptArchitect:
+    def __init__(self, client):
+        self._client = client
+
+    def run(self, quote: str, mood: str, style: str) -> str:
+        from src.prompts import architect
+        try:
+            return architect.build_prompt(quote=quote, mood=mood, style=style)
+        except Exception:
+            return f"{quote} — {mood}, {style}"
+
+
 def _make_studio_for_dry_run():                        # pragma: no cover
     """Build a minimal Studio with live trend_scout/music_director/etc."""
     from studio.client import StudioClient
     client = StudioClient(api_key=__import__("os").environ["STUDIO_API_KEY"])
-    from studio import trend_scout, music_director, prompt_architect
     from studio.social_strategist import run as social_strategist_run
     return SimpleNamespace(
         client=client,
-        trend_scout=trend_scout,
-        music_director=music_director,
-        prompt_architect=prompt_architect,
+        trend_scout=_DryRunTrendScout(client),
+        music_director=_DryRunMusicDirector(),
+        prompt_architect=_DryRunPromptArchitect(client),
         social_strategist=SimpleNamespace(run=social_strategist_run),
     )
 
