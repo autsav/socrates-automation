@@ -45,7 +45,8 @@ def srt_to_word_timings(srt_text: str) -> WordTimingsOutput:
         {"scenes": {"hook": {"words": [...], "duration_sec": float, "start_sec": 0.0}, ...},
          "total_duration_sec": float}
     """
-    blocks = re.split(r"\n\n+", srt_text.strip())
+    normalized = srt_text.replace("\r\n", "\n").replace("\r", "\n")
+    blocks = re.split(r"\n{2,}", normalized.strip())
     words: list[WordTiming] = []
     last_end = 0.0
     for block in blocks:
