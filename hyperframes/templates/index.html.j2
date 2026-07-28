@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-mood="{{ mood }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <link rel="stylesheet" href="css/moods.css" />
+  <link rel="stylesheet" href="css/scenes.css" />
+  <link rel="stylesheet" href="css/effects.css" />
+</head>
+<body>
+  <div id="root"
+       data-composition-id="main"
+       data-start="0"
+       data-duration="{{ sceneFrames.total }}"
+       data-width="1080"
+       data-height="1920">
+
+    <!-- Background layer -->
+    <div id="bg" class="clip" data-start="0" data-duration="{{ sceneFrames.total }}" data-track-index="0">
+      <div class="gradient-bg"></div>
+    </div>
+
+    {% include 'scenes/hook.j2' %}
+    {% include 'scenes/bridge.j2' %}
+    {% include 'scenes/quote.j2' %}
+    {% include 'scenes/cta.j2' %}
+
+    <!-- Audio -->
+    {% if music %}
+    <audio id="music" class="clip" data-start="0" data-duration="{{ sceneFrames.total }}" data-track-index="10" src="{{ music }}" preload="auto"></audio>
+    {% endif %}
+    {% if voices.hook %}
+    <audio id="vo-hook" class="clip" data-start="0" data-duration="{{ sceneFrames.hook }}" data-track-index="11" src="{{ voices.hook }}" preload="auto"></audio>
+    {% endif %}
+    {% if voices.bridge %}
+    <audio id="vo-bridge" class="clip" data-start="{{ sceneFrames.hook }}" data-duration="{{ sceneFrames.bridge }}" data-track-index="11" src="{{ voices.bridge }}" preload="auto"></audio>
+    {% endif %}
+    {% if voices.quote %}
+    <audio id="vo-quote" class="clip" data-start="{{ sceneFrames.hook + sceneFrames.bridge + (silenceDropSec or 0) }}" data-duration="{{ sceneFrames.quote }}" data-track-index="11" src="{{ voices.quote }}" preload="auto"></audio>
+    {% endif %}
+    {% if voices.cta %}
+    <audio id="vo-cta" class="clip" data-start="{{ sceneFrames.hook + sceneFrames.bridge + sceneFrames.quote }}" data-duration="{{ sceneFrames.cta }}" data-track-index="11" src="{{ voices.cta }}" preload="auto"></audio>
+    {% endif %}
+  </div>
+
+  <script type="application/json" id="reel-data">{{ reel_data | tojson }}</script>
+  <script type="module" src="js/index.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+/* Tier 1 scene layout + typography */
+
+#root {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: var(--bg-outer, #000);
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.scene-inner {
+  width: 100%;
+  padding: 80px 60px;
+  text-align: center;
+}
+
+.scene-text {
+  font-family: "Archivo Black", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--text, #fff);
+  text-shadow: 0 0 40px var(--glow, rgba(255,255,255,0.3));
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.hook-text {
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.bridge-text {
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--accent, #fff);
+}
+
+.quote-text {
+  font-size: 68px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.scene-attribution {
+  margin-top: 32px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--accent, #ccc);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cta-text {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--accent, #fff);
+}
+
+/* Word spans injected by GSAP */
+.word-span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(20px);
+}

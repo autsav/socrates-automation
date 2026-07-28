@@ -1,0 +1,8 @@
+<div id="scene-quote" class="clip scene" data-start="{{ sceneFrames.hook + sceneFrames.bridge }}" data-duration="{{ sceneFrames.quote }}" data-track-index="1">
+  <div class="scene-inner">
+    <div id="quote-text" class="scene-text quote-text">{{ quote }}</div>
+    {% if attribution %}
+    <div id="quote-attribution" class="scene-attribution">{{ attribution }}</div>
+    {% endif %}
+  </div>
+</div>

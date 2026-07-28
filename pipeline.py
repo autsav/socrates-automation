@@ -858,6 +858,22 @@ def _apply_trend_scout(cfg, quote_data):
         if not candidates:
             log.info("  [trend-scout] no trends available — evergreen hook")
             return quote_data
+        # Persistent trend dedup: drop trends whose material_key was already used
+        # recently, so the same trend can't win day after day. Reuses the exact
+        # "trend:<sha1[:8]>" key shape the story-beat dedup already records.
+        try:
+            from src.core.data_store import recent_material_keys
+            import hashlib
+            used = recent_material_keys(40)
+            candidates = [c for c in candidates
+                         if "trend:" + hashlib.sha1(
+                             (c.get("topic", "") or "").strip().lower().encode()
+                             ).hexdigest()[:8] not in used]
+        except Exception:  # noqa: BLE001 - dedup is best-effort, never blocks
+            pass
+        if not candidates:
+            log.info("  [trend-scout] only stale trends available — evergreen hook")
+            return quote_data
         qctx = {"quote": quote_data.get("quote", ""), "theme": quote_data.get("mood", ""),
                 "audience": quote_data.get("audience", "")}
         th = _trend_pick(cfg, candidates, qctx)
@@ -968,16 +984,18 @@ def _reel_background(cfg, quote_data, mood):
 
 def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                    dry_run: bool, manual: bool, access_token: str,
-                   use_remotion: bool = False) -> dict:
+                   renderer: str = "remotion") -> dict:
     """
     POV mode: generate a text Reel and post/send it exactly like the regular Reel
     flow, minus the background-image generation steps.
 
     Renderer selection:
-      - use_remotion=True → render with the Remotion project (professional,
+      - renderer="hyperframes" → render with HyperFrames (HTML+GSAP). Falls back
+        to Remotion → ffmpeg POV on failure.
+      - renderer="remotion" → render with the Remotion project (professional,
         physics-driven text animations). Falls back to the ffmpeg POV generator
         automatically if Node/Remotion isn't installed or the render fails.
-      - otherwise → the zero-cost ffmpeg + Pillow POV generator.
+      - renderer="ffmpeg" → the zero-cost ffmpeg + Pillow POV generator.
     """
     hook_text = quote_data.get("hook") or _generate_psychology_hook(
         quote_data["audience"], quote_data["row_number"])
@@ -1029,9 +1047,9 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
     reel_path = None
 
-    if use_remotion:
+    if renderer in ("hyperframes", "remotion"):
         # Produce full VO (hook/quote/cta) + a music bed for the narrated
-        # Remotion reel. Best-effort: any failure → that piece is simply absent
+        # reel. Best-effort: any failure → that piece is simply absent
         # (the reel still renders; the ffmpeg fallback below makes zero TTS calls).
         hook_voice = quote_voice = cta_voice = music_path = None
         hook_words = quote_words = cta_words = []
@@ -1151,39 +1169,14 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
         hook_text = _enforce_hook_len(hook_text) if hook_text else ""
         cta_text = _loopify(cta_text, hook_text)
 
-        try:
-            from src.video.remotion_reel import generate_remotion_reel
-            # Auto-numbered output: reel_001.mp4, reel_002.mp4, ...
-            counter = 1
-            while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
-                counter += 1
-            # Cinematic multi-clip background (spec 2): several dramatic Pexels
-            # clips cut between instead of one static loop. Best-effort — any
-            # failure (or <2 usable clips) falls back to the existing
-            # single-background path (_reel_background: stock photo -> FLUX).
-            bg_path = None
-            bg_clips = None
+        # ── HyperFrames dispatch (C2, additive-only) ────────────────────────────
+        if renderer == "hyperframes":
             try:
-                pexels_key = getattr(cfg, "PEXELS_API_KEY", "") or os.getenv("PEXELS_API_KEY", "")
-                if pexels_key:
-                    clips = fetch_reel_clips(
-                        mood, pexels_key, OUTPUT_DIR,
-                        topic_query=quote_data.get("topic_query") or None)
-                    if len(clips) >= 2:
-                        bg_clips = clips
-                        log.info(f"  [reel] multi-clip cinematic background: {len(clips)} clips")
-                    elif len(clips) == 1:
-                        bg_path = clips[0]
-                        log.info(f"  [reel] single stock clip background: {_rel_path(bg_path)}")
-            except Exception as e:  # noqa: BLE001 - footage is best-effort
-                log.warning(f"  [reel] multi-clip fetch failed ({e}) — falling back")
-            if bg_clips is None and bg_path is None:
-                bg_path = _reel_background(cfg, quote_data, mood)
-            # Silence-drop (spec 1): a beat of near-silence right before the
-            # quote lands — only meaningful when there's a quote VO to cut
-            # against.
-            silence_drop = 0.8 if quote_voice else 0.0
-            reel_path = generate_remotion_reel(
+                from src.video.hyperframes_reel import generate_hyperframes_reel
+                counter = 1
+                while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
+                    counter += 1
+                reel_path = generate_hyperframes_reel(
                     hook=hook_text,
                     quote=quote_data["quote"],
                     attribution="— Socrates",
@@ -1200,15 +1193,74 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
                     bridge=bridge_text,
                     bridge_voice=bridge_voice,
                     bridge_words=bridge_words,
-                    background=bg_path,
-                    backgrounds=bg_clips,
-                    silence_drop_sec=silence_drop,
                     anim_seed=row_n or 0,
-            )
-        except Exception as e:
-            log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
-        if reel_path is None:
-            log.info("  [remotion] unavailable/failed — using ffmpeg POV fallback")
+                )
+            except Exception as e:
+                log.warning(f"  [hyperframes] renderer errored ({e}) — falling back to Remotion")
+            if reel_path is None:
+                log.info("  [hyperframes] failed — falling back to Remotion")
+                renderer = "remotion"
+
+        # ── Remotion dispatch (default, frozen during C2/C3) ────────────────────
+        if renderer == "remotion":
+            try:
+                from src.video.remotion_reel import generate_remotion_reel
+                # Auto-numbered output: reel_001.mp4, reel_002.mp4, ...
+                counter = 1
+                while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
+                    counter += 1
+                # Cinematic multi-clip background (spec 2): several dramatic Pexels
+                # clips cut between instead of one static loop. Best-effort — any
+                # failure (or <2 usable clips) falls back to the existing
+                # single-background path (_reel_background: stock photo -> FLUX).
+                bg_path = None
+                bg_clips = None
+                try:
+                    pexels_key = getattr(cfg, "PEXELS_API_KEY", "") or os.getenv("PEXELS_API_KEY", "")
+                    if pexels_key:
+                        clips = fetch_reel_clips(
+                            mood, pexels_key, OUTPUT_DIR,
+                            topic_query=quote_data.get("topic_query") or None)
+                        if len(clips) >= 2:
+                            bg_clips = clips
+                            log.info(f"  [reel] multi-clip cinematic background: {len(clips)} clips")
+                        elif len(clips) == 1:
+                            bg_path = clips[0]
+                            log.info(f"  [reel] single stock clip background: {_rel_path(bg_path)}")
+                except Exception as e:  # noqa: BLE001 - footage is best-effort
+                    log.warning(f"  [reel] multi-clip fetch failed ({e}) — falling back")
+                if bg_clips is None and bg_path is None:
+                    bg_path = _reel_background(cfg, quote_data, mood)
+                # Silence-drop (spec 1): a beat of near-silence right before the
+                # quote lands — only meaningful when there's a quote VO to cut
+                # against.
+                silence_drop = 0.8 if quote_voice else 0.0
+                reel_path = generate_remotion_reel(
+                        hook=hook_text,
+                        quote=quote_data["quote"],
+                        attribution="— Socrates",
+                        cta=cta_text,
+                        mood=mood,
+                        output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
+                        hook_voice=hook_voice,
+                        quote_voice=quote_voice,
+                        cta_voice=cta_voice,
+                        music_path=music_path,
+                        hook_words=hook_words,
+                        quote_words=quote_words,
+                        cta_words=cta_words,
+                        bridge=bridge_text,
+                        bridge_voice=bridge_voice,
+                        bridge_words=bridge_words,
+                        background=bg_path,
+                        backgrounds=bg_clips,
+                        silence_drop_sec=silence_drop,
+                        anim_seed=row_n or 0,
+                )
+            except Exception as e:
+                log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
+            if reel_path is None:
+                log.info("  [remotion] unavailable/failed — using ffmpeg POV fallback")
 
     if reel_path is None:
         counter = 1
@@ -1329,20 +1381,19 @@ def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     return record
 
 
-def _reels_use_remotion(reel: bool, carousel: bool, remotion: bool, pov: bool) -> bool:
-    """Every reel renders via the Remotion path (_run_pov_reel: Remotion+FLUX+
-    edge-tts). The ffmpeg generate_reel + OpenAI-TTS reel path is retired.
-    Non-reel (image) and carousel posts are unaffected."""
-    return pov or remotion or (reel and not carousel)
+def _reels_use_renderer(reel: bool, carousel: bool, renderer: str) -> bool:
+    """Return True when the POV reel path should run (any renderer except
+    the FLUX static-image Reel path). Non-reel (image) and carousel posts
+    are unaffected."""
+    return renderer in ("remotion", "hyperframes", "ffmpeg") or (reel and not carousel)
 
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
-                  carousel: bool = False, pov: bool = False, remotion: bool = False,
+                  carousel: bool = False, renderer: str = "remotion",
                   seed: int | None = None, content: str | None = None, team: bool = False):
-    # All reels take the Remotion+FLUX path; --remotion still forces it too.
-    # Falls back to the ffmpeg POV generator (edge-tts, never OpenAI) only if
-    # Node/Remotion is unavailable.
-    pov = _reels_use_remotion(reel, carousel, remotion, pov)
+    # All reels take the POV path; --renderer chooses which engine.
+    # Falls back to ffmpeg POV generator only if the chosen renderer fails.
+    pov = _reels_use_renderer(reel, carousel, renderer)
     cfg = Config()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -1437,10 +1488,21 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     if not content and not dry_run and cfg.ANTHROPIC_API_KEY:
         try:
             from src.content.controversy_engine import generate_controversy, pick_mode, DEFAULT_TARGETS
+            from src.content.trend_sources import classify_trend_mode
             import random as _rng
             slot_num = _current_slot()
             trend_topic = quote_data.get("trend_topic", "")
-            mode = pick_mode(slot_num, trend_available=bool(trend_topic))
+            if trend_topic:
+                # Auto-map the trend to its best-fit mode: a behavior/habit trend
+                # -> ROAST (roast the habit the trend reveals); an event/phenomenon
+                # -> VERDICT (Socrates judges it). Every 6th trend slot still goes
+                # DEBATE for variety. This replaces the old slot-only pick_mode,
+                # which dropped the trend 2 of 3 slots.
+                mode = classify_trend_mode(trend_topic)
+                if slot_num % 6 == 0:
+                    mode = "debate"
+            else:
+                mode = pick_mode(slot_num, trend_available=False)
             target = _rng.choice(DEFAULT_TARGETS) if not trend_topic else trend_topic
 
             # Build a lightweight client for the controversy call
@@ -1465,6 +1527,12 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
                 if result.get("hashtags"):
                     quote_data["hashtags"] = result["hashtags"]
                 quote_data["format"] = mode  # roast/verdict/debate
+                # 4d: seed a topical hashtag from the trend topic so the data-driven
+                # recommend_hashtags has a newsjack tag to rank (the controversy
+                # path previously never set trend_tag, unlike the story path).
+                if trend_topic:
+                    quote_data["trend_tag"] = "".join(
+                        c for c in trend_topic.lower() if c.isalnum())[:20]
                 log.info(f"  [controversy] {mode} mode: hook={result.get('hook','')[:50]!r}")
         except Exception as e:
             log.warning(f"  [controversy] engine unavailable ({e}) — using standard hooks")
@@ -1494,10 +1562,9 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
 
     # ── POV mode: zero-cost text Reel — bypasses FLUX entirely ────────────────
     if pov:
-        renderer = "Remotion (professional animations)" if remotion else "ffmpeg + Pillow"
         log.info(f"Step 2: POV mode — generating text Reel via {renderer}...")
         return _run_pov_reel(cfg, quote_data, mood, slot, timestamp, dry_run, manual,
-                             access_token, use_remotion=remotion)
+                             access_token, renderer=renderer)
 
     # ── Phase 1: Build enhanced FLUX prompt ────────────────────────────────────
     flux_override = ""
@@ -1889,7 +1956,9 @@ if __name__ == "__main__":
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
     parser.add_argument("--pov", action="store_true", help="Generate a zero-cost POV text Reel (ffmpeg + Pillow only, no FLUX) instead of the FLUX-based Reel.")
-    parser.add_argument("--remotion", action="store_true", help="Generate a POV text Reel with Remotion (professional physics-driven text animations). Implies --pov; falls back to the ffmpeg POV generator if Node/Remotion isn't installed.")
+    parser.add_argument("--remotion", action="store_true", help="Alias for --renderer remotion.")
+    parser.add_argument("--renderer", choices=["remotion", "hyperframes", "ffmpeg"],
+                        default="remotion", help="Renderer for POV reels: remotion (default), hyperframes (experimental), or ffmpeg (zero-cost).")
     parser.add_argument("--batch", action="store_true", help="Generate a week's worth of POV Reels (30) in one run and exit — does not post to Instagram.")
     parser.add_argument("--seed", type=int, default=None, help="Force a FLUX image seed for reproducible backgrounds.")
     parser.add_argument("--content", type=str, default=None,
@@ -1898,15 +1967,23 @@ if __name__ == "__main__":
     parser.add_argument("--team", action="store_true", help="Use the 8-agent team system's approved plan for today; falls back to legacy if no plan exists.")
     args = parser.parse_args()
 
+    renderer = "remotion"
+    if args.renderer:
+        renderer = args.renderer
+    if args.remotion:
+        renderer = "remotion"
+    if args.pov:
+        renderer = "ffmpeg"
+
     if args.batch:
         from src.video.batch_generator import generate_batch
         generate_batch()
     elif args.manual:
         # --manual implies --reel (generate video) but skips API posting
         run_pipeline(dry_run=False, reel=True, manual=True, studio=args.studio,
-                     pov=args.pov, remotion=args.remotion, seed=args.seed, content=args.content,
+                     renderer=renderer, seed=args.seed, content=args.content,
                      team=args.team)
     else:
         run_pipeline(dry_run=args.dry_run, reel=args.reel, studio=args.studio,
-                     carousel=args.carousel, pov=args.pov, remotion=args.remotion, seed=args.seed,
+                     carousel=args.carousel, renderer=renderer, seed=args.seed,
                      content=args.content, team=args.team)

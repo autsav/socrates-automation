@@ -1,0 +1,21 @@
+{
+  "name": "socrates-hyperframes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "render": "hyperframes render"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "typescript": "^5.4.0",
+    "hyperframes": "^0.4.0",
+    "@types/node": "^22.0.0"
+  }
+}

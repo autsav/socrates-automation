@@ -1,0 +1,14 @@
+/* Tier 1 effects — gradient background + vignette only */
+
+.gradient-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, var(--bg-core, #333) 0%, var(--bg-outer, #000) 70%);
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 200px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}

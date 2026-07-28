@@ -1,0 +1,6 @@
+node_modules/
+out/
+renders/
+*.mp4
+index.html
+*.js.map
