@@ -119,12 +119,12 @@ def _render_html(payload: dict, output_path: Path) -> Path:
         has_hook,
     )
 
-    # Remove computed keys so they don't collide with explicit kwargs
-    render_ctx = {k: v for k, v in payload.items() if k not in ("sceneFrames", "mood")}
+    # Ensure sceneFrames is in the reel_data JSON consumed by JS
+    payload["sceneFrames"] = sf
+    render_ctx = {k: v for k, v in payload.items() if k not in ("mood",)}
     html = template.render(
         **render_ctx,
         reel_data=payload,
-        sceneFrames=sf,
         mood=mood,
     )
     output_path.write_text(html, encoding="utf-8")
