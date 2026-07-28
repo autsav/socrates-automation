@@ -18,6 +18,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from src.core.excel_reader import read_todays_quote, get_mood_prompt, mark_as_posted, _current_slot
 from src.visual.image_generator import generate_background
@@ -1948,6 +1949,26 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     return record
 
 
+def _make_studio_for_dry_run():                        # pragma: no cover
+    """Build a minimal Studio with live trend_scout/music_director/etc."""
+    from studio.client import StudioClient
+    client = StudioClient(api_key=__import__("os").environ["STUDIO_API_KEY"])
+    from studio import trend_scout, music_director, prompt_architect
+    from studio.social_strategist import run as social_strategist_run
+    return SimpleNamespace(
+        client=client,
+        trend_scout=trend_scout,
+        music_director=music_director,
+        prompt_architect=prompt_architect,
+        social_strategist=SimpleNamespace(run=social_strategist_run),
+    )
+
+
+def _make_excel_for_dry_run():                         # pragma: no cover
+    from src.core.excel_reader import ExcelReader
+    return ExcelReader()  # default path
+
+
 class Pipeline:
     """Minimal Pipeline holder — houses the deterministic `_match_quote()`
     helper that the social_strategist agent calls to pick a quote row from
@@ -1977,6 +1998,46 @@ class Pipeline:
             return None
         scored.sort(key=lambda t: (-t[0], t[1]))  # highest score, then lowest row_number
         return scored[0][2]
+
+    @classmethod
+    def from_args(cls, args):                              # pragma: no cover
+        p = cls.__new__(cls)
+        p.args = args
+        p.studio = _make_studio_for_dry_run()
+        p.excel_reader = _make_excel_for_dry_run()
+        return p
+
+    def _build_quote_data_for_dry_run(self, trend_override):  # pragma: no cover
+        """Run only the orchestrator stages that produce quote_data (no render)."""
+        try:
+            trend = ({"headline": trend_override, "keywords": [], "angle": "manual"}
+                     if trend_override else self.studio.trend_scout.run())
+        except Exception as e:
+            print(f"trend failed: {e}", file=sys.stderr)
+            return None
+        if not trend:
+            return None
+        quote_row = self._match_quote(trend.get("keywords", []))
+        if not quote_row:
+            return None
+        from studio.social_strategist import StrategyInput
+        from studio import settings
+        creative = self.studio.social_strategist.run(StrategyInput(
+            trend=trend, quote_row=quote_row, audience=settings.STRATEGY_AUDIENCE))
+        try:
+            music = self.studio.music_director.pick(
+                mood=creative["mood"], trend_keywords=trend.get("keywords", []))
+            music_id = music["track_id"]
+        except Exception:
+            music_id = None
+        try:
+            flux_prompt = self.studio.prompt_architect.run(
+                quote=creative["quote"], mood=creative["mood"], style="photorealism_rig")
+        except Exception:
+            flux_prompt = None
+        return {**creative, "music_track_id": music_id,
+                "flux_prompt": flux_prompt,
+                "row_number": quote_row.get("row_number")}
 
     def _run_strategy(self) -> str | None:
         """Trend-led IG content via social_strategist (Opus). Bypasses studio."""

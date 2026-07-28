@@ -70,3 +70,6 @@ hyperframes_studio/
 
 # Studio script generated artifacts
 sfx-*.wav
+
+# Dry-run strategy sidecars (scripts/dry_run_strategy.py output, human review only)
+content/strategy/
