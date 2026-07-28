@@ -228,3 +228,44 @@ TREND_HOOK_SCHEMA = _obj({
     "bridge": {"type": "string"},
     "rationale": {"type": "string"},
 }, ["used"])
+
+
+@dataclass
+class QuoteData:
+    hook: str
+    bridge: str | None
+    quote: str
+    cta: str
+    caption: str
+    hashtags: list
+    mood: str
+    attribution: str
+    audience: str
+    row_number: int | None
+    music_track_id: str | None = None
+    flux_prompt: str | None = None
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**d)
+
+
+QUOTE_DATA_SCHEMA = _obj({
+    "hook": {"type": "string"},
+    "bridge": {"type": ["string", "null"]},
+    "quote": {"type": "string"},
+    "cta": {"type": "string"},
+    "caption": {"type": "string"},
+    "hashtags": {"type": "array", "items": {"type": "string"},
+                 "minItems": 3, "maxItems": 5},
+    "mood": {"type": "string", "enum": list(VALID_MOODS)},
+    "attribution": {"type": "string"},
+    "audience": {"type": "string"},
+    "row_number": {"type": ["integer", "null"]},
+    "music_track_id": {"type": ["string", "null"]},
+    "flux_prompt": {"type": ["string", "null"]},
+}, ["hook", "quote", "cta", "caption", "hashtags", "mood",
+    "attribution", "audience", "row_number"])
