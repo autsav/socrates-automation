@@ -21,6 +21,13 @@ Arc: **Hook → [Bridge] → Quote → CTA** (bridge scene only when `quote_data
   agent-written trending hook+bridge, safety-gated (prompt **and** `is_unsafe` keyword denylist).
 - **Remotion BridgeScene** (`remotion/src/components/BridgeScene.tsx`), optional 4th scene.
 
+ ## Features (2026-07-28)
+  - **`--strategy`** flag bypasses studio; runs `social_strategist` (Opus) end-to-end.
+    Trend-led → Opus generates full QuoteData JSON → music + flux prompt → render.
+    Fallback chain: trend empty → evergreen; no quote match → highest-momentum;
+    Opus fail → studio. Cost ≈ 7× studio run.
+
+
 ## Gotchas discovered (do NOT re-learn the hard way)
 - **ffmpeg `rotate` filter has no `in` variable** — only `n`/`t`. `zoompan` DOES have `in`.
   A rotate angle expr using `in` → parse fail → `-22 Invalid argument` → every reel crashes.
