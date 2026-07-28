@@ -238,6 +238,47 @@ def get_quote_by_row(row_number: int, excel_path: str = "quotes.xlsx") -> str | 
     return None
 
 
+def all_rows(excel_path: str = "quotes.xlsx") -> list[dict]:
+    """Return all ready rows from the Excel pool, normalized for _match_quote().
+
+    Schema per row: {row_number, text, theme, attribution, mood}.
+    Skips rows with empty quote/caption, status==skip, or already posted.
+    Empty list if file missing or unreadable (never raises).
+    """
+    path = Path(excel_path)
+    if not path.exists():
+        return []
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+        ws = wb["Quotes"]
+        rows: list[dict] = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            row_num   = row[0]
+            quote     = row[1]
+            audience  = row[2]
+            caption   = row[3]
+            mood      = row[5] if len(row) > 5 else None
+            status    = row[6] if len(row) > 6 else None
+            posted    = row[7] if len(row) > 7 else None
+            if not quote or not caption:
+                continue
+            if status and str(status).lower() == "skip":
+                continue
+            if posted:
+                continue
+            rows.append({
+                "row_number":  row_num,
+                "text":        str(quote).strip(),
+                "theme":       str(audience).strip().lower() if audience else "",
+                "attribution": "",  # not stored in Excel; social_strategist derives
+                "mood":        str(mood).strip().lower() if mood else "",
+            })
+        wb.close()
+        return rows
+    except Exception:
+        return []
+
+
 if __name__ == "__main__":
     import os
     from dotenv import load_dotenv

@@ -30,6 +30,7 @@ from src.core.data_store import init_db, save_post, mark_posted, release_post, g
 from studio.reconcile import reconcile_token
 from studio.client import StudioClient
 from studio import music_director
+from studio import settings
 from src.analytics.ab_test import pick_caption_variant, pick_mood, pick_optimal_slot
 from src.analytics.hook_tracker import pick_best_hook
 from src.core.token_manager import get_valid_token_with_fallback
@@ -1977,6 +1978,81 @@ class Pipeline:
         scored.sort(key=lambda t: (-t[0], t[1]))  # highest score, then lowest row_number
         return scored[0][2]
 
+    def _run_strategy(self) -> str | None:
+        """Trend-led IG content via social_strategist (Opus). Bypasses studio."""
+        try:
+            trend = self.studio.trend_scout.run()
+        except Exception as e:                          # noqa: BLE001
+            print(f"strategy.trend_fallback: {e}")
+            trend = None
+        if not trend:
+            return self._fallback_to_studio("--strategy: no trend")
+
+        try:
+            quote_row = self._match_quote(trend.get("keywords", []))
+        except Exception as e:                          # noqa: BLE001
+            print(f"strategy.match_fallback: {e}")
+            quote_row = None
+        if not quote_row:
+            return self._fallback_to_studio("--strategy: no quote match")
+
+        try:
+            from studio.social_strategist import StrategyInput
+            creative = self.studio.social_strategist.run(StrategyInput(
+                trend=trend, quote_row=quote_row, audience=settings.STRATEGY_AUDIENCE,
+            ))
+        except Exception as e:                          # noqa: BLE001
+            print(f"strategy.creative_fallback: {e}")
+            return self._fallback_to_studio("--strategy: opus failed")
+
+        try:
+            music = self.studio.music_director.pick(
+                mood=creative["mood"], trend_keywords=trend.get("keywords", []))
+            music_id = music["track_id"]
+        except Exception as e:                          # noqa: BLE001
+            print(f"strategy.music_fallback: {e}")
+            music_id = None
+
+        try:
+            flux_prompt = self.studio.prompt_architect.run(
+                quote=creative["quote"], mood=creative["mood"], style="photorealism_rig")
+        except Exception as e:                          # noqa: BLE001
+            print(f"strategy.flux_fallback: {e}")
+            flux_prompt = None
+
+        quote_data = {**creative,
+                      "music_track_id": music_id,
+                      "flux_prompt": flux_prompt,
+                      "row_number": quote_row.get("row_number")}
+        return self._render_via_content(quote_data)
+
+    def _fallback_to_studio(self, reason: str):           # pragma: no cover
+        """Stub — overridden by monkeypatch in tests; in prod, this calls _run_studio()."""
+        raise NotImplementedError(f"_fallback_to_studio: {reason}")
+
+    def _render_via_content(self, quote_data: dict):      # pragma: no cover
+        """Stub — overridden by monkeypatch in tests; in prod, this renders reel."""
+        raise NotImplementedError("_render_via_content")
+
+    def run(self) -> str | None:
+        """Top-level Pipeline entry point. Honors --strategy before delegating
+        to the legacy module-level run_pipeline(). Task 9 will replace the
+        legacy delegation with a full Pipeline-based implementation."""
+        if getattr(self.args, "strategy", False):
+            return self._run_strategy()
+        # Legacy path: module-level run_pipeline() handles all other flags.
+        from pipeline import run_pipeline
+        return run_pipeline(
+            dry_run=getattr(self.args, "dry_run", False),
+            reel=getattr(self.args, "reel", False),
+            carousel=getattr(self.args, "carousel", False),
+            manual=getattr(self.args, "manual", False),
+            studio=getattr(self.args, "studio", False),
+            team=getattr(self.args, "team", False),
+            content=getattr(self.args, "content", None),
+            seed=getattr(self.args, "seed", None),
+        )
+
 
 if __name__ == "__main__":
     import argparse
@@ -1996,6 +2072,8 @@ if __name__ == "__main__":
                         help="Path to a JSON file of hand-crafted reel content "
                              "(hook/bridge/quote/cta/caption/hashtags/mood); bypasses excel+studio.")
     parser.add_argument("--team", action="store_true", help="Use the 8-agent team system's approved plan for today; falls back to legacy if no plan exists.")
+    parser.add_argument("--strategy", action="store_true",
+                        help="Trend-led IG content via Opus social_strategist. Bypasses studio.")
     args = parser.parse_args()
 
     renderer = "remotion"
