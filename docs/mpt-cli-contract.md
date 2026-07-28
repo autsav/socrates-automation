@@ -78,6 +78,17 @@ Default `--stop-at` is `video` (full pipeline).
 
 `--stop-at terms` with `--video-source local` → exit 2 (validation error).
 
+## Subtitles
+
+- MPT does **NOT** have a `--word-timings` flag. Word-level timing JSON does
+  not exist in MPT's CLI surface — captions come from edge-tts word boundaries
+  baked into the SRT.
+- Subtitle file path: `mpt/storage/tasks/<task-id>/subtitle.srt` (exact
+  filename, NOT `<n>.srt`).
+- After `--stop-at video` (or `--stop-at subtitle`), read
+  `subtitle.srt` directly and adapt to per-word timings via an SRT parser
+  (see `src/mpt_adapter.srt_to_word_timings` in Task 3).
+
 ## Core flags we will use
 
 | Flag | Default | Notes |
