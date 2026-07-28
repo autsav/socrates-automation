@@ -2,9 +2,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict, field
+from typing import Optional
 
 from src.core.excel_reader import VALID_MOODS
 from studio.settings import AUDIENCES
+
+
+@dataclass
+class RpmHook:
+    """Kinetic-text retention hook overlay (HyperFrames).
+
+    Inserted into the reel at ``at_sec`` for ``duration_sec`` to interrupt
+    passive watching — pop-up questions, mid-roll nudges, micro-CTA pings.
+    """
+    at_sec: float
+    text: str
+    duration_sec: float
+    style: str  # "pop" | "slide" | "fade"
 
 
 @dataclass
@@ -244,6 +258,10 @@ class QuoteData:
     row_number: int | None
     music_track_id: str | None = None
     flux_prompt: str | None = None
+    # Overlay fields (HyperFrames) — defaults preserve existing callers.
+    rpm_hooks: list[RpmHook] = field(default_factory=list)
+    cta_copy: str = ""
+    cta_url: Optional[str] = None
 
     def to_dict(self):
         return asdict(self)
@@ -267,5 +285,13 @@ QUOTE_DATA_SCHEMA = _obj({
     "row_number": {"type": ["integer", "null"]},
     "music_track_id": {"type": ["string", "null"]},
     "flux_prompt": {"type": ["string", "null"]},
+    "rpm_hooks": {"type": "array", "items": _obj(
+        {"at_sec": {"type": "number"},
+         "text": {"type": "string"},
+         "duration_sec": {"type": "number"},
+         "style": {"type": "string", "enum": ["pop", "slide", "fade"]}},
+        ["at_sec", "text", "duration_sec", "style"])},
+    "cta_copy": {"type": "string"},
+    "cta_url": {"type": ["string", "null"]},
 }, ["hook", "quote", "cta", "caption", "hashtags", "mood",
     "attribution", "audience", "row_number"])

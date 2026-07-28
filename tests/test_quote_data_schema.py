@@ -2,7 +2,7 @@ from studio.types import QuoteData, QUOTE_DATA_SCHEMA
 
 
 def test_quote_data_round_trip():
-    """Dataclass survives to_dict/from_dict with all 11 fields."""
+    """Dataclass survives to_dict/from_dict with all fields (incl. overlays)."""
     raw = {
         "hook": "You will not finish this video.",
         "bridge": None,
@@ -16,6 +16,9 @@ def test_quote_data_round_trip():
         "row_number": 42,
         "music_track_id": "jamendo-123",
         "flux_prompt": "Stoic marble bust, dramatic lighting",
+        "rpm_hooks": [],
+        "cta_copy": "",
+        "cta_url": None,
     }
     qd = QuoteData.from_dict(raw)
     assert qd.to_dict() == raw
