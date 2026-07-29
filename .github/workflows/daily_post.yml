@@ -117,6 +117,21 @@ jobs:
       - name: Init/migrate SQLite database
         run: python -c "from src.core.data_store import init_db; init_db()"
 
+      - name: Configure MPT LLM (openai via existing OPENAI_API_KEY)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "⚠️  OPENAI_API_KEY not set — MPT will fail at terms stage (no LLM)"
+          else
+            sed -i.bak \
+              -e 's|^llm_provider = .*|llm_provider = "openai"|' \
+              -e 's|^openai_api_key = .*|openai_api_key = "'"$OPENAI_API_KEY"'"|' \
+              -e 's|^openai_model_name = .*|openai_model_name = "gpt-4o-mini"|' \
+              mpt/config.toml
+            echo "✅ MPT configured: provider=openai model=gpt-4o-mini"
+          fi
+
       - name: Detect post format (reel vs carousel vs pov)
         id: format
         run: |
