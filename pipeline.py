@@ -1010,7 +1010,14 @@ def _render_overlay_html(
     base_duration_sec: float,
     run_dir: Path,
 ) -> Path:
-    """Render the HyperFrames Jinja2 overlay template with timing data."""
+    """Render the HyperFrames Jinja2 overlay template with timing data.
+
+    The rendered HTML MUST live inside HYPERFRAMES_ROOT: render-overlay.ts serves
+    the input via a static server rooted at hyperframes/ and rejects any path that
+    escapes that root (403 Forbidden). Final overlay.mp4 still goes to run_dir.
+    """
+    hf_out_dir = HYPERFRAMES_ROOT / "output" / run_dir.name
+    hf_out_dir.mkdir(parents=True, exist_ok=True)
     quote_data = json.loads(Path(quote_data_path).read_text(encoding="utf-8"))
     scenes = {}
     if word_timings_path and Path(word_timings_path).exists():
@@ -1049,7 +1056,7 @@ def _render_overlay_html(
         base_duration_sec=base_duration_sec,
         overlay_data=overlay_data,
     )
-    output = run_dir / "overlay.html"
+    output = hf_out_dir / "overlay.html"
     output.write_text(rendered, encoding="utf-8")
     return output
 
