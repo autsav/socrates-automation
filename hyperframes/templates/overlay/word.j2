@@ -1,6 +1,10 @@
 <!-- hyperframes/templates/overlay/word.j2
      Single scene-relative word span. animateOverlayWords (Task 4) tweens
-     #overlay-word-{idx} via gsap (.scale / .color). `data-word-t` is the
-     scene-relative offset (the helper does NOT add scene start time —
-     orchestrator composes per-scene timeline at scene start_sec). -->
-<span id="overlay-word-{{ loop.index0 }}" class="overlay-word" data-word-t="{{ word.t }}">{{ word.w }}</span>
+     #overlay-word-{sceneName}-{idx} via gsap (.scale / .color).
+     `scene_name` comes from the outer loop in overlay.html.j2
+     ({% for scene_name, scene_data in scenes.items() %}) — Jinja2 makes
+     outer-loop variables visible inside inner {% include %} blocks.
+     `data-word-t` is the scene-relative offset (the helper does NOT add
+     scene start time — orchestrator composes per-scene timeline at scene
+     start_sec). -->
+<span id="overlay-word-{{ scene_name }}-{{ loop.index0 }}" class="overlay-word" data-word-t="{{ word.t }}">{{ word.w }}</span>

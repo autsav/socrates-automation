@@ -17,17 +17,18 @@ export interface WordTiming {
 export function animateOverlayWords(
   sceneWords: WordTiming[],
   durationSec: number,
+  sceneName: string,
 ): gsap.core.Timeline {
   const tl = gsap.timeline();
   sceneWords.forEach((word, idx) => {
     tl.addLabel(`w_${idx}`, word.t);
     tl.to(
-      `#overlay-word-${idx}`,
+      `#overlay-word-${sceneName}-${idx}`,
       { scale: 1.15, color: "#FFD700", duration: 0.2, ease: "power2.out" },
       word.t,
     );
     tl.to(
-      `#overlay-word-${idx}`,
+      `#overlay-word-${sceneName}-${idx}`,
       { scale: 1.0, color: "#FFFFFF", duration: 0.15, ease: "power2.in" },
       word.t + 0.2,
     );

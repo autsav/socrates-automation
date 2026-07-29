@@ -13,6 +13,7 @@ describe("animateOverlayWords", () => {
     const tl = animateOverlayWords(
       [{ t: 0.42, w: "The" }, { t: 0.78, w: "unexamined" }],
       2.5,
+      "hook",
     );
     expect(tl).toBeDefined();
     // Relative helper: last tween ends at 0.78 + 0.2 + 0.15 = 1.13
@@ -20,7 +21,7 @@ describe("animateOverlayWords", () => {
   });
 
   it("handles empty input", () => {
-    const tl = animateOverlayWords([], 0);
+    const tl = animateOverlayWords([], 0, "hook");
     expect(tl.duration()).toBe(0);
   });
 
@@ -28,6 +29,7 @@ describe("animateOverlayWords", () => {
     const tl = animateOverlayWords(
       [{ t: 0.0, w: "A" }, { t: 1.0, w: "B" }],
       2.0,
+      "quote",
     );
     expect(tl.labels?.["w_0"]).toBe(0);
     expect(tl.labels?.["w_1"]).toBe(1);

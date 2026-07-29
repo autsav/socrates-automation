@@ -40,9 +40,8 @@ const master = gsap.timeline();
 // (animateOverlayWords builds a relative timeline). The orchestrator
 // positions the per-scene timeline at scene start_sec in master time.
 for (const [sceneName, sceneData] of Object.entries(data.scenes)) {
-  const tl = animateOverlayWords(sceneData.words, sceneData.duration_sec);
+  const tl = animateOverlayWords(sceneData.words, sceneData.duration_sec, sceneName);
   master.add(tl, sceneData.start_sec);
-  void sceneName;
 }
 
 // RPM hooks (pop / slide / fade). Position each at hook.at_sec.
