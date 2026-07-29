@@ -23,6 +23,8 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from src.core.excel_reader import read_todays_quote, get_mood_prompt, mark_as_posted, _current_slot
 from src.visual.image_generator import generate_background
 from src.visual.image_composer import compose_post, compose_hook_scene, compose_quote_scene, compose_cta_scene
@@ -76,6 +78,9 @@ EXCEL_PATH = PROJECT_ROOT / "quotes.xlsx"
 # ── HyperFrames / MPT (Task 8) ────────────────────────────────────────────────
 MPT_ROOT = Path(__file__).resolve().parent / "mpt"
 MPT_VENV = MPT_ROOT / ".venv" / "bin" / "python"
+HYPERFRAMES_ROOT = Path(__file__).resolve().parent / "hyperframes"
+HF_OVERLAY_TEMPLATE = HYPERFRAMES_ROOT / "templates" / "overlay.html.j2"
+HF_OVERLAY_CLI = HYPERFRAMES_ROOT / "src" / "cli" / "render-overlay.ts"
 
 
 def _rel_path(p):
@@ -999,8 +1004,58 @@ class HfRenderError(Exception):
     """Raised when HyperFrames overlay render fails or produces no output."""
 
 
+def _render_overlay_html(
+    quote_data_path: Path,
+    word_timings_path: Path | None,
+    base_duration_sec: float,
+    run_dir: Path,
+) -> Path:
+    """Render the HyperFrames Jinja2 overlay template with timing data."""
+    quote_data = json.loads(Path(quote_data_path).read_text(encoding="utf-8"))
+    scenes = {}
+    if word_timings_path and Path(word_timings_path).exists():
+        try:
+            wt_data = json.loads(Path(word_timings_path).read_text(encoding="utf-8"))
+            scenes = wt_data.get("scenes", {})
+        except Exception as e:
+            log.warning(
+                "⚠️  Could not parse word_timings.json (%s); rendering with empty scenes",
+                e,
+            )
+
+    env = Environment(
+        loader=FileSystemLoader(str(HYPERFRAMES_ROOT / "templates")),
+        autoescape=select_autoescape(["html"]),
+    )
+    template = env.get_template(HF_OVERLAY_TEMPLATE.name)
+    overlay_data = {
+        "quote_data": str(quote_data_path),
+        "word_timings": str(word_timings_path) if word_timings_path else None,
+        "base_duration_sec": base_duration_sec,
+        "scenes": scenes,
+        "rpm_hooks": quote_data.get("rpm_hooks", []),
+        "cta_copy": quote_data.get("cta_copy", ""),
+        "cta_url": quote_data.get("cta_url"),
+        "cta_start_sec": quote_data.get("cta_start_sec", 0),
+        "cta_duration_sec": quote_data.get("cta_duration_sec", 0),
+    }
+    rendered = template.render(
+        rpm_hooks=overlay_data["rpm_hooks"],
+        scenes=scenes,
+        cta_copy=overlay_data["cta_copy"],
+        cta_url=overlay_data["cta_url"],
+        cta_start_sec=overlay_data["cta_start_sec"],
+        cta_duration_sec=overlay_data["cta_duration_sec"],
+        base_duration_sec=base_duration_sec,
+        overlay_data=overlay_data,
+    )
+    output = run_dir / "overlay.html"
+    output.write_text(rendered, encoding="utf-8")
+    return output
+
+
 def _invoke_hyperframes(quote_data_path: Path, word_timings_path: Path | None, run_dir: Path) -> Path:
-    """Invoke HyperFrames overlay render as subprocess."""
+    """Render overlay HTML and invoke HyperFrames as a subprocess."""
     run_dir.mkdir(parents=True, exist_ok=True)
     overlay_input = run_dir / "overlay_input.json"
     overlay_output = run_dir / "overlay.mp4"
@@ -1008,7 +1063,7 @@ def _invoke_hyperframes(quote_data_path: Path, word_timings_path: Path | None, r
     base_duration_sec = 16.0
     if word_timings_path and word_timings_path.exists():
         try:
-            wt_data = json.loads(word_timings_path.read_text())
+            wt_data = json.loads(word_timings_path.read_text(encoding="utf-8"))
             base_duration_sec = wt_data.get("total_duration_sec", 16.0)
         except Exception as e:
             log.warning("⚠️  Could not read word_timings.json (%s); using fallback duration", e)
@@ -1020,15 +1075,33 @@ def _invoke_hyperframes(quote_data_path: Path, word_timings_path: Path | None, r
         "overlay_only": True,
         "output": str(overlay_output),
     }
-    overlay_input.write_text(json.dumps(overlay_payload))
+    overlay_input.write_text(json.dumps(overlay_payload), encoding="utf-8")
+
+    try:
+        rendered_html = _render_overlay_html(
+            quote_data_path, word_timings_path, base_duration_sec, run_dir
+        )
+    except Exception as e:
+        log.error("❌ HyperFrames overlay HTML render failed: %s", e)
+        raise HfRenderError(f"HyperFrames overlay HTML render failed: {e}") from e
 
     cmd = [
-        "npx", "tsx", "hyperframes/src/cli/render-overlay.ts",
-        "--overlay-data", str(overlay_input),
+        "npx", "tsx", str(HF_OVERLAY_CLI),
+        "--input", str(rendered_html),
         "--output", str(overlay_output),
     ]
     log.info("🎨 Invoking HyperFrames overlay render: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=HYPERFRAMES_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        log.error("❌ HyperFrames overlay process failed: %s", e)
+        raise HfRenderError(f"HyperFrames overlay process failed: {e}") from e
 
     if result.returncode != 0:
         log.error("❌ HyperFrames overlay failed (exit %d): %s", result.returncode, result.stderr)
