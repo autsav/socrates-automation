@@ -109,3 +109,11 @@ def test_invoke_mpt_raises_on_missing_base_video(tmp_path):
         mock_run.return_value = MagicMock(returncode=0, stdout=stdout, stderr="")
         with pytest.raises(MptRenderError):
             _invoke_mpt(quote_data, run_dir)
+
+
+def test_invoke_mpt_raises_on_missing_quote_data(tmp_path):
+    missing_quote_data = tmp_path / "missing_quote_data.json"
+    run_dir = tmp_path / "run"
+
+    with pytest.raises(MptRenderError, match=str(missing_quote_data)):
+        _invoke_mpt(missing_quote_data, run_dir)

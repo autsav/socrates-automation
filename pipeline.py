@@ -1026,7 +1026,11 @@ def _invoke_mpt(quote_data_path: Path, run_dir: Path) -> dict:
 
     # Read quote_data — we pass the whole script text via --video-script
     # (avoids LLM cost; MPT skips script gen when --video-script is provided).
-    script_text = quote_data_path.read_text(encoding="utf-8")
+    try:
+        script_text = quote_data_path.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError, UnicodeDecodeError) as exc:
+        log.error("❌ quote_data unreadable at %s: %s", quote_data_path, exc)
+        raise MptRenderError(f"MPT quote_data unreadable at {quote_data_path}: {exc}") from exc
 
     # MPT CLI invocation per docs/mpt-cli-contract.md:
     #   --stop-at video       full pipeline
