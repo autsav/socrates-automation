@@ -104,11 +104,11 @@ def test_workflows_scrub_token_before_caching_db():
         assert "git add -f data/pipeline.db" not in t, f"{wf} must never re-commit the DB"
 
 
-def test_daily_post_uses_remotion_for_pov():
+def test_daily_post_uses_hyperframes_for_pov():
     t = _read(".github/workflows/daily_post.yml")
-    assert "python pipeline.py --remotion" in t          # auto-post, no --manual
+    assert "python pipeline.py --pov" in t               # auto-post, no --manual
     assert "actions/setup-node" in t
-    assert "npm --prefix remotion ci" in t
+    assert "npm --prefix hyperframes ci" in t
 
 
 def test_edge_tts_in_requirements():
@@ -128,5 +128,5 @@ def test_reel_slots_auto_post_no_manual_gate():
     # reel slot would silently re-introduce the human-upload bottleneck.
     t = _read(".github/workflows/daily_post.yml")
     for line in t.splitlines():
-        if "pipeline.py" in line and "--remotion" in line:
+        if "pipeline.py" in line and "--pov" in line:
             assert "--manual" not in line, f"reel slot re-gated to manual: {line.strip()}"

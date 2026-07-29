@@ -1,7 +1,6 @@
-"""Shared reel-data builder — one canonical dict for both Remotion and HyperFrames.
+"""Shared reel-data builder — one canonical dict for the HyperFrames POV Reel renderer.
 
-Extracted from ``remotion_reel.py::write_bridge_file`` so adding a field here
-flows to both renderers automatically.
+Adding a field here flows automatically into the rendered output.
 """
 from __future__ import annotations
 
@@ -56,7 +55,7 @@ def sceneFrames(
     bridge = max(MIN["bridge"], durationSec * 0.22) if bridgeOn else 0.0
     quote = max(MIN["quote"], durationSec * 0.42)
     cta = max(MIN["cta"], durationSec * 0.18)
-    # Fallback must preserve total duration (matching Remotion logic)
+    # Fallback must preserve total duration
     hookFrac = 0.34 if not bridgeOn else 0.30
     ctaFrac = 0.26 if not bridgeOn else 0.24
     hook = min(3.5, durationSec * hookFrac) if hasHook else 0.0
@@ -178,7 +177,7 @@ def build_reel_data(
     silence_drop_sec: float = 0.0,
     anim_seed: int = 0,
 ) -> dict:
-    """Return the canonical reel-data dict shared by Remotion and HyperFrames.
+    """Return the canonical reel-data dict for the HyperFrames POV Reel renderer.
 
     Does NOT copy files — callers handle their own asset staging.
     """

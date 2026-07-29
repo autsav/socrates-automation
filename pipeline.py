@@ -936,7 +936,7 @@ def _select_reel_music(cfg, quote_data, hook_text, mood):
         try:
             music_path = download_music_for_mood(mood)
         except Exception as e:  # noqa: BLE001
-            log.warning(f"  [remotion] music bed unavailable ({e}) — VO-only reel")
+            log.warning(f"  [audio] music bed unavailable ({e}) — VO-only reel")
     return music_path
 
 
@@ -1769,14 +1769,15 @@ def _pov_reel_flow(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
 
 def _reels_use_renderer(reel: bool, carousel: bool, renderer: str) -> bool:
-    """Return True when the POV reel path should run (any renderer except
-    the FLUX static-image Reel path). Non-reel (image) and carousel posts
-    are unaffected."""
-    return (reel and not carousel) or (renderer in ("remotion", "hyperframes", "ffmpeg") and not carousel)
+    """Return True when the POV reel path should run.
+
+    Non-reel (image) and carousel posts are unaffected.
+    """
+    return (reel and not carousel) or (renderer in ("hyperframes", "ffmpeg") and not carousel)
 
 
 def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False, studio: bool = False,
-                  carousel: bool = False, renderer: str = "remotion",
+                  carousel: bool = False, renderer: str = "hyperframes",
                   seed: int | None = None, content: str | None = None, team: bool = False):
     # All reels take the POV path; --renderer chooses which engine.
     # Falls back to ffmpeg POV generator only if the chosen renderer fails.
@@ -2570,9 +2571,8 @@ if __name__ == "__main__":
     parser.add_argument("--manual", action="store_true", help="Generate Reel but do not post. Send video + caption to Telegram for manual upload with trending music.")
     parser.add_argument("--studio", action="store_true", help="Use the AI Creative Studio (reasoning agents); falls back to legacy templates on any failure.")
     parser.add_argument("--pov", action="store_true", help="Generate a zero-cost POV text Reel (ffmpeg + Pillow only, no FLUX) instead of the FLUX-based Reel.")
-    parser.add_argument("--remotion", action="store_true", help="Alias for --renderer remotion.")
-    parser.add_argument("--renderer", choices=["remotion", "hyperframes", "ffmpeg"],
-                        default="remotion", help="Renderer for POV reels: remotion (default), hyperframes (experimental), or ffmpeg (zero-cost).")
+    parser.add_argument("--renderer", choices=["hyperframes", "ffmpeg"],
+                        default="hyperframes", help="Renderer for POV reels: hyperframes (default) or ffmpeg (zero-cost).")
     parser.add_argument("--batch", action="store_true", help="Generate a week's worth of POV Reels (30) in one run and exit — does not post to Instagram.")
     parser.add_argument("--seed", type=int, default=None, help="Force a FLUX image seed for reproducible backgrounds.")
     parser.add_argument("--content", type=str, default=None,
@@ -2583,11 +2583,9 @@ if __name__ == "__main__":
                         help="Trend-led IG content via Opus social_strategist. Bypasses studio.")
     args = parser.parse_args()
 
-    renderer = "remotion"
+    renderer = "hyperframes"
     if args.renderer:
         renderer = args.renderer
-    if args.remotion:
-        renderer = "remotion"
     if args.pov:
         renderer = "ffmpeg"
 

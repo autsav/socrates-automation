@@ -30,12 +30,10 @@ import pytest
 
 def test_reels_use_renderer_returns_true_for_reels():
     import pipeline as pl
-    assert pl._reels_use_renderer(reel=True, carousel=False, renderer="remotion") is True
     assert pl._reels_use_renderer(reel=True, carousel=False, renderer="hyperframes") is True
     assert pl._reels_use_renderer(reel=True, carousel=False, renderer="ffmpeg") is True
-    assert pl._reels_use_renderer(reel=False, carousel=False, renderer="remotion") is True
     assert pl._reels_use_renderer(reel=False, carousel=False, renderer="hyperframes") is True
-    assert pl._reels_use_renderer(reel=True, carousel=True, renderer="remotion") is False
+    assert pl._reels_use_renderer(reel=True, carousel=True, renderer="hyperframes") is False
     assert pl._reels_use_renderer(reel=False, carousel=False, renderer="image") is False
 
 
@@ -46,7 +44,7 @@ def _stub_silent_final(tmp_path: Path) -> Path:
     return p
 
 
-@pytest.mark.parametrize("renderer", ["remotion", "hyperframes", "ffmpeg"])
+@pytest.mark.parametrize("renderer", ["hyperframes", "ffmpeg"])
 def test_renderer_dispatches_to_pov_reel_flow(tmp_path, renderer):
     """Each --renderer value (non-image) reaches the caller-level _pov_reel_flow."""
     import pipeline as pl
@@ -63,14 +61,14 @@ def test_renderer_dispatches_to_pov_reel_flow(tmp_path, renderer):
     mock_render.assert_not_called()  # _pov_reel_flow is patched, so render isn't reached
 
 
-def test_renderer_remotion_takes_pov_branch():
-    """Sanity: --renderer remotion still routes through POV dispatch."""
+def test_renderer_hyperframes_takes_pov_branch():
+    """HyperFrames is the default POV renderer (MPT + HF + composite)."""
     import pipeline as pl
     with patch.object(pl, "_pov_reel_flow", return_value={"post_id": None}) as mock_flow, \
          patch.object(pl, "init_db"), \
          patch.object(pl, "has_posted_today", return_value=False), \
          patch.object(pl, "get_valid_token_with_fallback", return_value="tok"):
-        pl.run_pipeline(reel=True, renderer="remotion")
+        pl.run_pipeline(reel=True, renderer="hyperframes")
     assert mock_flow.called
 
 

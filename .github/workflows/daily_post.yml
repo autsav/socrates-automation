@@ -74,13 +74,13 @@ jobs:
       - name: Install ffmpeg (for Reel video generation)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
-      - name: Set up Node (for Remotion render)
+      - name: Set up Node (for HyperFrames render)
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Remotion deps
-        run: npm --prefix remotion ci
+      - name: Install HyperFrames deps
+        run: npm --prefix hyperframes ci
 
       - name: Generate ambient audio tracks
         run: python generate_audio.py
@@ -162,14 +162,14 @@ jobs:
             echo "📸 Auto-posting CAROUSEL (Wed/Thu — highest engagement day)"
             python pipeline.py --carousel
           elif [ "${{ steps.format.outputs.mode }}" = "pov" ]; then
-            echo "🎬 POV Reel (Remotion) → AUTO-POST to Instagram"
-            python pipeline.py --remotion
+            echo "🎬 POV Reel (MPT + HyperFrames) → AUTO-POST to Instagram"
+            python pipeline.py --pov
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "🎬 MANUAL TRIGGER — AI Creative Studio → AUTO-POST to Instagram"
-            python pipeline.py --studio --remotion
+            python pipeline.py --studio
           else
             echo "📲 SCHEDULED — AI Creative Studio → AUTO-POST to Instagram"
-            python pipeline.py --studio --remotion
+            python pipeline.py --studio
           fi
 
       - name: Send post notification (Telegram/Slack)
