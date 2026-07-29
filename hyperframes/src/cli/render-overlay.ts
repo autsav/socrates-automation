@@ -129,87 +129,105 @@ export async function render(args: Record<string, string>): Promise<void> {
   });
   const page = await browser.newPage();
   await page.setViewport({ width, height, deviceScaleFactor: 1 });
-  await page.goto(inputUrl, { waitUntil: "networkidle2" });
+  try {
+    await page.goto(inputUrl, { waitUntil: "networkidle2" });
 
-  // Wait for overlay-main.ts to expose __timelines.overlay (Task 5 contract).
-  await page.waitForFunction(
-    () => {
-      const w = window as unknown as { gsap?: unknown; __timelines?: { overlay?: { duration?: () => number } } };
-      return !!(w.gsap && w.__timelines && w.__timelines.overlay);
-    },
-    { timeout: 15000 },
-  );
+    // Wait for overlay-main.ts to expose __timelines.overlay (Task 5 contract).
+    await page.waitForFunction(
+      () => {
+        const w = window as unknown as { gsap?: unknown; __timelines?: { overlay?: { duration?: () => number } } };
+        return !!(w.gsap && w.__timelines && w.__timelines.overlay);
+      },
+      { timeout: 15000 },
+    );
 
-  const totalDur: number = durationSec > 0
-    ? durationSec
-    : await page.evaluate(() => {
-        const tl = (window as unknown as { __timelines: { overlay: { duration: () => number } } }).__timelines.overlay;
-        return tl.duration();
-      });
+    const totalDur: number = durationSec > 0
+      ? durationSec
+      : await page.evaluate(() => {
+          const tl = (window as unknown as { __timelines: { overlay: { duration: () => number } } }).__timelines.overlay;
+          return tl.duration();
+        });
 
-  const totalFrames = Math.ceil(totalDur * fps);
-  console.log(`[overlay] Rendering ${totalFrames} frames (${totalDur.toFixed(2)}s)`);
+    const totalFrames = Math.ceil(totalDur * fps);
+    console.log(`[overlay] Rendering ${totalFrames} frames (${totalDur.toFixed(2)}s)`);
 
-  // PNG-in-MP4 with alpha: PNG codec + rgba pix_fmt preserves transparency for
-  // compositing in Task 7 (scripts/composite_overlay.sh uses ffmpeg overlay filter).
-  // NOTE: yuv420p (used by render.ts) discards alpha — explicitly NOT used here.
-  const ffmpeg = spawn(
-    "ffmpeg",
-    [
-      "-y",
-      "-f", "image2pipe",
-      "-vcodec", "png",
-      "-r", String(fps),
-      "-i", "-",
-      "-c:v", "png",
-      "-pix_fmt", "rgba",
-      "-movflags", "+faststart",
-      output,
-    ],
-    { stdio: ["pipe", "inherit", "inherit"] },
-  );
+    // PNG-in-MP4 with alpha: PNG codec + rgba pix_fmt preserves transparency for
+    // compositing in Task 7 (scripts/composite_overlay.sh uses ffmpeg overlay filter).
+    // NOTE: yuv420p (used by render.ts) discards alpha — explicitly NOT used here.
+    const ffmpeg = spawn(
+      "ffmpeg",
+      [
+        "-y",
+        "-f", "image2pipe",
+        "-vcodec", "png",
+        "-r", String(fps),
+        "-i", "-",
+        "-c:v", "png",
+        "-pix_fmt", "rgba",
+        "-movflags", "+faststart",
+        output,
+      ],
+      { stdio: ["pipe", "inherit", "inherit"] },
+    );
 
-  let frame = 0;
-  const startTime = Date.now();
+    // Swallow EPIPE / other stdin errors so a mid-stream ffmpeg crash doesn't
+    // surface as an unhandled rejection. The 'close' handler below will
+    // surface the ffmpeg exit code as the canonical error.
+    ffmpeg.stdin!.on("error", () => {});
 
-  for (let i = 0; i < totalFrames; i++) {
-    const t = i / fps;
-    await page.evaluate((time: number) => {
-      const tl = (window as unknown as { __timelines: { overlay: { time: (n: number) => void; pause: () => void } } }).__timelines.overlay;
-      tl.time(time);
-      tl.pause();
-    }, t);
+    let frame = 0;
+    const startTime = Date.now();
 
-    // Allow layout/paint to settle before screenshot.
-    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+    for (let i = 0; i < totalFrames; i++) {
+      const t = i / fps;
+      await page.evaluate((time: number) => {
+        const tl = (window as unknown as { __timelines: { overlay: { time: (n: number) => void; pause: () => void } } }).__timelines.overlay;
+        tl.time(time);
+        tl.pause();
+      }, t);
 
-    // omitBackground:true is REQUIRED — the page body has `background: transparent`
-    // (overlay.html.j2 line 15) and we need the screenshot to preserve that alpha.
-    const png = await page.screenshot({ type: "png", omitBackground: true });
-    ffmpeg.stdin!.write(png);
+      // Allow layout/paint to settle before screenshot.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
 
-    frame++;
-    if (frame % 30 === 0 || frame === totalFrames) {
-      const elapsed = (Date.now() - startTime) / 1000;
-      const rate = frame / Math.max(elapsed, 0.001);
-      const remaining = (totalFrames - frame) / rate;
-      process.stdout.write(
-        `\r[overlay] ${frame}/${totalFrames}  ${((frame / totalFrames) * 100).toFixed(1)}%  ETA ${remaining.toFixed(0)}s`,
-      );
+      // omitBackground:true is REQUIRED — the page body has `background: transparent`
+      // (overlay.html.j2 line 15) and we need the screenshot to preserve that alpha.
+      const png = await page.screenshot({ type: "png", omitBackground: true });
+      // Guard against ffmpeg crashing mid-stream — write returns false / throws
+      // EPIPE on a broken pipe. Catch and surface via the close handler.
+      try {
+        ffmpeg.stdin!.write(png);
+      } catch {
+        break;
+      }
+
+      frame++;
+      if (frame % 30 === 0 || frame === totalFrames) {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const rate = frame / Math.max(elapsed, 0.001);
+        const remaining = (totalFrames - frame) / rate;
+        process.stdout.write(
+          `\r[overlay] ${frame}/${totalFrames}  ${((frame / totalFrames) * 100).toFixed(1)}%  ETA ${remaining.toFixed(0)}s`,
+        );
+      }
     }
-  }
 
-  ffmpeg.stdin!.end();
-  await new Promise<void>((res, rej) => {
-    ffmpeg.on("close", (code) => {
-      if (code === 0) res();
-      else rej(new Error(`ffmpeg exited ${code}`));
+    ffmpeg.stdin!.end();
+    await new Promise<void>((res, rej) => {
+      ffmpeg.on("close", (code) => {
+        if (code === 0) res();
+        else rej(new Error(`ffmpeg exited ${code}`));
+      });
     });
-  });
 
-  await browser.close();
-  server.stop();
-  console.log(`\n[overlay] Saved ${output}`);
+    console.log(`\n[overlay] Saved ${output}`);
+  } finally {
+    // Tear down Chromium subprocess + bound HTTP port on every exit path.
+    // `server.stop()` is synchronous-ish and idempotent; browser.close() is
+    // async and idempotent — wrap its rejection so a second close (e.g. after
+    // an already-closed browser) doesn't mask the original error.
+    await browser.close().catch(() => {});
+    server.stop();
+  }
 }
 
 // CLI entry guard — only run when this file is invoked directly, not when
