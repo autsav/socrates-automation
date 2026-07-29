@@ -1313,9 +1313,12 @@ def _concat_vo_scenes(vo: dict | None, output_path: Path) -> Path | None:
     if not vo:
         return None
     # Per-scene paths produced by prepare_reel_voiceover_edge_tts (and bridge).
+    # Scene order matches the documented reel arc (CLAUDE.md "Reel flow"):
+    # Hook → [Bridge] → Quote → CTA. Bridge is optional and only present when
+    # the caller generated one — it slots between hook and quote.
     scenes = [
-        ("bridge", vo.get("bridge_voice")),
         ("hook",   vo.get("hook_voice")),
+        ("bridge", vo.get("bridge_voice")),
         ("quote",  vo.get("quote_voice")),
         ("cta",    vo.get("cta_voice")),
     ]
@@ -1373,6 +1376,14 @@ def _mix_audio_track(base_video: Path, vo_path: Path | None,
       - Music only → mux music, no VO
       - Neither → copy base_video to output (silent reel posts as-is)
 
+    Input ordering is **base-first**: the silent base video is always input
+    0 so ``-map 0:v`` always refers to the rendered reel. Audio inputs (VO
+    then music) are inputs 1..N — their indices shift depending on which
+    optional inputs are present, but the base-video stream index stays 0.
+    That eliminates the ``Stream map '0:v' matches no streams`` failure mode
+    where mapping ``0:v`` against an audio-only input (VO MP3, music MP3)
+    returns exit 1 and silently falls through to the silent-copy fallback.
+
     All operations are absolute-pathed and timeout-guarded. Never raises —
     any ffmpeg failure logs and falls back to base_video (silent) so the reel
     still posts. Per project rule "never crash a reel."
@@ -1393,36 +1404,40 @@ def _mix_audio_track(base_video: Path, vo_path: Path | None,
             return base
         return out
 
-    # ffmpeg amix: multiple inputs. We always mix the longest input (typically
-    # the VO) and trim to that length so music doesn't run past the video.
-    inputs: list[str] = []
+    # Build the audio input list. Order matters: each entry becomes an
+    # input whose index = (1 + position). Base is always input 0.
+    audio_inputs: list[Path] = []
     if has_vo:
-        inputs.extend(["-i", str(Path(vo_path).resolve())])
+        audio_inputs.append(Path(vo_path).resolve())
     if has_music:
-        inputs.extend(["-i", str(Path(music_path).resolve())])
+        audio_inputs.append(Path(music_path).resolve())
 
-    # Build filter graph. Music is ducked to 0.3; VO at 1.0 (the user hears
-    # the words over the bed).
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+           "-i", str(base)]
+    audio_start_idx = 1  # base is 0; first audio is 1.
+    for ap in audio_inputs:
+        cmd.extend(["-i", str(ap)])
+
     if has_vo and has_music:
-        # 2 inputs: VO (index 0) + music (index 1) → mix both, music ducked.
-        # amix uses shortest=0 so longer input runs longer; -t on output trims.
+        # Two audio inputs. Build filter graph that ducks music and mixes
+        # both onto the base video's audio track.
+        vo_idx = audio_start_idx                       # 1
+        music_idx = audio_start_idx + 1                # 2
         vf = (
-            "[1:a]volume=0.3[bg];"
-            "[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            f"[{music_idx}:a]volume=0.3[bg];"
+            f"[{vo_idx}:a][bg]amix=inputs=2:duration=first:"
+            f"dropout_transition=2[aout]"
         )
         map_args = ["-map", "0:v", "-map", "[aout]"]
     elif has_vo:
-        # VO only — single input, no amix needed.
+        # VO only — single audio input (index 1). Map base video + audio.
         vf = None
-        map_args = ["-map", "0:v", "-map", "0:a"]
+        map_args = ["-map", "0:v", "-map", f"{audio_start_idx}:a"]
     else:
-        # Music only — single input, no amix needed.
+        # Music only — single audio input (index 1). Map base video + audio.
         vf = None
-        map_args = ["-map", "0:v", "-map", "0:a"]
+        map_args = ["-map", "0:v", "-map", f"{audio_start_idx}:a"]
 
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
-    cmd.extend(inputs)
-    cmd.extend(["-i", str(base)])
     if vf:
         cmd.extend(["-filter_complex", vf])
     cmd.extend(map_args)
@@ -1451,7 +1466,8 @@ def _mix_audio_track(base_video: Path, vo_path: Path | None,
     return out
 
 
-def _run_pov_reel(quote_data_path: Path, output_dir: Path) -> Path:
+def _run_pov_reel(quote_data_path: Path, output_dir: Path,
+                  run_id: str | None = None) -> Path:
     """Render POV reel via MPT base + HyperFrames overlay + ffmpeg composite.
 
     Per Q1 (hard cutover): NO Remotion. Per Q6: NO fallback reel.
@@ -1460,6 +1476,17 @@ def _run_pov_reel(quote_data_path: Path, output_dir: Path) -> Path:
       1. MPT subprocess → base.mp4 + word_timings.json
       2. HyperFrames subprocess → overlay.mp4 (alpha channel)
       3. ffmpeg composite → final.mp4
+
+    Args:
+        quote_data_path: Path to the orchestrator's quote_data JSON input.
+        output_dir:       Root output dir (orchestrator nests ``reels/<run_id>/``
+                          under it).
+        run_id:           Optional per-invocation identifier (caller should pass
+                          the slot timestamp so concurrent or overlapping runs
+                          don't share ``OUTPUT_DIR/reels/quote_data/``). When
+                          None, falls back to ``quote_data_path.stem`` — only
+                          safe for callers that name their JSON file
+                          uniquely per run.
 
     Note: a ThreadPoolExecutor scaffolds the MPT and HyperFrames submissions as
     concurrent scaffolding, but HF's wrapper awaits MPT's word_timings before
@@ -1471,7 +1498,7 @@ def _run_pov_reel(quote_data_path: Path, output_dir: Path) -> Path:
             propagates verbatim; the cron caller aborts the slot (per Q1/Q6,
             no in-app fallback reel).
     """
-    run_id = quote_data_path.stem  # e.g., quote slug
+    run_id = run_id or quote_data_path.stem
     run_dir = output_dir / "reels" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1534,10 +1561,16 @@ def _pov_reel_flow(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
 
     Stage ordering (chosen per caller plan):
       1. Pick run_dir, write quote_data JSON (orchestrator input contract)
-      2. Generate VO (edge-tts; ElevenLabs unavailability → silent reel)
-      3. Pick Jamendo music bed (Music Director → mood fallback)
-      4. Render silent final.mp4 via ``_run_pov_reel``
-      5. Concatenate VO scenes → amix with music → final_with_audio.mp4
+      2. Generate VO (ElevenLabs when ELEVENLABS_API_KEY set, edge-tts fallback;
+         bridge scene optional). Best-effort.
+      3. Pick Jamendo music bed (Music Director → mood fallback). Best-effort.
+      4. Render silent final.mp4 via ``_run_pov_reel(run_id=timestamp)`` so each
+         invocation gets an isolated ``reels/<timestamp>/`` directory.
+      5. Concatenate VO scenes → amix with music → final_with_audio.mp4.
+         Per I2 (timing alignment): the rendered video is the timing master —
+         ``-shortest`` clips whichever audio track is longer. MPT renders with
+         its own internal word timing; this VO is best-effort narration layered
+         on top, not a frame-perfect sync source.
       6. Post (manual Telegram | IG API | dry_run) + mark_posted + first_comment
       7. Return dict record (same shape as the deleted 397-line body)
 
@@ -1554,20 +1587,44 @@ def _pov_reel_flow(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     hook_text = quote_data.get("hook") or ""
     bridge_text = _bridge_for_vo(quote_data)
 
-    # VO stage — edge-tts (free, always-available). ElevenLabs was a nice-to-have
-    # in the deleted body; here we use edge-tts as the primary path and treat
-    # absence as "silent reel" rather than crashing.
+    # VO stage — try ElevenLabs (human-quality) first when configured, fall
+    # back to edge-tts (free) when unavailable. Mirrors the deleted body's
+    # best-effort voiceover path. ELEVENLABS_API_KEY users keep the higher
+    # quality; everyone else still gets narration.
     vo: dict = {}
+    el_api_key = (getattr(cfg, "ELEVENLABS_API_KEY", "") or
+                  os.getenv("ELEVENLABS_API_KEY", ""))
     try:
-        if edge_tts_available():
-            vo = prepare_reel_voiceover_edge_tts(
-                hook_text=hook_text,
-                quote_text=quote_data["quote"],
-                cta_text=quote_data.get("cta", "") or "",
-                mood=mood,
-                output_dir=run_dir,
-                timestamp=timestamp,
-            )
+        if elevenlabs_available(el_api_key):
+            try:
+                log.info("  [voiceover] ElevenLabs (human-quality) — slot %s", slot)
+                vo = prepare_reel_voiceover_elevenlabs(
+                    hook_text=hook_text,
+                    quote_text=quote_data["quote"],
+                    cta_text=quote_data.get("cta", "") or "",
+                    mood=mood,
+                    output_dir=run_dir,
+                    timestamp=timestamp,
+                    api_key=el_api_key,
+                    scene_settings={
+                        "hook": delivery_profile("hook"),
+                        "quote": delivery_profile("quote"),
+                        "cta": delivery_profile("cta"),
+                    },
+                )
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"  [voiceover] ElevenLabs failed ({e}) — edge-tts")
+        if not vo or not vo.get("quote_voice"):
+            # Either ElevenLabs unavailable or produced no usable VO — try edge-tts.
+            if edge_tts_available():
+                vo = prepare_reel_voiceover_edge_tts(
+                    hook_text=hook_text,
+                    quote_text=quote_data["quote"],
+                    cta_text=quote_data.get("cta", "") or "",
+                    mood=mood,
+                    output_dir=run_dir,
+                    timestamp=timestamp,
+                )
         # Optional bridge VO (Hook → Bridge → Quote → CTA arc).
         if bridge_text and edge_tts_available():
             try:
@@ -1592,7 +1649,8 @@ def _pov_reel_flow(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
     # decides whether to abort the slot).
     silent_final = _run_pov_reel(
         quote_data_path=quote_data_path,
-        output_dir=OUTPUT_DIR,  # orchestrator derives OUTPUT_DIR/reels/<run_id>/
+        output_dir=OUTPUT_DIR,
+        run_id=timestamp,  # isolate each invocation into its own run_dir
     )
 
     # Audio mix — best-effort. On any failure, amix falls back to silent copy.

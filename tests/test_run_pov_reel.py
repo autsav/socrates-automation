@@ -145,6 +145,62 @@ def test_run_pov_reel_skips_composite_when_hf_fails(tmp_path):
     assert not (output_dir / "fallback.mp4").exists()
 
 
+def test_run_pov_reel_isolates_run_dir_via_run_id(tmp_path):
+    """Regression for C3: per-invocation run_id isolates run_dirs.
+
+    Caller passes run_id=timestamp so concurrent / overlapping slots don't
+    collide in OUTPUT_DIR/reels/quote_data/. Without run_id, the orchestrator
+    falls back to quote_data_path.stem — safe for unique JSON names only.
+    """
+    quote_data_path, output_dir = _setup_paths(tmp_path)
+
+    with patch("pipeline._invoke_mpt") as mock_mpt, \
+         patch("pipeline._invoke_hyperframes") as mock_hf, \
+         patch("pipeline._composite_reels") as mock_composite:
+        mock_mpt.return_value = {
+            "base_video": tmp_path / "base.mp4",
+            "word_timings": tmp_path / "word_timings.json",
+            "duration_sec": 16.0,
+            "resolution": [1080, 1920],
+        }
+        mock_hf.return_value = tmp_path / "overlay.mp4"
+        mock_composite.return_value = tmp_path / "final.mp4"
+
+        # Caller-side timestamp uniqueness
+        result_a = _run_pov_reel(quote_data_path, output_dir, run_id="20260729_120000")
+        result_b = _run_pov_reel(quote_data_path, output_dir, run_id="20260729_130000")
+
+    # Two distinct run_dirs → two distinct final.mp4 paths.
+    assert result_a.parent != result_b.parent
+    assert result_a.parent.name == "20260729_120000"
+    assert result_b.parent.name == "20260729_130000"
+    # Backward compat: no run_id → falls back to quote_data_path.stem.
+    expected_fallback = output_dir / "reels" / "quote_data" / "final.mp4"
+    assert result_a.parent.parent.parent == output_dir
+
+
+def test_run_pov_reel_run_id_default_uses_stem(tmp_path):
+    """Backward compat: without run_id, orchestrator derives from JSON stem."""
+    quote_data_path, output_dir = _setup_paths(tmp_path)
+
+    with patch("pipeline._invoke_mpt") as mock_mpt, \
+         patch("pipeline._invoke_hyperframes") as mock_hf, \
+         patch("pipeline._composite_reels") as mock_composite:
+        mock_mpt.return_value = {
+            "base_video": tmp_path / "base.mp4",
+            "word_timings": tmp_path / "word_timings.json",
+            "duration_sec": 16.0,
+            "resolution": [1080, 1920],
+        }
+        mock_hf.return_value = tmp_path / "overlay.mp4"
+        mock_composite.return_value = tmp_path / "final.mp4"
+
+        result = _run_pov_reel(quote_data_path, output_dir)  # no run_id
+
+    assert result.parent.name == "quote_data"  # stem fallback
+    assert result.parent.parent.parent == output_dir
+
+
 # ── Caller-level regression tests (Task 11 fix-R1) ───────────────────────────
 
 
@@ -294,3 +350,92 @@ def test_caller_invokes_post_to_instagram_with_final_video(tmp_path):
     assert "ig_42" in (record.get("post_id") or "")
     assert "final.mp4" in (record.get("reel_path") or "")
     mock_log.assert_called_once()
+
+
+def test_caller_uses_elevenlabs_when_api_key_set(tmp_path):
+    """Regression for I3: ElevenLabs is the primary VO path when its key is set.
+
+    When ELEVENLABS_API_KEY is available, the caller invokes the ElevenLabs
+    engine first. Edge-tts is the fallback only when ElevenLabs is unavailable
+    or produced no usable VO.
+    """
+    import pipeline as pl
+    cfg = MagicMock()
+    cfg.ELEVENLABS_API_KEY = "el-key-test"
+    silent_final = tmp_path / "silent.mp4"
+    silent_final.write_bytes(b"\x00")
+    final_with_audio = tmp_path / "final.mp4"
+    final_with_audio.write_bytes(b"\x00")
+
+    el_vo = {
+        "hook_voice": tmp_path / "h.mp3",
+        "quote_voice": tmp_path / "q.mp3",  # success marker
+        "cta_voice": tmp_path / "c.mp3",
+        "hook_words": [], "quote_words": [], "cta_words": [],
+    }
+
+    with patch.object(pl, "_run_pov_reel", return_value=silent_final), \
+         patch.object(pl, "_select_reel_music", return_value=None), \
+         patch.object(pl, "_concat_vo_scenes", return_value=None), \
+         patch.object(pl, "_mix_audio_track", return_value=final_with_audio), \
+         patch.object(pl, "elevenlabs_available", return_value=True) as mock_el_avail, \
+         patch.object(pl, "prepare_reel_voiceover_elevenlabs",
+                      return_value=el_vo) as mock_el_vo, \
+         patch.object(pl, "edge_tts_available", return_value=False), \
+         patch.object(pl, "save_post", return_value=1), \
+         patch.object(pl, "pick_best_hook", return_value={"hook_id": "h1"}), \
+         patch.object(pl, "post_reel_to_instagram", return_value="ig_99"), \
+         patch.object(pl, "mark_as_posted"), \
+         patch.object(pl, "mark_posted"), \
+         patch.object(pl, "Notifier"), \
+         patch.object(pl, "save_log"):
+        pl._pov_reel_flow(
+            cfg, {"quote": "q", "audience": "a", "caption": "c",
+                  "row_number": 1, "hook": "h", "cta": "", "bridge": ""},
+            "calm_stoic", 1, "ts", dry_run=True, manual=False,
+            access_token="t",
+        )
+
+    # ElevenLabs availability check was consulted.
+    assert mock_el_avail.called
+    # ElevenLabs engine produced the VO (quote_voice present).
+    assert mock_el_vo.called
+
+
+def test_caller_falls_back_to_edge_tts_when_elevenlabs_unavailable(tmp_path):
+    """When ELEVENLABS_API_KEY is missing, caller uses edge-tts."""
+    import pipeline as pl
+    cfg = MagicMock()
+    cfg.ELEVENLABS_API_KEY = ""  # no key
+    silent_final = tmp_path / "silent.mp4"
+    silent_final.write_bytes(b"\x00")
+    final_with_audio = tmp_path / "final.mp4"
+    final_with_audio.write_bytes(b"\x00")
+
+    with patch.object(pl, "_run_pov_reel", return_value=silent_final), \
+         patch.object(pl, "_select_reel_music", return_value=None), \
+         patch.object(pl, "_concat_vo_scenes", return_value=None), \
+         patch.object(pl, "_mix_audio_track", return_value=final_with_audio), \
+         patch.object(pl, "elevenlabs_available", return_value=False), \
+         patch.object(pl, "edge_tts_available", return_value=True), \
+         patch.object(pl, "prepare_reel_voiceover_edge_tts",
+                      return_value={"hook_voice": None, "quote_voice": None,
+                                    "cta_voice": None,
+                                    "hook_words": [], "quote_words": [],
+                                    "cta_words": []}) as mock_edge_vo, \
+         patch.object(pl, "save_post", return_value=1), \
+         patch.object(pl, "pick_best_hook", return_value={"hook_id": "h1"}), \
+         patch.object(pl, "post_reel_to_instagram", return_value=None), \
+         patch.object(pl, "mark_as_posted"), \
+         patch.object(pl, "mark_posted"), \
+         patch.object(pl, "Notifier"), \
+         patch.object(pl, "save_log"):
+        pl._pov_reel_flow(
+            cfg, {"quote": "q", "audience": "a", "caption": "c",
+                  "row_number": 1, "hook": "h", "cta": "", "bridge": ""},
+            "calm_stoic", 1, "ts", dry_run=True, manual=False,
+            access_token="t",
+        )
+
+    # Edge-tts is the fallback path.
+    assert mock_edge_vo.called
