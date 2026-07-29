@@ -16,6 +16,9 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import uuid
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -69,6 +72,10 @@ PROJECT_ROOT = Path(__file__).parent.resolve()
 LOG_DIR = PROJECT_ROOT / "logs"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 EXCEL_PATH = PROJECT_ROOT / "quotes.xlsx"
+
+# ── HyperFrames / MPT (Task 8) ────────────────────────────────────────────────
+MPT_ROOT = Path(__file__).resolve().parent / "mpt"
+MPT_VENV = MPT_ROOT / ".venv" / "bin" / "python"
 
 
 def _rel_path(p):
@@ -982,6 +989,116 @@ def _reel_background(cfg, quote_data, mood):
     except Exception as e:  # noqa: BLE001 - never crash a reel
         log.warning(f"  [reel] FLUX background unavailable ({e}) — particle bg")
         return None
+
+
+class MptRenderError(Exception):
+    """Raised when MPT render fails or produces no output."""
+
+
+def _invoke_mpt(quote_data_path: Path, run_dir: Path) -> dict:
+    """Invoke MPT CLI as subprocess; render base video + adapt SRT to word timings.
+
+    Contract: see docs/mpt-cli-contract.md. Key points:
+    - cwd MUST be MPT_ROOT (absolute path to mpt/)
+    - CLI is `python cli.py`, NOT `python -m mpt.main`
+    - Exit 0 → parse stdout JSON for {"task_id", "result": {"videos": [...], "subtitle": ...}}
+    - Exit 1/2 → log stderr, raise
+
+    Args:
+        quote_data_path: absolute path to studio QuoteData JSON (passed as `--video-script` text)
+        run_dir: directory for outputs (base.mp4, word_timings.json)
+
+    Returns:
+        dict with keys: base_video (Path), word_timings (Path),
+                        duration_sec (float | None), resolution (list | None)
+
+    Raises:
+        MptRenderError: if subprocess exit ≠ 0, stdout not JSON, or base.mp4 missing
+    """
+    from src.mpt_adapter import srt_to_word_timings  # Task 3 adapter (lazy import)
+
+    quote_data_path = Path(quote_data_path)
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    base_video = run_dir / "base.mp4"
+    word_timings_path = run_dir / "word_timings.json"
+    task_id = str(uuid.uuid4())
+
+    # Read quote_data — we pass the whole script text via --video-script
+    # (avoids LLM cost; MPT skips script gen when --video-script is provided).
+    script_text = quote_data_path.read_text(encoding="utf-8")
+
+    # MPT CLI invocation per docs/mpt-cli-contract.md:
+    #   --stop-at video       full pipeline
+    #   --video-aspect 9:16   IG Reels portrait
+    #   --voice-name no-voice we provide our own VO from edge-tts
+    #   --bgm-type none       we mix Jamendo separately
+    #   --subtitle-enabled    MPT emits SRT (required for word timings)
+    #   --video-source pexels stock footage provider
+    #   --task-id <uuid>      predictable output paths
+    cmd = [
+        str(MPT_VENV),
+        "cli.py",
+        "--video-script", script_text,
+        "--video-aspect", "9:16",
+        "--stop-at", "video",
+        "--voice-name", "no-voice",
+        "--bgm-type", "none",
+        "--subtitle-enabled",
+        "--video-source", "pexels",
+        "--task-id", task_id,
+    ]
+
+    log.info("🎬 Invoking MPT (cwd=%s): cli.py --task-id=%s", MPT_ROOT, task_id)
+    proc = subprocess.run(
+        cmd,
+        cwd=MPT_ROOT,                # absolute path to mpt/
+        capture_output=True,
+        text=True,
+        timeout=600,                 # 10 min max
+    )
+
+    if proc.returncode != 0:
+        log.error("❌ MPT failed (exit %d): %s", proc.returncode, proc.stderr[:1000])
+        raise MptRenderError(f"MPT exit {proc.returncode}: {proc.stderr[:500]}")
+
+    # Parse stdout JSON
+    try:
+        payload = json.loads(proc.stdout)
+        result_block = payload["result"]
+        mpt_video = Path(result_block["videos"][0])
+        mpt_srt = Path(result_block["subtitle"])
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+        log.error("❌ MPT stdout not parseable: %s\nstdout=%s", exc, proc.stdout[:500])
+        raise MptRenderError(f"MPT stdout malformed: {exc}") from exc
+
+    # Copy outputs into run_dir
+    if not mpt_video.exists():
+        log.error("❌ MPT result path missing: %s", mpt_video)
+        raise MptRenderError(f"MPT video missing at {mpt_video}")
+
+    shutil.copy2(mpt_video, base_video)
+
+    # Adapt MPT's SRT → our word_timings.json via Task 3 adapter
+    srt_text = mpt_srt.read_text(encoding="utf-8") if mpt_srt.exists() else ""
+    if srt_text:
+        timings = srt_to_word_timings(srt_text)
+        word_timings_path.write_text(
+            json.dumps(timings, indent=2), encoding="utf-8"
+        )
+        total_sec = timings.get("total_duration_sec")
+    else:
+        log.warning("⚠️  MPT emitted no SRT; HF overlay will use degraded timing")
+        total_sec = None
+
+    output: dict = {
+        "base_video": base_video,
+        "word_timings": word_timings_path if word_timings_path.exists() else None,
+        "duration_sec": total_sec,
+        "resolution": None,
+    }
+    log.info("✅ MPT produced %s (%.1fs)", base_video, total_sec or 0)
+    return output
 
 
 def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
