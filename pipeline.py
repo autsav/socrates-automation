@@ -995,6 +995,50 @@ class MptRenderError(Exception):
     """Raised when MPT render fails or produces no output."""
 
 
+class HfRenderError(Exception):
+    """Raised when HyperFrames overlay render fails or produces no output."""
+
+
+def _invoke_hyperframes(quote_data_path: Path, word_timings_path: Path | None, run_dir: Path) -> Path:
+    """Invoke HyperFrames overlay render as subprocess."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    overlay_input = run_dir / "overlay_input.json"
+    overlay_output = run_dir / "overlay.mp4"
+
+    base_duration_sec = 16.0
+    if word_timings_path and word_timings_path.exists():
+        try:
+            wt_data = json.loads(word_timings_path.read_text())
+            base_duration_sec = wt_data.get("total_duration_sec", 16.0)
+        except Exception as e:
+            log.warning("⚠️  Could not read word_timings.json (%s); using fallback duration", e)
+
+    overlay_payload = {
+        "quote_data": str(quote_data_path),
+        "word_timings": str(word_timings_path) if word_timings_path else None,
+        "base_duration_sec": base_duration_sec,
+        "overlay_only": True,
+        "output": str(overlay_output),
+    }
+    overlay_input.write_text(json.dumps(overlay_payload))
+
+    cmd = [
+        "npx", "tsx", "hyperframes/src/cli/render-overlay.ts",
+        "--overlay-data", str(overlay_input),
+        "--output", str(overlay_output),
+    ]
+    log.info("🎨 Invoking HyperFrames overlay render: %s", " ".join(cmd))
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+    if result.returncode != 0:
+        log.error("❌ HyperFrames overlay failed (exit %d): %s", result.returncode, result.stderr)
+        raise HfRenderError(f"HyperFrames exit {result.returncode}: {result.stderr[:500]}")
+    if not overlay_output.exists():
+        log.error("❌ HyperFrames succeeded but overlay.mp4 missing at %s", overlay_output)
+        raise HfRenderError("HyperFrames succeeded but overlay.mp4 missing")
+    return overlay_output
+
+
 def _invoke_mpt(quote_data_path: Path, run_dir: Path) -> dict:
     """Invoke MPT CLI as subprocess; render base video + adapt SRT to word timings.
 
