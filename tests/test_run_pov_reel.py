@@ -1,4 +1,11 @@
-"""Tests for pipeline._run_pov_reel() — Task 11 orchestrator.
+"""Tests for pipeline._run_pov_reel() (orchestrator) + _pov_reel_flow() (caller).
+
+Two layers:
+  - ``_run_pov_reel(quote_data_path, output_dir)`` → Path
+        Render-only orchestrator (MPT → HF → ffmpeg composite, silent final.mp4).
+  - ``_pov_reel_flow(cfg, quote_data, mood, slot, timestamp, dry_run, manual,
+                    access_token)`` → dict
+        Caller-level reel-flow that owns VO, music, audio-mix, posting.
 
 The orchestrator chains MPT → HyperFrames → ffmpeg composite into a single
 Path return value. Hard cutover (per Q1): NO in-app fallback reel. Exceptions
@@ -8,7 +15,7 @@ The ThreadPoolExecutor scaffolding is preserved as future-proofing, but HF
 waits on MPT's word_timings so wall-time is sequential in practice.
 """
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -17,6 +24,9 @@ from pipeline import (
     MptRenderError,
     _run_pov_reel,
 )
+
+
+# ── Orchestrator tests (Task 11) ──────────────────────────────────────────────
 
 
 def _setup_paths(tmp_path: Path) -> tuple[Path, Path]:
@@ -133,3 +143,154 @@ def test_run_pov_reel_skips_composite_when_hf_fails(tmp_path):
     assert mock_mpt.called
     assert not mock_composite.called
     assert not (output_dir / "fallback.mp4").exists()
+
+
+# ── Caller-level regression tests (Task 11 fix-R1) ───────────────────────────
+
+
+def _setup_caller(tmp_path: Path) -> tuple:
+    """Build files + mocks for a _pov_reel_flow() dry_run=true run.
+
+    Returns (quote_data, cfg, silent_final, final_with_audio, run_dir).
+    """
+    silent_final = tmp_path / "silent.mp4"
+    silent_final.write_bytes(b"\x00")
+    final_with_audio = tmp_path / "final.mp4"
+    final_with_audio.write_bytes(b"\x00")
+    cfg = MagicMock()
+    return (
+        {"quote": "test quote", "audience": "entrepreneurs",
+         "caption": "test caption", "row_number": 1, "hook": "test hook",
+         "cta": "test cta", "bridge": ""},
+        cfg, silent_final, final_with_audio,
+    )
+
+
+def _patch_caller_common(mocks: dict):
+    """Apply the standard mock set used by caller-level tests."""
+    mocks.update({
+        "init_db": patch.object(__import__("pipeline"), "init_db"),
+        "has_posted_today": patch.object(
+            __import__("pipeline"), "has_posted_today", return_value=False),
+        "get_valid_token": patch.object(
+            __import__("pipeline"), "get_valid_token_with_fallback",
+            return_value="tok"),
+    })
+
+
+def test_caller_invokes_new_orchestrator_with_paths(tmp_path):
+    """Regression: caller invokes _run_pov_reel(quote_data_path, output_dir)."""
+    import pipeline as pl
+    quote_data, cfg, silent_final, final_with_audio = _setup_caller(tmp_path)
+
+    with patch.object(pl, "_run_pov_reel", return_value=silent_final) as mock_render, \
+         patch.object(pl, "_select_reel_music", return_value=None), \
+         patch.object(pl, "_concat_vo_scenes", return_value=None), \
+         patch.object(pl, "_mix_audio_track", return_value=final_with_audio), \
+         patch.object(pl, "edge_tts_available", return_value=False), \
+         patch.object(pl, "save_post", return_value=1), \
+         patch.object(pl, "pick_best_hook", return_value={"hook_id": "h1"}), \
+         patch.object(pl, "post_reel_to_instagram", return_value="ig_1"), \
+         patch.object(pl, "mark_as_posted"), \
+         patch.object(pl, "mark_posted"), \
+         patch.object(pl, "Notifier"), \
+         patch.object(pl, "save_log"):
+        pl.run_pipeline(dry_run=True, reel=True, renderer="hyperframes")
+
+    # Orchestrator was called with the NEW signature (Path, Path).
+    assert mock_render.called
+    assert "quote_data_path" in mock_render.call_args.kwargs
+    assert "output_dir" in mock_render.call_args.kwargs
+    assert isinstance(mock_render.call_args.kwargs["quote_data_path"], Path)
+    assert isinstance(mock_render.call_args.kwargs["output_dir"], Path)
+
+
+def test_caller_runs_audio_mix_when_vo_and_music_succeed(tmp_path):
+    """Audio-mix stage runs with VO track + music when both succeed."""
+    import pipeline as pl
+    quote_data, cfg, silent_final, final_with_audio = _setup_caller(tmp_path)
+    vo_track = tmp_path / "vo.mp3"
+    vo_track.write_bytes(b"\x00")
+    music = tmp_path / "music.mp3"
+    music.write_bytes(b"\x00")
+
+    with patch.object(pl, "_run_pov_reel", return_value=silent_final), \
+         patch.object(pl, "_select_reel_music", return_value=music), \
+         patch.object(pl, "_concat_vo_scenes", return_value=vo_track), \
+         patch.object(pl, "_mix_audio_track", return_value=final_with_audio) as mock_mix, \
+         patch.object(pl, "edge_tts_available", return_value=True), \
+         patch.object(pl, "prepare_reel_voiceover_edge_tts",
+                      return_value={"hook_voice": tmp_path / "h.mp3",
+                                    "quote_voice": vo_track,
+                                    "cta_voice": tmp_path / "c.mp3",
+                                    "hook_words": [], "quote_words": [],
+                                    "cta_words": []}), \
+         patch.object(pl, "_bridge_for_vo", return_value=""), \
+         patch.object(pl, "save_post", return_value=1), \
+         patch.object(pl, "pick_best_hook", return_value={"hook_id": "h1"}), \
+         patch.object(pl, "post_reel_to_instagram", return_value="ig_1"), \
+         patch.object(pl, "mark_as_posted"), \
+         patch.object(pl, "mark_posted"), \
+         patch.object(pl, "Notifier"), \
+         patch.object(pl, "save_log"):
+        pl.run_pipeline(dry_run=False, reel=True, renderer="hyperframes")
+
+    assert mock_mix.called
+    kwargs = mock_mix.call_args.kwargs
+    assert kwargs.get("vo_path") == vo_track
+    assert kwargs.get("music_path") == music
+
+
+def test_caller_skips_audio_mix_when_vo_fails(tmp_path):
+    """Audio-mix skips VO when _concat_vo_scenes returns None (still mixes music)."""
+    import pipeline as pl
+    quote_data, cfg, silent_final, final_with_audio = _setup_caller(tmp_path)
+    music = tmp_path / "music.mp3"
+    music.write_bytes(b"\x00")
+
+    with patch.object(pl, "_run_pov_reel", return_value=silent_final), \
+         patch.object(pl, "_select_reel_music", return_value=music), \
+         patch.object(pl, "_concat_vo_scenes", return_value=None), \
+         patch.object(pl, "_mix_audio_track", return_value=final_with_audio) as mock_mix, \
+         patch.object(pl, "edge_tts_available", return_value=False), \
+         patch.object(pl, "save_post", return_value=1), \
+         patch.object(pl, "pick_best_hook", return_value={"hook_id": "h1"}), \
+         patch.object(pl, "post_reel_to_instagram", return_value="ig_1"), \
+         patch.object(pl, "mark_as_posted"), \
+         patch.object(pl, "mark_posted"), \
+         patch.object(pl, "Notifier"), \
+         patch.object(pl, "save_log"):
+        pl.run_pipeline(dry_run=False, reel=True, renderer="hyperframes")
+
+    # Audio-mix was called with vo_path=None but music_path present.
+    assert mock_mix.called
+    assert mock_mix.call_args.kwargs.get("vo_path") is None
+    assert mock_mix.call_args.kwargs.get("music_path") == music
+
+
+def test_caller_invokes_post_to_instagram_with_final_video(tmp_path):
+    """Post-to-IG is invoked with the mixed-audio final video path."""
+    import pipeline as pl
+    quote_data, cfg, silent_final, final_with_audio = _setup_caller(tmp_path)
+
+    with patch.object(pl, "_run_pov_reel", return_value=silent_final), \
+         patch.object(pl, "_select_reel_music", return_value=None), \
+         patch.object(pl, "_concat_vo_scenes", return_value=None), \
+         patch.object(pl, "_mix_audio_track", return_value=final_with_audio), \
+         patch.object(pl, "edge_tts_available", return_value=False), \
+         patch.object(pl, "save_post", return_value=1), \
+         patch.object(pl, "pick_best_hook", return_value={"hook_id": "h1"}), \
+         patch.object(pl, "post_reel_to_instagram", return_value="ig_42") as mock_post, \
+         patch.object(pl, "mark_as_posted"), \
+         patch.object(pl, "mark_posted"), \
+         patch.object(pl, "Notifier"), \
+         patch.object(pl, "save_log") as mock_log:
+        record = pl.run_pipeline(dry_run=False, reel=True, renderer="hyperframes")
+
+    # post_to_instagram called with the audio-mixed final path.
+    assert mock_post.called
+    assert mock_post.call_args.kwargs.get("video_path") == final_with_audio
+    # Returned record has the audio-mixed reel_path.
+    assert "ig_42" in (record.get("post_id") or "")
+    assert "final.mp4" in (record.get("reel_path") or "")
+    mock_log.assert_called_once()

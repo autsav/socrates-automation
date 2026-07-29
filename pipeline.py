@@ -1297,6 +1297,160 @@ def _invoke_mpt(quote_data_path: Path, run_dir: Path) -> dict:
     return output
 
 
+class AudioMixError(Exception):
+    """Raised when ffmpeg audio-mix fails (typed exception so callers can
+    distinguish render-time vs audio-mix failures)."""
+
+
+def _concat_vo_scenes(vo: dict | None, output_path: Path) -> Path | None:
+    """Concatenate VO scene tracks (hook + bridge + quote + cta) into a single
+    MP3 via ffmpeg's concat demuxer. Returns the output path on success, None
+    when no scenes produced audio (so caller can fall through to silent reel).
+
+    Best-effort: any ffmpeg failure → returns None (the reel still renders and
+    posts, just without VO — never crash a reel, per project convention).
+    """
+    if not vo:
+        return None
+    # Per-scene paths produced by prepare_reel_voiceover_edge_tts (and bridge).
+    scenes = [
+        ("bridge", vo.get("bridge_voice")),
+        ("hook",   vo.get("hook_voice")),
+        ("quote",  vo.get("quote_voice")),
+        ("cta",    vo.get("cta_voice")),
+    ]
+    present = [(label, p) for label, p in scenes if p and Path(p).exists()]
+    if not present:
+        return None
+    if len(present) == 1:
+        # Single scene — copy verbatim to output_path.
+        try:
+            shutil.copyfile(present[0][1], output_path)
+            return output_path
+        except Exception as e:  # noqa: BLE001 - never crash a reel
+            log.warning(f"  [vo-concat] single-scene copy failed ({e})")
+            return None
+
+    list_file = output_path.with_suffix(".list.txt")
+    try:
+        with list_file.open("w") as f:
+            for label, p in present:
+                # ffmpeg concat demuxer requires single-quoted absolute paths.
+                f.write(f"file '{Path(p).resolve()}'\n")
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "concat", "-safe", "0", "-i", str(list_file),
+            "-c", "copy",
+            str(output_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            log.warning(f"  [vo-concat] ffmpeg exit {result.returncode}: "
+                        f"{result.stderr[:200]}")
+            return None
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            log.warning("  [vo-concat] ffmpeg produced no output")
+            return None
+        return output_path
+    except Exception as e:  # noqa: BLE001 - never crash a reel
+        log.warning(f"  [vo-concat] failed ({e})")
+        return None
+    finally:
+        try:
+            list_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def _mix_audio_track(base_video: Path, vo_path: Path | None,
+                     music_path: Path | None, output: Path,
+                     _ffmpeg_runner=None) -> Path:
+    """Mix VO + music onto a silent base_video via ffmpeg.
+
+    Composition rules:
+      - Both VO and music → mix VO prominent, music low bed (volume 0.3)
+      - VO only → mux VO, no music
+      - Music only → mux music, no VO
+      - Neither → copy base_video to output (silent reel posts as-is)
+
+    All operations are absolute-pathed and timeout-guarded. Never raises —
+    any ffmpeg failure logs and falls back to base_video (silent) so the reel
+    still posts. Per project rule "never crash a reel."
+    """
+    base = Path(base_video).resolve()
+    out = Path(output).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    has_vo = vo_path is not None and Path(vo_path).exists()
+    has_music = music_path is not None and Path(music_path).exists()
+
+    if not has_vo and not has_music:
+        # Silent reel — just copy the video so downstream paths stay consistent.
+        try:
+            shutil.copyfile(base, out)
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"  [mix] silent copy failed ({e}); reusing base path")
+            return base
+        return out
+
+    # ffmpeg amix: multiple inputs. We always mix the longest input (typically
+    # the VO) and trim to that length so music doesn't run past the video.
+    inputs: list[str] = []
+    if has_vo:
+        inputs.extend(["-i", str(Path(vo_path).resolve())])
+    if has_music:
+        inputs.extend(["-i", str(Path(music_path).resolve())])
+
+    # Build filter graph. Music is ducked to 0.3; VO at 1.0 (the user hears
+    # the words over the bed).
+    if has_vo and has_music:
+        # 2 inputs: VO (index 0) + music (index 1) → mix both, music ducked.
+        # amix uses shortest=0 so longer input runs longer; -t on output trims.
+        vf = (
+            "[1:a]volume=0.3[bg];"
+            "[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        map_args = ["-map", "0:v", "-map", "[aout]"]
+    elif has_vo:
+        # VO only — single input, no amix needed.
+        vf = None
+        map_args = ["-map", "0:v", "-map", "0:a"]
+    else:
+        # Music only — single input, no amix needed.
+        vf = None
+        map_args = ["-map", "0:v", "-map", "0:a"]
+
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
+    cmd.extend(inputs)
+    cmd.extend(["-i", str(base)])
+    if vf:
+        cmd.extend(["-filter_complex", vf])
+    cmd.extend(map_args)
+    cmd.extend(["-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest"])
+    cmd.append(str(out))
+
+    runner = _ffmpeg_runner if _ffmpeg_runner is not None else subprocess.run
+    try:
+        result = runner(cmd, capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        log.warning("  [mix] ffmpeg timed out — posting silent reel")
+        shutil.copyfile(base, out)
+        return out
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"  [mix] ffmpeg failed to launch ({e}) — posting silent reel")
+        shutil.copyfile(base, out)
+        return out
+
+    if result.returncode != 0 or not out.exists() or out.stat().st_size == 0:
+        log.warning(f"  [mix] ffmpeg exit {result.returncode} ({result.stderr[:200] if result.stderr else ''})"
+                    f" — posting silent reel")
+        shutil.copyfile(base, out)
+        return out
+
+    log.info(f"  [mix] audio mixed: VO={has_vo} music={has_music} → {_rel_path(out)}")
+    return out
+
+
 def _run_pov_reel(quote_data_path: Path, output_dir: Path) -> Path:
     """Render POV reel via MPT base + HyperFrames overlay + ffmpeg composite.
 
@@ -1367,6 +1521,193 @@ def _run_pov_reel(quote_data_path: Path, output_dir: Path) -> Path:
 
     log.info("✅ Final reel: %s", final_video)
     return final_video
+
+
+def _pov_reel_flow(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
+                   dry_run: bool, manual: bool, access_token: str) -> dict:
+    """Caller-level reel orchestrator: VO + music + render + audio-mix + post.
+
+    The new ``_run_pov_reel`` (Task 11) is render-only (MPT → HF → composite,
+    silent final.mp4). All pre-render audio prep + post-render audio mixing +
+    Instagram / manual / Telegram posting lives at the caller level so the
+    orchestrator stays a clean three-stage pipeline.
+
+    Stage ordering (chosen per caller plan):
+      1. Pick run_dir, write quote_data JSON (orchestrator input contract)
+      2. Generate VO (edge-tts; ElevenLabs unavailability → silent reel)
+      3. Pick Jamendo music bed (Music Director → mood fallback)
+      4. Render silent final.mp4 via ``_run_pov_reel``
+      5. Concatenate VO scenes → amix with music → final_with_audio.mp4
+      6. Post (manual Telegram | IG API | dry_run) + mark_posted + first_comment
+      7. Return dict record (same shape as the deleted 397-line body)
+
+    Every optional stage is best-effort (try/except → log + fall through).
+    The reel posts even when VO, music, or audio-mix fail — never crash a reel.
+    """
+    # Prepare run directory + write quote_data JSON (orchestrator contract).
+    run_dir = OUTPUT_DIR / "reels" / timestamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+    quote_data_path = run_dir / "quote_data.json"
+    with quote_data_path.open("w") as f:
+        json.dump(quote_data, f, default=str)
+
+    hook_text = quote_data.get("hook") or ""
+    bridge_text = _bridge_for_vo(quote_data)
+
+    # VO stage — edge-tts (free, always-available). ElevenLabs was a nice-to-have
+    # in the deleted body; here we use edge-tts as the primary path and treat
+    # absence as "silent reel" rather than crashing.
+    vo: dict = {}
+    try:
+        if edge_tts_available():
+            vo = prepare_reel_voiceover_edge_tts(
+                hook_text=hook_text,
+                quote_text=quote_data["quote"],
+                cta_text=quote_data.get("cta", "") or "",
+                mood=mood,
+                output_dir=run_dir,
+                timestamp=timestamp,
+            )
+        # Optional bridge VO (Hook → Bridge → Quote → CTA arc).
+        if bridge_text and edge_tts_available():
+            try:
+                bridge_path = run_dir / f"voice_bridge_{timestamp}.mp3"
+                if generate_scene_voiceover_edge_tts(
+                        bridge_text, REEL_VOICE, bridge_path):
+                    vo["bridge_voice"] = bridge_path
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"  [pov-flow] bridge VO failed ({e})")
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"  [pov-flow] VO generation failed ({e}) — silent reel")
+
+    # Music stage.
+    music_path = None
+    try:
+        music_path = _select_reel_music(cfg, quote_data, hook_text, mood)
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"  [pov-flow] music selection failed ({e}) — VO-only reel")
+
+    # Render — silent final.mp4 from orchestrator. Exceptions from here
+    # propagate (MPT/HF/Composite errors are typed and intentional; cron caller
+    # decides whether to abort the slot).
+    silent_final = _run_pov_reel(
+        quote_data_path=quote_data_path,
+        output_dir=OUTPUT_DIR,  # orchestrator derives OUTPUT_DIR/reels/<run_id>/
+    )
+
+    # Audio mix — best-effort. On any failure, amix falls back to silent copy.
+    vo_track = _concat_vo_scenes(vo, run_dir / "vo_concat.mp3")
+    final_video = _mix_audio_track(
+        base_video=silent_final,
+        vo_path=vo_track,
+        music_path=music_path,
+        output=run_dir / "final.mp4",
+    )
+
+    # Post — manual / IG / dry_run / dedup. Mirrors the deleted body so
+    # downstream callers see the same record shape.
+    hook_pick = pick_best_hook(audience=quote_data["audience"],
+                               quote_text=quote_data["quote"])
+    post_row_id = save_post(
+        quote_text=quote_data["quote"],
+        audience=quote_data["audience"],
+        mood=mood,
+        caption_variant=-1,
+        posting_slot=slot,
+        dry_run=dry_run,
+        hook_id=hook_pick["hook_id"],
+    )
+    if post_row_id is not None:
+        record_trigger_keyword(post_row_id, _extract_trigger_keyword(
+            quote_data.get("cta", "") or ""))
+        record_arc(post_row_id, quote_data.get("arc"))
+        record_material(post_row_id, quote_data.get("material_key"))
+        record_script(post_row_id, quote_data.get("script"))
+
+    if post_row_id is None:
+        log.warning(
+            f"  [dedup] slot {slot} already claimed today (concurrent run) — "
+            f"skipping to avoid a double-post")
+        return {"skipped": True, "reason": f"slot {slot} already claimed today"}
+
+    post_id = None
+    if manual:
+        log.info("Step: MANUAL MODE — sending POV Reel to Telegram for manual posting...")
+        try:
+            notifier = Notifier(cfg)
+            trending = get_trending_suggestion(mood)
+            notifier.notify_manual_reel_ready(
+                reel_path=final_video,
+                cover_path=None,
+                caption=quote_data["caption"],
+                mood=mood,
+                trending_suggestion=trending,
+                post_row_id=post_row_id,
+            )
+            log.info("✅ POV Reel sent to Telegram! Download and post with trending music.")
+        except Exception as e:
+            log.error(f"Failed to send POV Reel to Telegram: {e}")
+        mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
+        mark_posted(post_row_id, f"PENDING_MANUAL_{post_row_id}", None,
+                    _rel_path(final_video))
+    elif not dry_run and final_video:
+        log.info("Step: Posting POV Reel to Instagram...")
+        try:
+            post_id = post_reel_to_instagram(
+                video_path=final_video,
+                caption=quote_data["caption"],
+                ig_account_id=cfg.IG_ACCOUNT_ID,
+                access_token=access_token,
+                cloudinary_config={
+                    "cloud_name": cfg.CLOUDINARY_CLOUD_NAME,
+                    "api_key": cfg.CLOUDINARY_API_KEY,
+                    "api_secret": cfg.CLOUDINARY_API_SECRET,
+                },
+            )
+            log.info(f"✅ Posted! ID: {post_id}")
+            mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
+            mark_posted(post_row_id, post_id, None, _rel_path(final_video))
+            try:
+                from src.engagement.first_comment import post_comment, first_comment_text
+                if post_comment(post_id, first_comment_text(quote_data), access_token):
+                    log.info("  [first-comment] engagement question attached")
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"  [first-comment] skipped ({e})")
+            if post_id:
+                try:
+                    notifier = Notifier(cfg)
+                    trending = get_trending_suggestion(mood)
+                    notifier.notify_post_published(
+                        post_id=post_id,
+                        caption_preview=quote_data["caption"][:120],
+                        mood=mood,
+                        trending_suggestion=trending,
+                    )
+                except Exception as e:
+                    log.warning(f"Notification failed (non-blocking): {e}")
+        except Exception as e:
+            log.error(f"Publish failed: {e} — releasing slot {slot} for retry")
+            release_post(post_row_id)
+            raise
+    else:
+        log.info("⏭ dry_run=True — skip Instagram post")
+
+    record = {
+        "timestamp": timestamp,
+        "row_number": quote_data["row_number"],
+        "audience": quote_data["audience"],
+        "mood": mood,
+        "quote": quote_data["quote"],
+        "caption_preview": quote_data["caption"][:80],
+        "image_path": None,
+        "reel_path": _rel_path(final_video),
+        "post_id": post_id,
+        "dry_run": dry_run,
+        "pov": True,
+    }
+    save_log(record)
+    log.info("▶ POV Pipeline complete")
+    return record
 
 
 def _reels_use_renderer(reel: bool, carousel: bool, renderer: str) -> bool:
@@ -1551,8 +1892,14 @@ def run_pipeline(dry_run: bool = False, reel: bool = False, manual: bool = False
     # ── POV mode: zero-cost text Reel — bypasses FLUX entirely ────────────────
     if pov:
         log.info(f"Step 2: POV mode — generating text Reel via {renderer}...")
-        return _run_pov_reel(cfg, quote_data, mood, slot, timestamp, dry_run, manual,
-                             access_token, renderer=renderer)
+        # Per Task 11 fix-R1: the new _run_pov_reel is render-only
+        # (MPT → HF → composite, silent final.mp4). The caller-level
+        # _pov_reel_flow() owns VO generation, music selection, audio-mix,
+        # post-to-Instagram / Telegram-manual / dry_run, mark_posted, and
+        # returns the same record dict the deleted 397-line body returned.
+        return _pov_reel_flow(
+            cfg, quote_data, mood, slot, timestamp,
+            dry_run=dry_run, manual=manual, access_token=access_token)
 
     # ── Phase 1: Build enhanced FLUX prompt ────────────────────────────────────
     flux_override = ""
