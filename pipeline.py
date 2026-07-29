@@ -1297,403 +1297,76 @@ def _invoke_mpt(quote_data_path: Path, run_dir: Path) -> dict:
     return output
 
 
-def _run_pov_reel(cfg, quote_data: dict, mood: str, slot: int, timestamp: str,
-                   dry_run: bool, manual: bool, access_token: str,
-                   renderer: str = "remotion") -> dict:
+def _run_pov_reel(quote_data_path: Path, output_dir: Path) -> Path:
+    """Render POV reel via MPT base + HyperFrames overlay + ffmpeg composite.
+
+    Per Q1 (hard cutover): NO Remotion. Per Q6: NO fallback reel.
+
+    Flow:
+      1. MPT subprocess → base.mp4 + word_timings.json
+      2. HyperFrames subprocess → overlay.mp4 (alpha channel)
+      3. ffmpeg composite → final.mp4
+
+    Note: a ThreadPoolExecutor scaffolds the MPT and HyperFrames submissions as
+    concurrent scaffolding, but HF's wrapper awaits MPT's word_timings before
+    it can render, so wall-time is sequential. The scaffolding is preserved so
+    a future MPT pass can be split off without restructuring the call sites.
+
+    Raises:
+        MptRenderError / HfRenderError / CompositeError: any stage failure
+            propagates verbatim; the cron caller aborts the slot (per Q1/Q6,
+            no in-app fallback reel).
     """
-    POV mode: generate a text Reel and post/send it exactly like the regular Reel
-    flow, minus the background-image generation steps.
+    run_id = quote_data_path.stem  # e.g., quote slug
+    run_dir = output_dir / "reels" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-    Renderer selection:
-      - renderer="hyperframes" → render with HyperFrames (HTML+GSAP). Falls back
-        to Remotion → ffmpeg POV on failure.
-      - renderer="remotion" → render with the Remotion project (professional,
-        physics-driven text animations). Falls back to the ffmpeg POV generator
-        automatically if Node/Remotion isn't installed or the render fails.
-      - renderer="ffmpeg" → the zero-cost ffmpeg + Pillow POV generator.
-    """
-    hook_text = quote_data.get("hook") or _generate_psychology_hook(
-        quote_data["audience"], quote_data["row_number"])
-    cta_text = quote_data.get("cta") or _pick_cta(quote_data.get("row_number") or 0)
+    log.info("🎬 _run_pov_reel: %s (run_id=%s)", quote_data_path, run_id)
 
-    # Arc variety: shape hook/bridge for this post's arc (classic / question /
-    # cold_open) so consecutive reels don't share one predictable structure.
-    row_n = quote_data.get("row_number")
-    arc = _pick_arc(row_n, has_trend=bool(quote_data.get("trend_topic")))
-    story = None
-    if arc in ("story", "weird", "punch"):
-        story = _build_story_beats(cfg, arc, quote_data)
-        if story is None:
-            arc = _fallback_arc(row_n)
-    if story is not None:
-        # Beats ride the existing scenes: hook->Hook, reframe->Bridge, quote
-        # stays the twist, cta->CTA. Weird arcs are send-engineered by prompt.
-        hook_text = story["beat_hook"]
-        cta_text = story["beat_cta"]
-        quote_data["bridge"] = story["beat_reframe"]
-        quote_data["topic_query"] = story.get("topic_query", "")
-        quote_data["caption_first_line"] = story.get("caption_first_line", "")
-        quote_data["trend_tag"] = story.get("trend_tag", "")
-        quote_data["script"] = {"hook": _enforce_hook_len(hook_text), "reframe": story["beat_reframe"], "cta": cta_text}
-    else:
-        hook_text, arc_bridge = _apply_arc(
-            arc, hook_text, quote_data.get("bridge", ""),
-            quote_data.get("audience", ""), row_n)
-        quote_data["bridge"] = arc_bridge
-    quote_data["arc"] = arc
-    quote_data["material_key"] = story.get("material_key") if story else None
-    log.info(f"  [pov] Arc: {arc} | Hook: {hook_text[:50] or '(cold open)'}...")
+    # Stage 1 + 2: invoke MPT and HF concurrently via scaffolding.
+    # HF waits on MPT for word_timings, so wall-time is sequential.
+    import concurrent.futures
 
-    # Discovery levers (recipes #6/#7/#9): curiosity-gap first line, caption
-    # SEO keywords, one topical hashtag (total tags stay <=5). Best-effort.
-    try:
-        cap = quote_data.get("caption", "")
-        cap = _enforce_caption_gap(cap, quote_data.get("caption_first_line", ""))
-        seo = _seo_line(quote_data.get("audience", ""))
-        if seo not in cap:
-            cap = f"{cap}\n\n{seo}"
-        tag = (quote_data.get("trend_tag") or "").strip().lstrip("#")
-        if tag and f"#{tag}" not in cap and cap.count("#") < 5:
-            cap = f"{cap} #{tag}"
-        cap = _append_signoff(cap)
-        quote_data["caption"] = cap
-    except Exception as e:  # noqa: BLE001
-        log.warning(f"  [caption] levers skipped ({e})")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        mpt_future = executor.submit(_invoke_mpt, quote_data_path, run_dir)
 
-    reel_path = None
-
-    if renderer in ("hyperframes", "remotion"):
-        # Produce full VO (hook/quote/cta) + a music bed for the narrated
-        # reel. Best-effort: any failure → that piece is simply absent
-        # (the reel still renders; the ffmpeg fallback below makes zero TTS calls).
-        hook_voice = quote_voice = cta_voice = music_path = None
-        hook_words = quote_words = cta_words = []
-        try:
-            # Use ElevenLabs (human-quality) when API key is available,
-            # fall back to edge-tts (free but robotic) otherwise.
-            el_api_key = getattr(cfg, "ELEVENLABS_API_KEY", "") or os.getenv("ELEVENLABS_API_KEY", "")
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            if elevenlabs_available(el_api_key):
-                log.info("  [voiceover] Using ElevenLabs (human-quality narration)")
-                vo = prepare_reel_voiceover_elevenlabs(
-                    hook_text=hook_text,
-                    quote_text=quote_data["quote"],
-                    cta_text=cta_text,
-                    mood=mood,
-                    output_dir=OUTPUT_DIR,
-                    timestamp=ts,
-                    api_key=el_api_key,
-                    scene_settings={
-                        "hook": delivery_profile("hook"),
-                        "quote": delivery_profile("quote"),
-                        "cta": delivery_profile("cta"),
-                    },
-                )
-            elif edge_tts_available():
-                log.info("  [voiceover] ElevenLabs unavailable — using edge-tts fallback")
-                vo = prepare_reel_voiceover_edge_tts(
-                    hook_text=hook_text,
-                    quote_text=quote_data["quote"],
-                    cta_text=cta_text,
-                    mood=mood,
-                    output_dir=OUTPUT_DIR,
-                    timestamp=ts,
-                )
-            else:
-                vo = {}
-            # Resilience: if ElevenLabs came back without the critical quote VO
-            # (bad key/scope, quota, outage), redo the whole VO with edge-tts
-            # rather than shipping a silent reel. (Seen live: a key missing the
-            # text_to_speech permission 401'd every scene.)
-            if (not vo or not vo.get("quote_voice")) and edge_tts_available():
-                log.warning("  [voiceover] ElevenLabs produced no usable VO — "
-                            "falling back to edge-tts")
-                vo = prepare_reel_voiceover_edge_tts(
-                    hook_text=hook_text,
-                    quote_text=quote_data["quote"],
-                    cta_text=cta_text,
-                    mood=mood,
-                    output_dir=OUTPUT_DIR,
-                    timestamp=ts,
-                )
-            if isinstance(vo, dict):
-                    hook_voice = vo.get("hook_voice")
-                    quote_voice = vo.get("quote_voice")
-                    cta_voice = vo.get("cta_voice")
-                    hook_words = vo.get("hook_words") or []
-                    quote_words = vo.get("quote_words") or []
-                    cta_words = vo.get("cta_words") or []
-                    # ~5% pitch-down on the quote VO — the payoff line, worth
-                    # the extra AI-vs-human narrowing (spec 1). Best-effort.
-                    if quote_voice:
-                        try:
-                            apply_gravitas(quote_voice)
-                        except Exception as e:  # noqa: BLE001
-                            log.warning(f"  [voiceover] gravitas skipped ({e})")
-        except Exception as e:
-            log.warning(f"  [remotion] reel voiceover unavailable ({e}) — silent reel")
-
-        # Optional Bridge scene VO (Hook -> Bridge -> Quote -> CTA). Best-effort:
-        # any failure leaves bridge_voice/bridge_words empty — the Bridge scene
-        # still renders (text-only, no narration), it just plays silent.
-        # Cap the bridge here — the single chokepoint every source (trend-scout,
-        # --content injection, generators) flows through.
-        bridge_text = _bridge_for_vo(quote_data)
-        bridge_voice = None
-        bridge_words = []
-        if bridge_text:
-            try:
-                ts_bridge = datetime.now().strftime("%Y%m%d_%H%M%S")
-                bridge_path = OUTPUT_DIR / f"voice_bridge_{ts_bridge}.mp3"
-                bridge_ok = False
-                # Same engine as the other scenes — a mid-reel voice switch
-                # (ElevenLabs hook, edge-tts bridge) is jarring.
-                el_key = getattr(cfg, "ELEVENLABS_API_KEY", "") or os.getenv("ELEVENLABS_API_KEY", "")
-                if elevenlabs_available(el_key):
-                    from src.audio.elevenlabs_engine import (
-                        generate_scene_voiceover as _el_scene,
-                        REEL_VOICE as _EL_REEL_VOICE,
-                    )
-                    # Chapter-break tags direct ElevenLabs' pacing/urgency arc
-                    # only — the on-screen bridge_text (payload + animation
-                    # timing) must stay untagged, so we tag a local copy here.
-                    tagged_bridge = insert_chapter_breaks(bridge_text)
-                    bridge_ok = _el_scene(tagged_bridge, _EL_REEL_VOICE, bridge_path,
-                                           el_key, settings=delivery_profile("bridge"))
-                if not bridge_ok and edge_tts_available():
-                    from src.audio.edge_tts_engine import SCENE_PROSODY
-                    bridge_ok = generate_scene_voiceover_edge_tts(
-                        bridge_text, REEL_VOICE, bridge_path, *SCENE_PROSODY["bridge"])
-                if bridge_ok:
-                    bridge_voice = bridge_path
-                    # Word timings were estimated from the tagged text when
-                    # ElevenLabs produced them — strip the <break> fragments
-                    # so word-by-word animation stays synced to bridge_text.
-                    bridge_words = _strip_break_artifacts(
-                        parse_word_srt(bridge_path.with_suffix(".srt")))
-            except Exception as e:
-                log.warning(f"  [remotion] bridge voiceover unavailable ({e}) — bridge silent")
-
-        music_path = _select_reel_music(cfg, quote_data, hook_text, mood)
-
-        # Finalize hook/CTA with the viral-formula helpers just before render —
-        # idempotent for already-finalized (injected) content, and guarantees
-        # every renderer sees a formula-compliant hook/CTA regardless of source.
-        # Arc already shaped the hook upstream — never resurrect it from
-        # quote_data here (a cold_open must stay hook-less).
-        hook_text = _enforce_hook_len(hook_text) if hook_text else ""
-        cta_text = _loopify(cta_text, hook_text)
-
-        # ── HyperFrames dispatch (C2, additive-only) ────────────────────────────
-        if renderer == "hyperframes":
-            try:
-                from src.video.hyperframes_reel import generate_hyperframes_reel
-                counter = 1
-                while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
-                    counter += 1
-                reel_path = generate_hyperframes_reel(
-                    hook=hook_text,
-                    quote=quote_data["quote"],
-                    attribution="— Socrates",
-                    cta=cta_text,
-                    mood=mood,
-                    output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
-                    hook_voice=hook_voice,
-                    quote_voice=quote_voice,
-                    cta_voice=cta_voice,
-                    music_path=music_path,
-                    hook_words=hook_words,
-                    quote_words=quote_words,
-                    cta_words=cta_words,
-                    bridge=bridge_text,
-                    bridge_voice=bridge_voice,
-                    bridge_words=bridge_words,
-                    anim_seed=row_n or 0,
-                )
-            except Exception as e:
-                log.warning(f"  [hyperframes] renderer errored ({e}) — falling back to Remotion")
-            if reel_path is None:
-                log.info("  [hyperframes] failed — falling back to Remotion")
-                renderer = "remotion"
-
-        # ── Remotion dispatch (default, frozen during C2/C3) ────────────────────
-        if renderer == "remotion":
-            try:
-                from src.video.remotion_reel import generate_remotion_reel
-                # Auto-numbered output: reel_001.mp4, reel_002.mp4, ...
-                counter = 1
-                while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
-                    counter += 1
-                # Cinematic multi-clip background (spec 2): several dramatic Pexels
-                # clips cut between instead of one static loop. Best-effort — any
-                # failure (or <2 usable clips) falls back to the existing
-                # single-background path (_reel_background: stock photo -> FLUX).
-                bg_path = None
-                bg_clips = None
-                try:
-                    pexels_key = getattr(cfg, "PEXELS_API_KEY", "") or os.getenv("PEXELS_API_KEY", "")
-                    if pexels_key:
-                        clips = fetch_reel_clips(
-                            mood, pexels_key, OUTPUT_DIR,
-                            topic_query=quote_data.get("topic_query") or None)
-                        if len(clips) >= 2:
-                            bg_clips = clips
-                            log.info(f"  [reel] multi-clip cinematic background: {len(clips)} clips")
-                        elif len(clips) == 1:
-                            bg_path = clips[0]
-                            log.info(f"  [reel] single stock clip background: {_rel_path(bg_path)}")
-                except Exception as e:  # noqa: BLE001 - footage is best-effort
-                    log.warning(f"  [reel] multi-clip fetch failed ({e}) — falling back")
-                if bg_clips is None and bg_path is None:
-                    bg_path = _reel_background(cfg, quote_data, mood)
-                # Silence-drop (spec 1): a beat of near-silence right before the
-                # quote lands — only meaningful when there's a quote VO to cut
-                # against.
-                silence_drop = 0.8 if quote_voice else 0.0
-                reel_path = generate_remotion_reel(
-                        hook=hook_text,
-                        quote=quote_data["quote"],
-                        attribution="— Socrates",
-                        cta=cta_text,
-                        mood=mood,
-                        output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
-                        hook_voice=hook_voice,
-                        quote_voice=quote_voice,
-                        cta_voice=cta_voice,
-                        music_path=music_path,
-                        hook_words=hook_words,
-                        quote_words=quote_words,
-                        cta_words=cta_words,
-                        bridge=bridge_text,
-                        bridge_voice=bridge_voice,
-                        bridge_words=bridge_words,
-                        background=bg_path,
-                        backgrounds=bg_clips,
-                        silence_drop_sec=silence_drop,
-                        anim_seed=row_n or 0,
-                )
-            except Exception as e:
-                log.warning(f"  [remotion] renderer errored ({e}) — falling back to POV")
-            if reel_path is None:
-                log.info("  [remotion] unavailable/failed — using ffmpeg POV fallback")
-
-    if reel_path is None:
-        counter = 1
-        while (OUTPUT_DIR / f"reel_{counter:03d}.mp4").exists():
-            counter += 1
-        reel_path = generate_pov_reel(
-            quote=quote_data["quote"],
-            hook=hook_text,
-            cta=cta_text,
-            output_path=OUTPUT_DIR / f"reel_{counter:03d}.mp4",
-            mood=mood,
-        )
-    if reel_path:
-        log.info(f"POV Reel: {reel_path}")
-
-    hook_pick = pick_best_hook(audience=quote_data["audience"], quote_text=quote_data["quote"])
-    post_row_id = save_post(
-        quote_text=quote_data["quote"],
-        audience=quote_data["audience"],
-        mood=mood,
-        caption_variant=-1,
-        posting_slot=slot,
-        dry_run=dry_run,
-        hook_id=hook_pick["hook_id"],
-    )
-    if post_row_id is not None:
-        record_trigger_keyword(post_row_id, _extract_trigger_keyword(cta_text))
-        record_arc(post_row_id, quote_data.get("arc"))
-        record_material(post_row_id, quote_data.get("material_key"))
-        record_script(post_row_id, quote_data.get("script"))
-
-    if post_row_id is None:
-        log.warning(
-            f"  [dedup] slot {slot} already claimed today (concurrent run) — "
-            f"skipping to avoid a double-post"
-        )
-        return {"skipped": True, "reason": f"slot {slot} already claimed today"}
-
-    post_id = None
-    if manual:
-        log.info("Step: MANUAL MODE — sending POV Reel to Telegram for manual posting...")
-        try:
-            notifier = Notifier(cfg)
-            trending = get_trending_suggestion(mood)
-            notifier.notify_manual_reel_ready(
-                reel_path=reel_path,
-                cover_path=None,
-                caption=quote_data["caption"],
-                mood=mood,
-                trending_suggestion=trending,
-                post_row_id=post_row_id,
+        # HF needs word_timings, but we don't have it yet — submit a wrapper
+        # that waits on the MPT future before invoking HF.
+        def hf_wrapper():
+            mpt_result = mpt_future.result()
+            return _invoke_hyperframes(
+                quote_data_path,
+                mpt_result.get("word_timings"),
+                run_dir,
             )
-            log.info("✅ POV Reel sent to Telegram! Download and post with trending music.")
-        except Exception as e:
-            log.error(f"Failed to send POV Reel to Telegram: {e}")
-        mark_as_posted(EXCEL_PATH, quote_data["row_number"], "PENDING_MANUAL")
-        # post_id is UNIQUE — a bare "PENDING_MANUAL" collides on the 2nd manual
-        # post ever. Suffix with the row id so each pending-manual row is unique.
-        mark_posted(post_row_id, f"PENDING_MANUAL_{post_row_id}", None, _rel_path(reel_path))
-    elif not dry_run and reel_path:
-        log.info("Step: Posting POV Reel to Instagram...")
+
+        hf_future = executor.submit(hf_wrapper)
+
+        # Surface MPT errors first; still wait for HF so we don't orphan it.
         try:
-            post_id = post_reel_to_instagram(
-                video_path=reel_path,
-                caption=quote_data["caption"],
-                ig_account_id=cfg.IG_ACCOUNT_ID,
-                access_token=access_token,
-                cloudinary_config={
-                    "cloud_name": cfg.CLOUDINARY_CLOUD_NAME,
-                    "api_key": cfg.CLOUDINARY_API_KEY,
-                    "api_secret": cfg.CLOUDINARY_API_SECRET,
-                },
-            )
-            log.info(f"✅ Posted! ID: {post_id}")
-            mark_as_posted(EXCEL_PATH, quote_data["row_number"], post_id)
-            mark_posted(post_row_id, post_id, None, _rel_path(reel_path))
-            # Recipe #20: seed the comment section with the debate question.
-            try:
-                from src.engagement.first_comment import post_comment, first_comment_text
-                if post_comment(post_id, first_comment_text(quote_data), access_token):
-                    log.info("  [first-comment] engagement question attached")
-            except Exception as e:  # noqa: BLE001
-                log.warning(f"  [first-comment] skipped ({e})")
-            if post_id:
-                try:
-                    notifier = Notifier(cfg)
-                    trending = get_trending_suggestion(mood)
-                    notifier.notify_post_published(
-                        post_id=post_id,
-                        caption_preview=quote_data["caption"][:120],
-                        mood=mood,
-                        trending_suggestion=trending,
-                    )
-                except Exception as e:
-                    log.warning(f"Notification failed (non-blocking): {e}")
+            mpt_result = mpt_future.result()
+            log.info("✅ MPT complete: %s", mpt_result["base_video"])
         except Exception as e:
-            log.error(f"Publish failed: {e} — releasing slot {slot} for retry")
-            release_post(post_row_id)
+            log.error("❌ MPT failed: %s", e)
+            try:
+                hf_future.result()
+            except Exception:
+                pass
             raise
-    else:
-        log.info("⏭ dry_run=True — skip Instagram post")
 
-    record = {
-        "timestamp": timestamp,
-        "row_number": quote_data["row_number"],
-        "audience": quote_data["audience"],
-        "mood": mood,
-        "quote": quote_data["quote"],
-        "caption_preview": quote_data["caption"][:80],
-        "image_path": None,
-        "reel_path": _rel_path(reel_path),
-        "post_id": post_id,
-        "dry_run": dry_run,
-        "pov": True,
-    }
-    save_log(record)
-    log.info("▶ POV Pipeline complete")
-    return record
+        try:
+            overlay_video = hf_future.result()
+            log.info("✅ HyperFrames overlay complete: %s", overlay_video)
+        except Exception as e:
+            log.error("❌ HyperFrames overlay failed: %s", e)
+            raise
+
+    # Stage 3: composite base.mp4 + overlay.mp4 → final.mp4
+    final_video = run_dir / "final.mp4"
+    _composite_reels(mpt_result["base_video"], overlay_video, final_video)
+
+    log.info("✅ Final reel: %s", final_video)
+    return final_video
 
 
 def _reels_use_renderer(reel: bool, carousel: bool, renderer: str) -> bool:
