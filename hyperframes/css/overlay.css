@@ -1,0 +1,86 @@
+/* hyperframes/css/overlay.css
+   Overlay-only styles. Body is transparent so the overlay composites
+   OVER a base video (Task 7 scripts/composite_overlay.sh). Layers ordered
+   top → bottom in DOM:
+   .rpm-hook       (absolute, scene-anchored trivia hook)
+   .overlay-scene  (per-scene flex container; word spans inside)
+   #cta-card       (absolute, bottom-center, opaque pill)
+*/
+
+body {
+  margin: 0;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  color: #FFFFFF;
+}
+
+#root {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.overlay-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.overlay-word {
+  display: inline-block;
+  margin: 0 4px;
+  font-size: 48px;
+  font-weight: 700;
+  transform: scale(1);
+  color: #FFFFFF;
+}
+
+.rpm-hook {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: rgba(0, 0, 0, 0.85);
+  border: 3px solid #FFD700;
+  padding: 20px 40px;
+  border-radius: 12px;
+  font-size: 36px;
+  font-weight: 700;
+  color: #FFFFFF;
+  z-index: 2;
+}
+
+.rpm-text {
+  text-align: center;
+}
+
+.cta-card {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 215, 0, 0.95);
+  color: #000;
+  padding: 24px 48px;
+  border-radius: 16px;
+  text-align: center;
+  z-index: 3;
+}
+
+.cta-copy {
+  font-size: 42px;
+  font-weight: 800;
+}
+
+.cta-link {
+  display: block;
+  margin-top: 12px;
+  font-size: 24px;
+  color: #333;
+  text-decoration: none;
+}

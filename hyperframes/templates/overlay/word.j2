@@ -1,0 +1,6 @@
+<!-- hyperframes/templates/overlay/word.j2
+     Single scene-relative word span. animateOverlayWords (Task 4) tweens
+     #overlay-word-{idx} via gsap (.scale / .color). `data-word-t` is the
+     scene-relative offset (the helper does NOT add scene start time —
+     orchestrator composes per-scene timeline at scene start_sec). -->
+<span id="overlay-word-{{ loop.index0 }}" class="overlay-word" data-word-t="{{ word.t }}">{{ word.w }}</span>

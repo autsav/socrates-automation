@@ -1,0 +1,41 @@
+<!-- hyperframes/templates/overlay.html.j2
+     Standalone overlay composition (transparent background, 1080x1920).
+     Layered ABOVE a base video in compositor or sampled by Puppeteer
+     (Task 6). Reads scene timings + rpm hooks + CTA from #overlay-data JSON,
+     drives #root's children via overlay-main.ts. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <title>HyperFrames Overlay</title>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <link rel="stylesheet" href="css/overlay.css" />
+</head>
+<body style="background: transparent;">
+  <div id="root" data-composition-id="overlay" data-duration="{{ base_duration_sec }}" data-width="1080" data-height="1920">
+
+    <!-- RPM hooks overlay layer -->
+    {% for hook in rpm_hooks %}
+      {% include 'overlay/rpm-hook.j2' %}
+    {% endfor %}
+
+    <!-- Per-word kinetic text per scene -->
+    {% for scene_name, scene_data in scenes.items() %}
+      <div id="scene-{{ scene_name }}" class="overlay-scene" data-start="{{ scene_data.start_sec }}" data-duration="{{ scene_data.duration_sec }}">
+        {% for word in scene_data.words %}
+          {% include 'overlay/word.j2' %}
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <!-- CTA card -->
+    {% if cta_copy %}
+      {% include 'overlay/cta.j2' %}
+    {% endif %}
+  </div>
+
+  <script type="application/json" id="overlay-data">{{ overlay_data | tojson }}</script>
+  <script type="module" src="js/overlay-main.js"></script>
+</body>
+</html>

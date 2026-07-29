@@ -1,0 +1,8 @@
+<!-- hyperframes/templates/overlay/rpm-hook.j2
+     Single RPM hook (trivia / question / context). rpmHook() (Task 4)
+     targets #rpm-hook (id, not class — one hook per render batch). Multiple
+     hooks in same composition overlap by time; orchestrator uses `at_sec`
+     to place each into master timeline. -->
+<div id="rpm-hook" class="rpm-hook rpm-style-{{ hook.style }}" data-at-sec="{{ hook.at_sec }}">
+  <div class="rpm-text">{{ hook.text }}</div>
+</div>

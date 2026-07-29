@@ -1,0 +1,10 @@
+<!-- hyperframes/templates/overlay/cta.j2
+     Single CTA card. ctaCard() (Task 4) targets #cta-card (id, not class).
+     Positioned bottom-center via overlay.css; orchestrator drives entrance
+     at cta_start_sec. -->
+<div id="cta-card" class="cta-card">
+  <div class="cta-copy">{{ cta_copy }}</div>
+  {% if cta_url %}
+  <a href="{{ cta_url }}" class="cta-link">{{ cta_url }}</a>
+  {% endif %}
+</div>
