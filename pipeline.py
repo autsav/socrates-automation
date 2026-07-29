@@ -81,6 +81,7 @@ MPT_VENV = MPT_ROOT / ".venv" / "bin" / "python"
 HYPERFRAMES_ROOT = Path(__file__).resolve().parent / "hyperframes"
 HF_OVERLAY_TEMPLATE = HYPERFRAMES_ROOT / "templates" / "overlay.html.j2"
 HF_OVERLAY_CLI = HYPERFRAMES_ROOT / "src" / "cli" / "render-overlay.ts"
+SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 
 
 def _rel_path(p):
@@ -1002,6 +1003,73 @@ class MptRenderError(Exception):
 
 class HfRenderError(Exception):
     """Raised when HyperFrames overlay render fails or produces no output."""
+
+
+class CompositeError(Exception):
+    """Raised when the ffmpeg base+overlay composite fails."""
+
+
+def _composite_reels(base_video: Path, overlay_video: Path, final_video: Path) -> Path:
+    """Composite MPT base.mp4 + HF overlay.mp4 → final.mp4 via shell script.
+
+    Uses the absolute path to scripts/composite_overlay.sh so the invocation is
+    cwd-independent (relative paths break in production cron runs).
+
+    Args:
+        base_video: path to base.mp4 (from MPT)
+        overlay_video: path to overlay.mp4 (from HyperFrames, alpha channel)
+        final_video: path for the composited final.mp4
+
+    Returns:
+        Path to final_video.
+
+    Raises:
+        CompositeError: inputs missing, script launch failed, non-zero exit,
+            or the script exited 0 without producing final.mp4.
+    """
+    base_video = Path(base_video)
+    overlay_video = Path(overlay_video)
+    final_video = Path(final_video)
+
+    if not base_video.exists():
+        log.error("❌ Composite base video not found: %s", base_video)
+        raise CompositeError(f"Base video not found: {base_video}")
+    if not overlay_video.exists():
+        log.error("❌ Composite overlay video not found: %s", overlay_video)
+        raise CompositeError(f"Overlay video not found: {overlay_video}")
+
+    final_video.parent.mkdir(parents=True, exist_ok=True)
+
+    script = SCRIPTS_DIR / "composite_overlay.sh"
+    cmd = [
+        "bash",
+        str(script),
+        str(base_video),
+        str(overlay_video),
+        str(final_video),
+    ]
+
+    log.info("🎬 Compositing base + overlay: %s", " ".join(cmd))
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        log.error("❌ Composite launch failed: %s", e)
+        raise CompositeError(f"Composite launch failed: {e}") from e
+
+    if result.returncode != 0:
+        log.error("❌ Composite failed (exit %d): %s", result.returncode, result.stderr)
+        raise CompositeError(f"Composite exit {result.returncode}: {result.stderr[:500]}")
+
+    if not final_video.exists():
+        log.error("❌ Composite succeeded but final.mp4 missing at %s", final_video)
+        raise CompositeError(f"Composite succeeded but final.mp4 missing at {final_video}")
+
+    return final_video
 
 
 def _render_overlay_html(
